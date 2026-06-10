@@ -98,6 +98,40 @@ Copy-Item pipeline_config.example.json pipeline_config.json
 
 Do not commit `pipeline_config.json`; it is ignored because it may contain secrets.
 
+### Provider Mode
+
+The app can read provider settings from `.env`.
+
+Create your local `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Set:
+
+```text
+PROVIDER_MODE=1
+```
+
+Mode mapping:
+
+- `1` = Gemini
+- `2` = Amazon Bedrock
+- `3` = direct Anthropic Claude
+
+### Gemini Setup
+
+For Gemini mode:
+
+```text
+PROVIDER_MODE=1
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+The app uses the Google Gen AI SDK (`google-genai`).
+
 ### Amazon Bedrock Setup
 
 The app can use Amazon Bedrock first and keep direct Anthropic as fallback.
@@ -121,21 +155,21 @@ Then configure `pipeline_config.json`:
 
 ```json
 {
-  "provider": "bedrock",
+  "provider_mode": "2",
   "aws_region": "us-east-1",
   "model_bedrock": "your_bedrock_model_id",
-  "bedrock_fallback_to_anthropic": true,
+  "fallback_to_anthropic": true,
   "model_sonnet": "claude-sonnet-4-6"
 }
 ```
 
-If Bedrock fails and `bedrock_fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
+If Bedrock or Gemini fails and `fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
 
 If you want direct Anthropic only:
 
 ```json
 {
-  "provider": "anthropic",
+  "provider_mode": "3",
   "model_sonnet": "claude-sonnet-4-6"
 }
 ```

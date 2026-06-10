@@ -33,9 +33,11 @@ ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "new_flow"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
+ENV_FILE = ROOT / ".env"
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_BEDROCK_REGION = "us-east-1"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 _log_cb = None
 
@@ -109,13 +111,48 @@ MODEL_PRICING_PER_MTOK = {
     "claude-sonnet-4-6": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-sonnet-4-5": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
+    "gemini-2.5-flash": {"input": 0.30, "cache_write": 0.0, "cache_read": 0.0, "output": 2.50},
+    "gemini-2.5-pro": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
 }
 
 
+def load_env_file() -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not ENV_FILE.exists():
+        return values
+    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        values[key] = value
+        os.environ.setdefault(key, value)
+    return values
+
+
 def load_config() -> dict[str, Any]:
+    env_values = load_env_file()
     if CFG_FILE.exists():
-        return json.loads(CFG_FILE.read_text(encoding="utf-8"))
-    return {}
+        cfg = json.loads(CFG_FILE.read_text(encoding="utf-8"))
+    else:
+        cfg = {}
+    env_to_cfg = {
+        "PROVIDER_MODE": "provider_mode",
+        "RESUME_AGENT_PROVIDER": "provider",
+        "GEMINI_API_KEY": "gemini_api_key",
+        "GEMINI_MODEL": "model_gemini",
+        "BEDROCK_MODEL_ID": "model_bedrock",
+        "AWS_REGION": "aws_region",
+        "AWS_DEFAULT_REGION": "aws_region",
+        "AWS_PROFILE": "aws_profile",
+        "ANTHROPIC_API_KEY": "anthropic_api_key",
+    }
+    for env_key, cfg_key in env_to_cfg.items():
+        if env_values.get(env_key):
+            cfg[cfg_key] = env_values[env_key]
+    return cfg
 
 
 def get_client() -> anthropic.AsyncAnthropic:
@@ -130,9 +167,25 @@ def get_client() -> anthropic.AsyncAnthropic:
 
 def get_provider() -> str:
     cfg = load_config()
+    mode = str(cfg.get("provider_mode", "") or os.environ.get("PROVIDER_MODE", "")).strip().lower()
+    mode_map = {
+        "1": "gemini",
+        "gemini": "gemini",
+        "gemeni": "gemini",
+        "2": "bedrock",
+        "aws": "bedrock",
+        "bedrock": "bedrock",
+        "3": "anthropic",
+        "claude": "anthropic",
+        "anthropic": "anthropic",
+    }
+    if mode in mode_map:
+        return mode_map[mode]
     provider = str(cfg.get("provider", "") or os.environ.get("RESUME_AGENT_PROVIDER", "")).lower().strip()
-    if provider in {"bedrock", "anthropic"}:
+    if provider in {"gemini", "bedrock", "anthropic"}:
         return provider
+    if cfg.get("model_gemini") or os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
     if cfg.get("model_bedrock") or os.environ.get("BEDROCK_MODEL_ID"):
         return "bedrock"
     return "anthropic"
@@ -152,6 +205,24 @@ def get_bedrock_model() -> str:
             "Set BEDROCK_MODEL_ID or add model_bedrock to pipeline_config.json."
         )
     return model
+
+
+def get_gemini_model() -> str:
+    cfg = load_config()
+    return os.environ.get("GEMINI_MODEL") or cfg.get("model_gemini") or DEFAULT_GEMINI_MODEL
+
+
+def get_gemini_client():
+    try:
+        from google import genai
+    except ImportError as exc:
+        raise RuntimeError("google-genai is required for Gemini. Run: pip install google-genai") from exc
+
+    cfg = load_config()
+    key = os.environ.get("GEMINI_API_KEY") or cfg.get("gemini_api_key", "")
+    if not key:
+        raise RuntimeError("Gemini provider selected but GEMINI_API_KEY is missing.")
+    return genai.Client(api_key=key)
 
 
 def get_bedrock_client():
@@ -208,6 +279,50 @@ def bedrock_messages(messages: list[dict[str, str]]) -> list[dict[str, Any]]:
         }
         for msg in messages
     ]
+
+
+def system_text(system_blocks: list[dict[str, Any]]) -> str:
+    return "\n\n".join(str(block.get("text", "")) for block in system_blocks if str(block.get("text", "")).strip())
+
+
+def gemini_prompt(messages: list[dict[str, str]]) -> str:
+    chunks = []
+    for msg in messages:
+        role = "USER" if msg["role"] == "user" else "ASSISTANT"
+        chunks.append(f"{role}:\n{msg['content']}")
+    return "\n\n".join(chunks)
+
+
+def call_gemini_sync(
+    *,
+    system_blocks: list[dict[str, Any]],
+    messages: list[dict[str, str]],
+    model: str,
+    max_tokens: int,
+) -> tuple[str, dict[str, int]]:
+    try:
+        from google.genai import types
+    except ImportError as exc:
+        raise RuntimeError("google-genai is required for Gemini. Run: pip install google-genai") from exc
+
+    client = get_gemini_client()
+    response = client.models.generate_content(
+        model=model,
+        contents=gemini_prompt(messages),
+        config=types.GenerateContentConfig(
+            system_instruction=system_text(system_blocks),
+            max_output_tokens=max_tokens,
+        ),
+    )
+    usage = getattr(response, "usage_metadata", None)
+    input_tokens = int(getattr(usage, "prompt_token_count", 0) or 0) if usage else 0
+    output_tokens = int(getattr(usage, "candidates_token_count", 0) or 0) if usage else 0
+    return (response.text or "").strip(), {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
 
 
 def call_bedrock_sync(
@@ -299,11 +414,28 @@ async def call_model(
     cost_cb=None,
 ) -> str:
     provider = get_provider()
-    model = get_bedrock_model() if provider == "bedrock" else get_model()
+    if provider == "gemini":
+        model = get_gemini_model()
+    elif provider == "bedrock":
+        model = get_bedrock_model()
+    else:
+        model = get_model()
     t0 = time.monotonic()
 
     try:
-        if provider == "bedrock":
+        if provider == "gemini":
+            text, usage_data = await asyncio.to_thread(
+                call_gemini_sync,
+                system_blocks=system_blocks,
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+            )
+            input_tokens = usage_data["input_tokens"]
+            output_tokens = usage_data["output_tokens"]
+            cache_create = usage_data["cache_creation_input_tokens"]
+            cache_read = usage_data["cache_read_input_tokens"]
+        elif provider == "bedrock":
             text, usage_data = await asyncio.to_thread(
                 call_bedrock_sync,
                 system_blocks=system_blocks,
@@ -331,8 +463,9 @@ async def call_model(
             cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
     except Exception:
         cfg = load_config()
-        if provider == "bedrock" and bool(cfg.get("bedrock_fallback_to_anthropic", True)):
-            log(f"{label}: Bedrock failed; falling back to direct Anthropic.")
+        fallback_enabled = bool(cfg.get("fallback_to_anthropic", cfg.get("bedrock_fallback_to_anthropic", True)))
+        if provider in {"gemini", "bedrock"} and fallback_enabled:
+            log(f"{label}: {provider} failed; falling back to direct Anthropic.")
             client = get_client()
             model = get_model()
             provider = "anthropic"

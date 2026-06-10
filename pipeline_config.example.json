@@ -1,8 +1,11 @@
 {
+  "provider_mode": "1",
+  "_provider_mode_comment": "1 = Gemini, 2 = Amazon Bedrock, 3 = direct Anthropic Claude",
+  "model_gemini": "gemini-2.5-flash",
   "provider": "bedrock",
   "aws_region": "us-east-1",
   "model_bedrock": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-  "bedrock_fallback_to_anthropic": true,
+  "fallback_to_anthropic": true,
   "model_sonnet": "claude-sonnet-4-6",
   "default_words": "",
   "default_des": "",
