@@ -37,7 +37,7 @@ ENV_FILE = ROOT / ".env"
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_BEDROCK_REGION = "us-east-1"
-DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-extended"
+DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
 
 _log_cb = None
 
@@ -111,7 +111,7 @@ MODEL_PRICING_PER_MTOK = {
     "claude-sonnet-4-6": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-sonnet-4-5": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
-    "gemini-3.1-pro-extended": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
+    "gemini-3.1-pro-preview": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
     "gemini-2.5-flash": {"input": 0.30, "cache_write": 0.0, "cache_read": 0.0, "output": 2.50},
     "gemini-2.5-pro": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
 }
@@ -212,6 +212,11 @@ def get_bedrock_model() -> str:
 def get_gemini_model() -> str:
     cfg = load_config()
     return os.environ.get("GEMINI_MODEL") or cfg.get("model_gemini") or DEFAULT_GEMINI_MODEL
+
+
+def get_gemini_fallback_model() -> str:
+    cfg = load_config()
+    return os.environ.get("GEMINI_FALLBACK_MODEL") or cfg.get("model_gemini_fallback") or "gemini-2.5-flash"
 
 
 def get_gemini_client():
@@ -430,13 +435,28 @@ async def call_model(
 
     try:
         if provider == "gemini":
-            text, usage_data = await asyncio.to_thread(
-                call_gemini_sync,
-                system_blocks=system_blocks,
-                messages=messages,
-                model=model,
-                max_tokens=max_tokens,
-            )
+            try:
+                text, usage_data = await asyncio.to_thread(
+                    call_gemini_sync,
+                    system_blocks=system_blocks,
+                    messages=messages,
+                    model=model,
+                    max_tokens=max_tokens,
+                )
+            except Exception as gemini_exc:
+                fallback_model = get_gemini_fallback_model()
+                if fallback_model and fallback_model != model:
+                    log(f"{label}: Gemini model {model} failed; retrying {fallback_model}.")
+                    model = fallback_model
+                    text, usage_data = await asyncio.to_thread(
+                        call_gemini_sync,
+                        system_blocks=system_blocks,
+                        messages=messages,
+                        model=model,
+                        max_tokens=max_tokens,
+                    )
+                else:
+                    raise gemini_exc
             input_tokens = usage_data["input_tokens"]
             output_tokens = usage_data["output_tokens"]
             cache_create = usage_data["cache_creation_input_tokens"]

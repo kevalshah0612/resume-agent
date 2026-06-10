@@ -1,7 +1,8 @@
 {
   "provider_mode": "1",
   "_provider_mode_comment": "1 = Gemini, 2 = Amazon Bedrock, 3 = direct Anthropic Claude",
-  "model_gemini": "gemini-3.1-pro-extended",
+  "model_gemini": "gemini-3.1-pro-preview",
+  "model_gemini_fallback": "gemini-2.5-flash",
   "provider": "bedrock",
   "aws_region": "us-east-1",
   "aws_bearer_token_bedrock": "",

@@ -127,10 +127,11 @@ For Gemini mode:
 ```text
 PROVIDER_MODE=1
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.1-pro-extended
+GEMINI_MODEL=gemini-3.1-pro-preview
+GEMINI_FALLBACK_MODEL=gemini-2.5-flash
 ```
 
-The app uses the Google Gen AI SDK (`google-genai`).
+The app uses the Google Gen AI SDK (`google-genai`). If the primary Gemini model is unavailable or quota-limited, it retries the fallback Gemini model before using direct Anthropic fallback.
 
 ### Amazon Bedrock Setup
 
