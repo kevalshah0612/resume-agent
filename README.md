@@ -136,27 +136,41 @@ The app uses the Google Gen AI SDK (`google-genai`).
 
 The app can use Amazon Bedrock first and keep direct Anthropic as fallback.
 
-Use normal AWS credentials:
+If you generated a long-term Bedrock API key, use:
 
-```powershell
-$env:AWS_ACCESS_KEY_ID="your_access_key"
-$env:AWS_SECRET_ACCESS_KEY="your_secret_key"
-$env:AWS_REGION="us-east-1"
+```text
+PROVIDER_MODE=2
+AWS_REGION=us-east-1
+AWS_BEARER_TOKEN_BEDROCK=your_bedrock_long_term_api_key
+BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
+```
+
+Alternative IAM credentials:
+
+```text
+PROVIDER_MODE=2
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
 ```
 
 Or use an AWS profile:
 
-```powershell
-$env:AWS_PROFILE="your_profile_name"
-$env:AWS_REGION="us-east-1"
+```text
+PROVIDER_MODE=2
+AWS_PROFILE=your_profile_name
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
 ```
 
-Then configure `pipeline_config.json`:
+Equivalent `pipeline_config.json`:
 
 ```json
 {
   "provider_mode": "2",
   "aws_region": "us-east-1",
+  "aws_bearer_token_bedrock": "",
   "model_bedrock": "global.anthropic.claude-sonnet-4-6",
   "fallback_to_anthropic": true,
   "model_sonnet": "claude-sonnet-4-6"

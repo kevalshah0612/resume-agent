@@ -4,6 +4,7 @@
   "model_gemini": "gemini-3.1-pro-extended",
   "provider": "bedrock",
   "aws_region": "us-east-1",
+  "aws_bearer_token_bedrock": "",
   "model_bedrock": "global.anthropic.claude-sonnet-4-6",
   "fallback_to_anthropic": true,
   "model_sonnet": "claude-sonnet-4-6",

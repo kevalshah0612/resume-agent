@@ -145,6 +145,7 @@ def load_config() -> dict[str, Any]:
         "GEMINI_API_KEY": "gemini_api_key",
         "GEMINI_MODEL": "model_gemini",
         "BEDROCK_MODEL_ID": "model_bedrock",
+        "AWS_BEARER_TOKEN_BEDROCK": "aws_bearer_token_bedrock",
         "AWS_REGION": "aws_region",
         "AWS_DEFAULT_REGION": "aws_region",
         "AWS_PROFILE": "aws_profile",
@@ -247,6 +248,10 @@ def get_bedrock_client():
     ]:
         if cfg.get(cfg_key):
             session_kwargs[session_key] = cfg[cfg_key]
+
+    bearer_token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK") or cfg.get("aws_bearer_token_bedrock", "")
+    if bearer_token:
+        os.environ.setdefault("AWS_BEARER_TOKEN_BEDROCK", bearer_token)
 
     session = boto3.Session(**session_kwargs)
     return session.client("bedrock-runtime")
