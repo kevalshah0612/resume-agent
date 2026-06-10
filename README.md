@@ -127,7 +127,7 @@ For Gemini mode:
 ```text
 PROVIDER_MODE=1
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.1-pro-extended
 ```
 
 The app uses the Google Gen AI SDK (`google-genai`).
@@ -157,7 +157,7 @@ Then configure `pipeline_config.json`:
 {
   "provider_mode": "2",
   "aws_region": "us-east-1",
-  "model_bedrock": "your_bedrock_model_id",
+  "model_bedrock": "global.anthropic.claude-sonnet-4-6",
   "fallback_to_anthropic": true,
   "model_sonnet": "claude-sonnet-4-6"
 }

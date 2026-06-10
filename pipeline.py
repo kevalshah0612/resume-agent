@@ -37,7 +37,7 @@ ENV_FILE = ROOT / ".env"
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_BEDROCK_REGION = "us-east-1"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-extended"
 
 _log_cb = None
 
@@ -111,6 +111,7 @@ MODEL_PRICING_PER_MTOK = {
     "claude-sonnet-4-6": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-sonnet-4-5": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
+    "gemini-3.1-pro-extended": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
     "gemini-2.5-flash": {"input": 0.30, "cache_write": 0.0, "cache_read": 0.0, "output": 2.50},
     "gemini-2.5-pro": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
 }
