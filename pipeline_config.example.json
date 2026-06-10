@@ -1,5 +1,6 @@
 {
   "model_sonnet": "claude-sonnet-4-6",
   "default_words": "",
-  "default_des": ""
+  "default_des": "",
+  "manual_starting_balance_usd": 0
 }

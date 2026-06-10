@@ -92,6 +92,24 @@ class ResumeInput:
     des: str = ""
 
 
+@dataclass
+class CostEvent:
+    label: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cache_creation_input_tokens: int
+    cache_read_input_tokens: int
+    estimated_cost_usd: float
+
+
+MODEL_PRICING_PER_MTOK = {
+    "claude-sonnet-4-6": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
+    "claude-sonnet-4-5": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
+    "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
+}
+
+
 def load_config() -> dict[str, Any]:
     if CFG_FILE.exists():
         return json.loads(CFG_FILE.read_text(encoding="utf-8"))
@@ -111,6 +129,22 @@ def get_client() -> anthropic.AsyncAnthropic:
 def get_model() -> str:
     cfg = load_config()
     return cfg.get("model_resume") or cfg.get("model_sonnet") or DEFAULT_MODEL
+
+
+def estimate_cost_usd(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_creation_input_tokens: int = 0,
+    cache_read_input_tokens: int = 0,
+) -> float:
+    rates = MODEL_PRICING_PER_MTOK.get(model, MODEL_PRICING_PER_MTOK["claude-sonnet-4-6"])
+    return (
+        input_tokens * rates["input"]
+        + cache_creation_input_tokens * rates["cache_write"]
+        + cache_read_input_tokens * rates["cache_read"]
+        + output_tokens * rates["output"]
+    ) / 1_000_000
 
 
 def read_prompt(name: str) -> str:
@@ -174,6 +208,7 @@ async def call_model(
     messages: list[dict[str, str]],
     label: str,
     max_tokens: int = 8192,
+    cost_cb=None,
 ) -> str:
     client = get_client()
     model = get_model()
@@ -188,11 +223,29 @@ async def call_model(
     usage = resp.usage
     cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
     cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    estimated_cost = estimate_cost_usd(
+        model,
+        usage.input_tokens,
+        usage.output_tokens,
+        cache_create,
+        cache_read,
+    )
     elapsed = time.monotonic() - t0
     log(
         f"{label}: in={usage.input_tokens} out={usage.output_tokens} "
-        f"cache_read={cache_read} cache_create={cache_create} elapsed={elapsed:.1f}s"
+        f"cache_read={cache_read} cache_create={cache_create} "
+        f"cost=${estimated_cost:.4f} elapsed={elapsed:.1f}s"
     )
+    if cost_cb:
+        cost_cb(CostEvent(
+            label=label,
+            model=model,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cache_creation_input_tokens=cache_create,
+            cache_read_input_tokens=cache_read,
+            estimated_cost_usd=estimated_cost,
+        ))
     return text
 
 
@@ -207,7 +260,7 @@ def recruiter_system() -> list[dict[str, Any]]:
     return [cached_text_block(read_prompt("recruiter.md"))]
 
 
-async def run_pass1(inp: ResumeInput) -> str:
+async def run_pass1(inp: ResumeInput, cost_cb=None) -> str:
     user_message = "\n\n".join([
         read_prompt("prompt_short.md"),
         PASS1_COMPACT_INSTRUCTION,
@@ -218,10 +271,11 @@ async def run_pass1(inp: ResumeInput) -> str:
         messages=[{"role": "user", "content": user_message}],
         label="PASS 1",
         max_tokens=3500,
+        cost_cb=cost_cb,
     )
 
 
-async def run_pass2(inp: ResumeInput, pass1_text: str, approval_text: str) -> str:
+async def run_pass2(inp: ResumeInput, pass1_text: str, approval_text: str, cost_cb=None) -> str:
     first_user = "\n\n".join([
         read_prompt("prompt_short.md"),
         PASS1_COMPACT_INSTRUCTION,
@@ -237,6 +291,7 @@ async def run_pass2(inp: ResumeInput, pass1_text: str, approval_text: str) -> st
         ],
         label="PASS 2",
         max_tokens=12000,
+        cost_cb=cost_cb,
     )
 
 
@@ -246,6 +301,7 @@ async def run_recruiter_review(
     resume1_json: dict[str, Any],
     des: str = "",
     resume2_json: dict[str, Any] | None = None,
+    cost_cb=None,
 ) -> str:
     parts = [
         read_prompt("recruiter_short.md"),
@@ -263,6 +319,7 @@ async def run_recruiter_review(
         messages=[{"role": "user", "content": "\n".join(parts)}],
         label="RECRUITER REVIEW",
         max_tokens=12000,
+        cost_cb=cost_cb,
     )
 
 

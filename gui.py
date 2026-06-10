@@ -19,8 +19,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from pipeline import (
+    CostEvent,
     ResumeInput,
     extract_json,
+    load_config,
     normalize_approval,
     run_pass1,
     run_pass2,
@@ -69,6 +71,8 @@ class JobTab(ttk.Frame):
         self.final_json_path: Path | None = None
         self.recruiter_json_path: Path | None = None
         self.docx_path: Path | None = None
+        self.cost_events: list[CostEvent] = []
+        self.cost_usd = 0.0
 
         self._build()
 
@@ -93,6 +97,8 @@ class JobTab(ttk.Frame):
         self.pdf_btn.grid(row=0, column=4, padx=(0, 6))
         ttk.Button(toolbar, text="Open Request", command=self.on_open_request).grid(row=0, column=5, padx=(0, 6))
         ttk.Button(toolbar, text="Clear Tab", command=self.on_clear_tab).grid(row=0, column=6, padx=(0, 6))
+        self.cost_label = ttk.Label(toolbar, text="$0.0000")
+        self.cost_label.grid(row=0, column=8, sticky="e", padx=(8, 8))
         self.status = ttk.Label(toolbar, text="Ready")
         self.status.grid(row=0, column=9, sticky="e")
 
@@ -181,6 +187,34 @@ class JobTab(ttk.Frame):
             button.config(state=state)
         self.status.config(text=message)
 
+    def add_cost_events(self, events: list[CostEvent]) -> None:
+        if not events:
+            return
+        self.cost_events.extend(events)
+        added = sum(e.estimated_cost_usd for e in events)
+        self.cost_usd += added
+        self.cost_label.config(text=f"${self.cost_usd:.4f}")
+        self.app.add_session_cost(added)
+        if self.request_dir:
+            save_json(
+                self.request_dir / "costs.json",
+                {
+                    "tab_total_usd": round(self.cost_usd, 6),
+                    "events": [
+                        {
+                            "label": e.label,
+                            "model": e.model,
+                            "input_tokens": e.input_tokens,
+                            "output_tokens": e.output_tokens,
+                            "cache_creation_input_tokens": e.cache_creation_input_tokens,
+                            "cache_read_input_tokens": e.cache_read_input_tokens,
+                            "estimated_cost_usd": round(e.estimated_cost_usd, 6),
+                        }
+                        for e in self.cost_events
+                    ],
+                },
+            )
+
     def on_pass1(self) -> None:
         try:
             inp = self.make_input()
@@ -192,16 +226,20 @@ class JobTab(ttk.Frame):
         self.set_busy(True, "PASS 1 running...")
 
         def task():
-            return asyncio.run(run_pass1(inp))
+            events: list[CostEvent] = []
+            result = asyncio.run(run_pass1(inp, cost_cb=events.append))
+            return result, events
 
         def done(result, err):
             self.set_busy(False, "PASS 1 ready" if not err else "PASS 1 failed")
             if err:
                 messagebox.showerror("PASS 1 failed", str(err), parent=self)
                 return
+            result, events = result
             self.pass1.delete("1.0", "end")
             self.pass1.insert("1.0", result)
             save_text(request_dir / "02_pass1_des_bank.txt", result)
+            self.add_cost_events(events)
 
         run_bg(self.app, task, done)
 
@@ -222,7 +260,8 @@ class JobTab(ttk.Frame):
         self.set_busy(True, "Generating JSON...")
 
         def task():
-            raw = asyncio.run(run_pass2(inp, pass1_text, approval))
+            events: list[CostEvent] = []
+            raw = asyncio.run(run_pass2(inp, pass1_text, approval, cost_cb=events.append))
             data = extract_json(raw)
             data = repair_repeated_verbs(data)
             errors = validate_resume_json(data)
@@ -230,17 +269,18 @@ class JobTab(ttk.Frame):
                 save_text(request_dir / "04_final_raw_failed.txt", raw)
                 save_json(request_dir / "05_final_failed.json", data)
                 raise RuntimeError("JSON failed local gates:\n- " + "\n- ".join(errors))
-            return raw, data
+            return raw, data, events
 
         def done(result, err):
             self.set_busy(False, "JSON ready" if not err else "JSON failed")
             if err:
                 messagebox.showerror("Generate JSON failed", str(err), parent=self)
                 return
-            raw, data = result
+            raw, data, events = result
             save_text(request_dir / "04_final_raw.txt", raw)
             self.final_json_path = request_dir / "05_final_resume.json"
             save_json(self.final_json_path, data)
+            self.add_cost_events(events)
             self.status.config(text=f"JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -268,10 +308,12 @@ class JobTab(ttk.Frame):
         self.set_busy(True, "Recruiter review running...")
 
         def task():
+            events: list[CostEvent] = []
             raw = asyncio.run(run_recruiter_review(
                 jd=inp.jd,
                 resume1_json=resume_json,
                 des=approval,
+                cost_cb=events.append,
             ))
             data = extract_json(raw)
             data = repair_repeated_verbs(data)
@@ -280,18 +322,19 @@ class JobTab(ttk.Frame):
                 save_text(request_dir / "06_recruiter_raw_failed.txt", raw)
                 save_json(request_dir / "07_recruiter_failed.json", data)
                 raise RuntimeError("Recruiter JSON failed local gates:\n- " + "\n- ".join(errors))
-            return raw, data
+            return raw, data, events
 
         def done(result, err):
             self.set_busy(False, "Recruiter JSON ready" if not err else "Recruiter failed")
             if err:
                 messagebox.showerror("Recruiter review failed", str(err), parent=self)
                 return
-            raw, data = result
+            raw, data, events = result
             save_text(request_dir / "06_recruiter_raw.txt", raw)
             self.recruiter_json_path = request_dir / "07_recruiter_final_resume.json"
             save_json(self.recruiter_json_path, data)
             self.final_json_path = self.recruiter_json_path
+            self.add_cost_events(events)
             self.status.config(text=f"Recruiter JSON: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -392,6 +435,9 @@ class JobTab(ttk.Frame):
         self.final_json_path = None
         self.recruiter_json_path = None
         self.docx_path = None
+        self.cost_events = []
+        self.cost_usd = 0.0
+        self.cost_label.config(text="$0.0000")
         self.status.config(text="Ready")
 
 
@@ -413,14 +459,28 @@ class ResumeApp(tk.Tk):
         ttk.Button(top, text="Duplicate Current", command=self.duplicate_current).grid(row=0, column=1, padx=(0, 6))
         ttk.Button(top, text="Close Current", command=self.close_current).grid(row=0, column=2, padx=(0, 6))
         ttk.Button(top, text="Clear DOCX/PDF", command=self.clear_docx_pdf).grid(row=0, column=3, padx=(0, 6))
+        self.session_cost_usd = 0.0
+        cfg = load_config()
+        self.manual_balance_usd = float(cfg.get("manual_starting_balance_usd", 0) or 0)
+        self.session_cost_label = ttk.Label(top, text="Session cost: $0.0000")
+        self.session_cost_label.grid(row=0, column=4, padx=(8, 6), sticky="w")
+        balance_text = "Balance: not connected" if self.manual_balance_usd <= 0 else f"Est. remaining: ${self.manual_balance_usd:.2f}"
+        self.balance_label = ttk.Label(top, text=balance_text)
+        self.balance_label.grid(row=0, column=5, padx=(8, 6), sticky="w")
         ttk.Label(top, text="Each tab can run independently. Start PASS 1 in multiple tabs for concurrent resumes.").grid(
-            row=0, column=4, sticky="e"
+            row=0, column=6, sticky="e"
         )
 
         self.notebook = ttk.Notebook(self)
         self.notebook.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self.tab_counter = 0
         self.add_tab()
+
+    def add_session_cost(self, amount: float) -> None:
+        self.session_cost_usd += amount
+        self.session_cost_label.config(text=f"Session cost: ${self.session_cost_usd:.4f}")
+        if self.manual_balance_usd > 0:
+            self.balance_label.config(text=f"Est. remaining: ${max(self.manual_balance_usd - self.session_cost_usd, 0):.2f}")
 
     def current_tab(self) -> JobTab | None:
         tab_id = self.notebook.select()

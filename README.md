@@ -142,6 +142,45 @@ The GUI supports multiple applications in one window.
 - Each tab runs independently in a background thread.
 - You can run PASS 1 for multiple companies at the same time.
 
+## Cost Tracking
+
+The GUI shows estimated Anthropic API cost in two places:
+
+- Per tab: cost for that application tab.
+- Session cost: total estimated cost since the GUI was opened.
+
+Each request folder also saves:
+
+```text
+costs.json
+```
+
+The estimate is calculated from token usage returned by the Anthropic API response:
+
+- input tokens
+- output tokens
+- cache creation input tokens
+- cache read input tokens
+
+The app uses the official Claude Sonnet 4.6 pricing structure by default:
+
+- base input: `$3 / MTok`
+- 5-minute prompt cache write: `$3.75 / MTok`
+- prompt cache read: `$0.30 / MTok`
+- output: `$15 / MTok`
+
+The normal Messages API response gives token usage, not live billing balance. Because of that, the app can show estimated spend per call, tab, and session, but it cannot automatically show the real account balance from a normal model call.
+
+To show an estimated remaining balance in the GUI, create `pipeline_config.json` from the example and set:
+
+```json
+{
+  "manual_starting_balance_usd": 5
+}
+```
+
+For official billing totals, use the Anthropic Console or Anthropic's usage/cost reporting tools.
+
 ## Mode Behavior
 
 Mode is optional and blank by default.
