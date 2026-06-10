@@ -14,6 +14,7 @@ between calls.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -34,6 +35,7 @@ RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_BEDROCK_REGION = "us-east-1"
 
 _log_cb = None
 
@@ -126,9 +128,56 @@ def get_client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(api_key=key)
 
 
+def get_provider() -> str:
+    cfg = load_config()
+    provider = str(cfg.get("provider", "") or os.environ.get("RESUME_AGENT_PROVIDER", "")).lower().strip()
+    if provider in {"bedrock", "anthropic"}:
+        return provider
+    if cfg.get("model_bedrock") or os.environ.get("BEDROCK_MODEL_ID"):
+        return "bedrock"
+    return "anthropic"
+
+
 def get_model() -> str:
     cfg = load_config()
     return cfg.get("model_resume") or cfg.get("model_sonnet") or DEFAULT_MODEL
+
+
+def get_bedrock_model() -> str:
+    cfg = load_config()
+    model = os.environ.get("BEDROCK_MODEL_ID") or cfg.get("model_bedrock", "")
+    if not model:
+        raise RuntimeError(
+            "Bedrock provider selected but no model_bedrock was configured. "
+            "Set BEDROCK_MODEL_ID or add model_bedrock to pipeline_config.json."
+        )
+    return model
+
+
+def get_bedrock_client():
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("boto3 is required for Amazon Bedrock. Run: pip install boto3") from exc
+
+    cfg = load_config()
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or cfg.get("aws_region", DEFAULT_BEDROCK_REGION)
+    profile = os.environ.get("AWS_PROFILE") or cfg.get("aws_profile", "")
+
+    session_kwargs: dict[str, Any] = {"region_name": region}
+    if profile:
+        session_kwargs["profile_name"] = profile
+
+    for cfg_key, session_key in [
+        ("aws_access_key_id", "aws_access_key_id"),
+        ("aws_secret_access_key", "aws_secret_access_key"),
+        ("aws_session_token", "aws_session_token"),
+    ]:
+        if cfg.get(cfg_key):
+            session_kwargs[session_key] = cfg[cfg_key]
+
+    session = boto3.Session(**session_kwargs)
+    return session.client("bedrock-runtime")
 
 
 def estimate_cost_usd(
@@ -145,6 +194,45 @@ def estimate_cost_usd(
         + cache_read_input_tokens * rates["cache_read"]
         + output_tokens * rates["output"]
     ) / 1_000_000
+
+
+def bedrock_system_blocks(system_blocks: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [{"text": str(block.get("text", ""))} for block in system_blocks if str(block.get("text", "")).strip()]
+
+
+def bedrock_messages(messages: list[dict[str, str]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "role": msg["role"],
+            "content": [{"text": msg["content"]}],
+        }
+        for msg in messages
+    ]
+
+
+def call_bedrock_sync(
+    *,
+    system_blocks: list[dict[str, Any]],
+    messages: list[dict[str, str]],
+    model: str,
+    max_tokens: int,
+) -> tuple[str, dict[str, int]]:
+    client = get_bedrock_client()
+    response = client.converse(
+        modelId=model,
+        system=bedrock_system_blocks(system_blocks),
+        messages=bedrock_messages(messages),
+        inferenceConfig={"maxTokens": max_tokens},
+    )
+    content = response["output"]["message"].get("content", [])
+    text = "".join(part.get("text", "") for part in content).strip()
+    usage = response.get("usage", {})
+    return text, {
+        "input_tokens": int(usage.get("inputTokens", 0) or 0),
+        "output_tokens": int(usage.get("outputTokens", 0) or 0),
+        "cache_creation_input_tokens": int(usage.get("cacheCreationInputTokens", 0) or 0),
+        "cache_read_input_tokens": int(usage.get("cacheReadInputTokens", 0) or 0),
+    }
 
 
 def read_prompt(name: str) -> str:
@@ -210,38 +298,78 @@ async def call_model(
     max_tokens: int = 8192,
     cost_cb=None,
 ) -> str:
-    client = get_client()
-    model = get_model()
+    provider = get_provider()
+    model = get_bedrock_model() if provider == "bedrock" else get_model()
     t0 = time.monotonic()
-    resp = await client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_blocks,
-        messages=messages,
-    )
-    text = resp.content[0].text.strip()
-    usage = resp.usage
-    cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-    cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+    try:
+        if provider == "bedrock":
+            text, usage_data = await asyncio.to_thread(
+                call_bedrock_sync,
+                system_blocks=system_blocks,
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+            )
+            input_tokens = usage_data["input_tokens"]
+            output_tokens = usage_data["output_tokens"]
+            cache_create = usage_data["cache_creation_input_tokens"]
+            cache_read = usage_data["cache_read_input_tokens"]
+        else:
+            client = get_client()
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_blocks,
+                messages=messages,
+            )
+            text = resp.content[0].text.strip()
+            usage = resp.usage
+            input_tokens = usage.input_tokens
+            output_tokens = usage.output_tokens
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    except Exception:
+        cfg = load_config()
+        if provider == "bedrock" and bool(cfg.get("bedrock_fallback_to_anthropic", True)):
+            log(f"{label}: Bedrock failed; falling back to direct Anthropic.")
+            client = get_client()
+            model = get_model()
+            provider = "anthropic"
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_blocks,
+                messages=messages,
+            )
+            text = resp.content[0].text.strip()
+            usage = resp.usage
+            input_tokens = usage.input_tokens
+            output_tokens = usage.output_tokens
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        else:
+            raise
+
     estimated_cost = estimate_cost_usd(
         model,
-        usage.input_tokens,
-        usage.output_tokens,
+        input_tokens,
+        output_tokens,
         cache_create,
         cache_read,
     )
     elapsed = time.monotonic() - t0
     log(
-        f"{label}: in={usage.input_tokens} out={usage.output_tokens} "
+        f"{label}: provider={provider} model={model} in={input_tokens} out={output_tokens} "
         f"cache_read={cache_read} cache_create={cache_create} "
         f"cost=${estimated_cost:.4f} elapsed={elapsed:.1f}s"
     )
     if cost_cb:
         cost_cb(CostEvent(
             label=label,
-            model=model,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
+            model=f"{provider}:{model}",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             cache_creation_input_tokens=cache_create,
             cache_read_input_tokens=cache_read,
             estimated_cost_usd=estimated_cost,

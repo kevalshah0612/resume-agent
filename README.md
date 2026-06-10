@@ -98,6 +98,48 @@ Copy-Item pipeline_config.example.json pipeline_config.json
 
 Do not commit `pipeline_config.json`; it is ignored because it may contain secrets.
 
+### Amazon Bedrock Setup
+
+The app can use Amazon Bedrock first and keep direct Anthropic as fallback.
+
+Use normal AWS credentials:
+
+```powershell
+$env:AWS_ACCESS_KEY_ID="your_access_key"
+$env:AWS_SECRET_ACCESS_KEY="your_secret_key"
+$env:AWS_REGION="us-east-1"
+```
+
+Or use an AWS profile:
+
+```powershell
+$env:AWS_PROFILE="your_profile_name"
+$env:AWS_REGION="us-east-1"
+```
+
+Then configure `pipeline_config.json`:
+
+```json
+{
+  "provider": "bedrock",
+  "aws_region": "us-east-1",
+  "model_bedrock": "your_bedrock_model_id",
+  "bedrock_fallback_to_anthropic": true,
+  "model_sonnet": "claude-sonnet-4-6"
+}
+```
+
+If Bedrock fails and `bedrock_fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
+
+If you want direct Anthropic only:
+
+```json
+{
+  "provider": "anthropic",
+  "model_sonnet": "claude-sonnet-4-6"
+}
+```
+
 ### Start The App
 
 ```powershell
