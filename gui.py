@@ -55,9 +55,9 @@ def run_bg(app: tk.Tk, fn, done) -> None:
     def worker():
         try:
             result = fn()
-            app.after(0, lambda: done(result, None))
+            app.after(0, lambda result=result: done(result, None))
         except Exception as exc:
-            app.after(0, lambda: done(None, exc))
+            app.after(0, lambda exc=exc: done(None, exc))
 
     threading.Thread(target=worker, daemon=True).start()
 
