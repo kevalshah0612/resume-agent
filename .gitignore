@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+
+# Local secrets
+.env
+pipeline_config.json
+
+# Generated application data
+requests/
+runs/
+archives/
+jobs_out/
+*.docx
+*.pdf
+
+# Local/editor files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
