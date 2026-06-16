@@ -111,26 +111,32 @@ Copy-Item .env.example .env
 Set:
 
 ```text
-PROVIDER_MODE=4
+PROVIDER_MODE=1
 ```
 
 Mode mapping:
 
-- `1` = Gemini
-- `2` = Amazon Bedrock
-- `3` = direct Anthropic Claude
-- `4` = NVIDIA Nemotron
+- `1` = NVIDIA Nemotron
+- `2` = direct Anthropic Claude
 
 ### NVIDIA Setup
 
 For NVIDIA mode:
 
 ```text
-PROVIDER_MODE=4
+PROVIDER_MODE=1
 NVIDIA_API_KEY=your_nvidia_api_key
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_MODEL=nvidia/nemotron-3-super-120b-a12b
 ```
+
+To change NVIDIA models quickly, edit only:
+
+```text
+NVIDIA_MODEL=nvidia/your-other-model
+```
+
+The app reloads `.env` when it starts a model call, so a new run can pick up that line without changing code.
 
 The app uses NVIDIA's OpenAI-compatible endpoint through the OpenAI Python SDK. The request enables thinking with:
 
@@ -141,71 +147,13 @@ The app uses NVIDIA's OpenAI-compatible endpoint through the OpenAI Python SDK. 
 }
 ```
 
-### Gemini Setup
-
-For Gemini mode:
-
-```text
-PROVIDER_MODE=1
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-3.1-pro-preview
-GEMINI_FALLBACK_MODEL=gemini-2.5-flash
-```
-
-The app uses the Google Gen AI SDK (`google-genai`). If the primary Gemini model is unavailable or quota-limited, it retries the fallback Gemini model before using direct Anthropic fallback.
-
-### Amazon Bedrock Setup
-
-The app can use Amazon Bedrock first and keep direct Anthropic as fallback.
-
-If you generated a long-term Bedrock API key, use:
-
-```text
-PROVIDER_MODE=2
-AWS_REGION=us-east-1
-AWS_BEARER_TOKEN_BEDROCK=your_bedrock_long_term_api_key
-BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
-```
-
-Alternative IAM credentials:
-
-```text
-PROVIDER_MODE=2
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
-```
-
-Or use an AWS profile:
-
-```text
-PROVIDER_MODE=2
-AWS_PROFILE=your_profile_name
-AWS_REGION=us-east-1
-BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
-```
-
-Equivalent `pipeline_config.json`:
-
-```json
-{
-  "provider_mode": "2",
-  "aws_region": "us-east-1",
-  "aws_bearer_token_bedrock": "",
-  "model_bedrock": "global.anthropic.claude-sonnet-4-6",
-  "fallback_to_anthropic": true,
-  "model_sonnet": "claude-sonnet-4-6"
-}
-```
-
-If Bedrock or Gemini fails and `fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
+If NVIDIA fails and `fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
 
 If you want direct Anthropic only:
 
 ```json
 {
-  "provider_mode": "3",
+  "provider_mode": "2",
   "model_sonnet": "claude-sonnet-4-6"
 }
 ```
@@ -256,7 +204,7 @@ The GUI supports multiple applications in one window.
 
 ## Cost Tracking
 
-The GUI shows estimated Anthropic API cost in two places:
+The GUI shows estimated model API cost in two places:
 
 - Per tab: cost for that application tab.
 - Session cost: total estimated cost since the GUI was opened.
@@ -267,7 +215,7 @@ Each request folder also saves:
 costs.json
 ```
 
-The estimate is calculated from token usage returned by the Anthropic API response:
+For direct Claude calls, the estimate is calculated from token usage returned by the Anthropic API response:
 
 - input tokens
 - output tokens
@@ -292,6 +240,8 @@ To show an estimated remaining balance in the GUI, create `pipeline_config.json`
 ```
 
 For official billing totals, use the Anthropic Console or Anthropic's usage/cost reporting tools.
+
+For NVIDIA calls, the OpenAI-compatible streaming response may not return token usage, so the app records the provider/model but may show `$0.00` unless usage metadata is returned.
 
 ## Mode Behavior
 
