@@ -111,7 +111,7 @@ Copy-Item .env.example .env
 Set:
 
 ```text
-PROVIDER_MODE=1
+PROVIDER_MODE=4
 ```
 
 Mode mapping:
@@ -119,6 +119,27 @@ Mode mapping:
 - `1` = Gemini
 - `2` = Amazon Bedrock
 - `3` = direct Anthropic Claude
+- `4` = NVIDIA Nemotron
+
+### NVIDIA Setup
+
+For NVIDIA mode:
+
+```text
+PROVIDER_MODE=4
+NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_MODEL=nvidia/nemotron-3-super-120b-a12b
+```
+
+The app uses NVIDIA's OpenAI-compatible endpoint through the OpenAI Python SDK. The request enables thinking with:
+
+```json
+{
+  "chat_template_kwargs": {"enable_thinking": true},
+  "reasoning_budget": 16384
+}
+```
 
 ### Gemini Setup
 

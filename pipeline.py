@@ -38,6 +38,7 @@ ENV_FILE = ROOT / ".env"
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_BEDROCK_REGION = "us-east-1"
 DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview"
+DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 
 _log_cb = None
 
@@ -114,6 +115,7 @@ MODEL_PRICING_PER_MTOK = {
     "gemini-3.1-pro-preview": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
     "gemini-2.5-flash": {"input": 0.30, "cache_write": 0.0, "cache_read": 0.0, "output": 2.50},
     "gemini-2.5-pro": {"input": 1.25, "cache_write": 0.0, "cache_read": 0.0, "output": 10.0},
+    "nvidia/nemotron-3-super-120b-a12b": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
 }
 
 
@@ -144,6 +146,9 @@ def load_config() -> dict[str, Any]:
         "RESUME_AGENT_PROVIDER": "provider",
         "GEMINI_API_KEY": "gemini_api_key",
         "GEMINI_MODEL": "model_gemini",
+        "NVIDIA_API_KEY": "nvidia_api_key",
+        "NVIDIA_MODEL": "model_nvidia",
+        "NVIDIA_BASE_URL": "nvidia_base_url",
         "BEDROCK_MODEL_ID": "model_bedrock",
         "AWS_BEARER_TOKEN_BEDROCK": "aws_bearer_token_bedrock",
         "AWS_REGION": "aws_region",
@@ -180,12 +185,17 @@ def get_provider() -> str:
         "3": "anthropic",
         "claude": "anthropic",
         "anthropic": "anthropic",
+        "4": "nvidia",
+        "nvidia": "nvidia",
+        "nemotron": "nvidia",
     }
     if mode in mode_map:
         return mode_map[mode]
     provider = str(cfg.get("provider", "") or os.environ.get("RESUME_AGENT_PROVIDER", "")).lower().strip()
-    if provider in {"gemini", "bedrock", "anthropic"}:
+    if provider in {"gemini", "bedrock", "anthropic", "nvidia"}:
         return provider
+    if cfg.get("model_nvidia") or os.environ.get("NVIDIA_API_KEY"):
+        return "nvidia"
     if cfg.get("model_gemini") or os.environ.get("GEMINI_API_KEY"):
         return "gemini"
     if cfg.get("model_bedrock") or os.environ.get("BEDROCK_MODEL_ID"):
@@ -196,6 +206,25 @@ def get_provider() -> str:
 def get_model() -> str:
     cfg = load_config()
     return cfg.get("model_resume") or cfg.get("model_sonnet") or DEFAULT_MODEL
+
+
+def get_nvidia_model() -> str:
+    cfg = load_config()
+    return os.environ.get("NVIDIA_MODEL") or cfg.get("model_nvidia") or DEFAULT_NVIDIA_MODEL
+
+
+def get_nvidia_client():
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("openai is required for NVIDIA provider. Run: pip install openai") from exc
+
+    cfg = load_config()
+    key = os.environ.get("NVIDIA_API_KEY") or cfg.get("nvidia_api_key", "")
+    if not key:
+        raise RuntimeError("NVIDIA provider selected but NVIDIA_API_KEY is missing.")
+    base_url = os.environ.get("NVIDIA_BASE_URL") or cfg.get("nvidia_base_url") or "https://integrate.api.nvidia.com/v1"
+    return OpenAI(base_url=base_url, api_key=key)
 
 
 def get_bedrock_model() -> str:
@@ -302,6 +331,50 @@ def gemini_prompt(messages: list[dict[str, str]]) -> str:
         role = "USER" if msg["role"] == "user" else "ASSISTANT"
         chunks.append(f"{role}:\n{msg['content']}")
     return "\n\n".join(chunks)
+
+
+def openai_messages(system_blocks: list[dict[str, Any]], messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    system = system_text(system_blocks)
+    result: list[dict[str, str]] = []
+    if system:
+        result.append({"role": "system", "content": system})
+    result.extend(messages)
+    return result
+
+
+def call_nvidia_sync(
+    *,
+    system_blocks: list[dict[str, Any]],
+    messages: list[dict[str, str]],
+    model: str,
+    max_tokens: int,
+) -> tuple[str, dict[str, int]]:
+    client = get_nvidia_client()
+    stream = client.chat.completions.create(
+        model=model,
+        messages=openai_messages(system_blocks, messages),
+        temperature=1,
+        top_p=0.95,
+        max_tokens=max_tokens,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_budget": min(max_tokens, 16384),
+        },
+        stream=True,
+    )
+    parts: list[str] = []
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+        content = getattr(chunk.choices[0].delta, "content", None)
+        if content is not None:
+            parts.append(content)
+    return "".join(parts).strip(), {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+    }
 
 
 def call_gemini_sync(
@@ -425,7 +498,9 @@ async def call_model(
     cost_cb=None,
 ) -> str:
     provider = get_provider()
-    if provider == "gemini":
+    if provider == "nvidia":
+        model = get_nvidia_model()
+    elif provider == "gemini":
         model = get_gemini_model()
     elif provider == "bedrock":
         model = get_bedrock_model()
@@ -434,7 +509,19 @@ async def call_model(
     t0 = time.monotonic()
 
     try:
-        if provider == "gemini":
+        if provider == "nvidia":
+            text, usage_data = await asyncio.to_thread(
+                call_nvidia_sync,
+                system_blocks=system_blocks,
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+            )
+            input_tokens = usage_data["input_tokens"]
+            output_tokens = usage_data["output_tokens"]
+            cache_create = usage_data["cache_creation_input_tokens"]
+            cache_read = usage_data["cache_read_input_tokens"]
+        elif provider == "gemini":
             try:
                 text, usage_data = await asyncio.to_thread(
                     call_gemini_sync,
@@ -490,7 +577,7 @@ async def call_model(
     except Exception:
         cfg = load_config()
         fallback_enabled = bool(cfg.get("fallback_to_anthropic", cfg.get("bedrock_fallback_to_anthropic", True)))
-        if provider in {"gemini", "bedrock"} and fallback_enabled:
+        if provider in {"nvidia", "gemini", "bedrock"} and fallback_enabled:
             log(f"{label}: {provider} failed; falling back to direct Anthropic.")
             client = get_client()
             model = get_model()
