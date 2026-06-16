@@ -7,9 +7,9 @@ Flow 1:
 Flow 2:
   recruiter review -> final JSON for DOCX
 
-The Markdown prompt files are loaded as-is from new_flow. Large static
-prompt/story blocks use Anthropic prompt caching; only the job input changes
-between calls.
+The Markdown prompt files are loaded as-is from new_flow. The provider layer is
+kept intentionally small: NVIDIA first when configured, direct Claude fallback
+when enabled.
 """
 
 from __future__ import annotations
@@ -277,7 +277,10 @@ def call_nvidia_sync(
 def read_prompt(name: str) -> str:
     path = PROMPT_DIR / name
     if not path.exists():
-        raise FileNotFoundError(f"Missing prompt file: {path}")
+        matches = [candidate for candidate in PROMPT_DIR.iterdir() if candidate.name.lower() == name.lower()]
+        if not matches:
+            raise FileNotFoundError(f"Missing prompt file: {path}")
+        path = matches[0]
     return path.read_text(encoding="utf-8")
 
 
@@ -431,7 +434,11 @@ def recruiter_system() -> list[dict[str, Any]]:
     return [cached_text_block(read_prompt("recruiter.md"))]
 
 
-async def run_pass1(inp: ResumeInput, cost_cb=None) -> str:
+def labeled_step(request_label: str, step: str) -> str:
+    return f"{request_label} | {step}" if request_label else step
+
+
+async def run_pass1(inp: ResumeInput, cost_cb=None, request_label: str = "") -> str:
     user_message = "\n\n".join([
         read_prompt("prompt_short.md"),
         PASS1_COMPACT_INSTRUCTION,
@@ -440,13 +447,19 @@ async def run_pass1(inp: ResumeInput, cost_cb=None) -> str:
     return await call_model(
         system_blocks=flow1_system(),
         messages=[{"role": "user", "content": user_message}],
-        label="PASS 1",
+        label=labeled_step(request_label, "PASS 1"),
         max_tokens=3500,
         cost_cb=cost_cb,
     )
 
 
-async def run_pass2(inp: ResumeInput, pass1_text: str, approval_text: str, cost_cb=None) -> str:
+async def run_pass2(
+    inp: ResumeInput,
+    pass1_text: str,
+    approval_text: str,
+    cost_cb=None,
+    request_label: str = "",
+) -> str:
     first_user = "\n\n".join([
         read_prompt("prompt_short.md"),
         PASS1_COMPACT_INSTRUCTION,
@@ -460,7 +473,7 @@ async def run_pass2(inp: ResumeInput, pass1_text: str, approval_text: str, cost_
             {"role": "assistant", "content": pass1_text},
             {"role": "user", "content": PASS2_COMPACT_INSTRUCTION + "\n\n" + normalized_approval},
         ],
-        label="PASS 2",
+        label=labeled_step(request_label, "PASS 2"),
         max_tokens=12000,
         cost_cb=cost_cb,
     )
@@ -473,6 +486,7 @@ async def run_recruiter_review(
     des: str = "",
     resume2_json: dict[str, Any] | None = None,
     cost_cb=None,
+    request_label: str = "",
 ) -> str:
     parts = [
         read_prompt("recruiter_short.md"),
@@ -488,8 +502,53 @@ async def run_recruiter_review(
     return await call_model(
         system_blocks=recruiter_system(),
         messages=[{"role": "user", "content": "\n".join(parts)}],
-        label="RECRUITER REVIEW",
+        label=labeled_step(request_label, "RECRUITER REVIEW"),
         max_tokens=12000,
+        cost_cb=cost_cb,
+    )
+
+
+async def run_application_answers(
+    *,
+    company: str,
+    title: str,
+    jd: str,
+    questions: str,
+    resume_json: dict[str, Any],
+    cost_cb=None,
+    request_label: str = "",
+) -> str:
+    system_blocks = [
+        cached_text_block(
+            "You answer job application form questions for Keval Shah. "
+            "Use the job description, company, role title, and resume JSON as evidence. "
+            "Write concise, natural, human answers. Avoid generic filler. "
+            "Do not invent sponsorship, salary, clearance, relocation, or legal facts. "
+            "If a question requires a factual value that is not present, say what to enter as a safe placeholder or ask the user to confirm."
+        )
+    ]
+    user_message = "\n".join([
+        f"Company: {company}",
+        f"Title: {title}",
+        "JD:",
+        jd.strip(),
+        "",
+        "Resume JSON:",
+        json.dumps(resume_json, indent=2),
+        "",
+        "Application questions to answer:",
+        questions.strip(),
+        "",
+        "Output format:",
+        "- For each question, repeat a short version of the question.",
+        "- Then give Answer: <short human answer>.",
+        "- Keep most answers 1-3 sentences unless the question asks for more.",
+    ])
+    return await call_model(
+        system_blocks=system_blocks,
+        messages=[{"role": "user", "content": user_message}],
+        label=labeled_step(request_label, "APPLICATION QA"),
+        max_tokens=3500,
         cost_cb=cost_cb,
     )
 
@@ -506,155 +565,6 @@ def extract_json(text: str) -> dict[str, Any]:
     raise ValueError(f"Could not extract valid JSON from model output: {last_error}")
 
 
-REPAIR_VERBS = [
-    "Optimized",
-    "Delivered",
-    "Implemented",
-    "Developed",
-    "Integrated",
-    "Automated",
-    "Refactored",
-    "Stabilized",
-    "Improved",
-    "Deployed",
-    "Standardized",
-    "Resolved",
-    "Architected",
-    "Instrumented",
-]
-
-
-def repair_repeated_verbs(data: dict[str, Any]) -> dict[str, Any]:
-    """Fix duplicate opening verbs by changing only the first word of later bullets."""
-    used: set[str] = set()
-
-    def repair_bullet(text: Any) -> str:
-        bullet = str(text or "").strip()
-        if not bullet:
-            return bullet
-        parts = bullet.split(maxsplit=1)
-        first = parts[0]
-        rest = parts[1] if len(parts) > 1 else ""
-        verb_key = re.sub(r"[^A-Za-z-]", "", first).lower()
-        if verb_key and verb_key not in used:
-            used.add(verb_key)
-            return bullet.rstrip(".")
-        for replacement in REPAIR_VERBS:
-            key = replacement.lower()
-            if key not in used:
-                used.add(key)
-                return f"{replacement} {rest}".strip().rstrip(".")
-        return bullet.rstrip(".")
-
-    for section in ("professional_experience", "projects"):
-        for item in data.get(section) or []:
-            item["bullets"] = [repair_bullet(b) for b in (item.get("bullets") or [])]
-
-    for edu in data.get("education") or []:
-        if str(edu.get("ta_bullet") or "").strip():
-            edu["ta_bullet"] = repair_bullet(edu["ta_bullet"])
-
-    return data
-
-
-def validate_resume_json(data: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    top_keys = [
-        "config",
-        "name",
-        "contact",
-        "linkedin_url",
-        "github_url",
-        "summary",
-        "education",
-        "technical_skills",
-        "professional_experience",
-        "projects",
-    ]
-    config_keys = [
-        "type",
-        "level",
-        "layout_profile",
-        "output",
-        "bold_markers",
-        "ta_active",
-        "company",
-        "role",
-    ]
-    if list(data.keys()) != top_keys:
-        errors.append("Top-level keys or key order do not match the new schema.")
-    cfg = data.get("config")
-    if not isinstance(cfg, dict) or list(cfg.keys()) != config_keys:
-        errors.append("Config keys or key order do not match the new schema.")
-    if not isinstance(data.get("technical_skills"), dict):
-        errors.append("technical_skills must be an object/dictionary.")
-
-    for idx, edu in enumerate(data.get("education") or [], 1):
-        if list(edu.keys()) != ["university", "degree", "location", "graduation", "ta_bullet"]:
-            errors.append(f"Education item {idx} has invalid keys.")
-
-    for idx, job in enumerate(data.get("professional_experience") or [], 1):
-        if list(job.keys()) != ["company", "title", "location", "dates", "bullets"]:
-            errors.append(f"Professional experience item {idx} has invalid keys.")
-
-    for idx, project in enumerate(data.get("projects") or [], 1):
-        if list(project.keys()) != ["name", "tech", "github_url", "bullets"]:
-            errors.append(f"Project item {idx} has invalid keys.")
-
-    banned = {
-        "institution",
-        "gpa",
-        "ta",
-        "client",
-        "url",
-        "link",
-        "repository",
-        "technologies",
-    }
-
-    def walk(value: Any, path: str = "$") -> None:
-        if isinstance(value, dict):
-            for key, child in value.items():
-                if key in banned:
-                    errors.append(f"Banned key found at {path}.{key}")
-                walk(child, f"{path}.{key}")
-        elif isinstance(value, list):
-            for i, child in enumerate(value):
-                walk(child, f"{path}[{i}]")
-
-    walk(data)
-
-    verbs: dict[str, str] = {}
-    for section in ("professional_experience", "projects"):
-        for i, item in enumerate(data.get(section) or [], 1):
-            for j, bullet in enumerate(item.get("bullets") or [], 1):
-                words = str(bullet).strip().split()
-                if not words:
-                    errors.append(f"Empty bullet at {section}[{i}].bullets[{j}]")
-                    continue
-                verb = re.sub(r"[^A-Za-z-]", "", words[0]).lower()
-                location = f"{section}[{i}].bullets[{j}]"
-                if verb in verbs:
-                    errors.append(f"Repeated opening verb '{words[0]}' at {verbs[verb]} and {location}.")
-                verbs[verb] = location
-                if str(bullet).strip().endswith("."):
-                    errors.append(f"Bullet ends with a period at {location}.")
-
-    for i, edu in enumerate(data.get("education") or [], 1):
-        ta_bullet = str(edu.get("ta_bullet") or "").strip()
-        if ta_bullet:
-            words = ta_bullet.split()
-            verb = re.sub(r"[^A-Za-z-]", "", words[0]).lower()
-            location = f"education[{i}].ta_bullet"
-            if verb in verbs:
-                errors.append(f"Repeated opening verb '{words[0]}' at {verbs[verb]} and {location}.")
-            verbs[verb] = location
-            if ta_bullet.endswith("."):
-                errors.append(f"TA bullet ends with a period at {location}.")
-
-    return errors
-
-
 def slug(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_")
     return cleaned or "Resume"
@@ -662,11 +572,6 @@ def slug(value: str) -> str:
 
 def timestamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M")
-
-
-def meaningful_stem(company: str, role: str = "") -> str:
-    role_part = slug(role or "Software_Engineer")
-    return f"Keval_Shah_{slug(company)}_{role_part}_{timestamp()}"
 
 
 def save_text(path: Path, text: str) -> None:
@@ -687,8 +592,8 @@ def build_docx(json_path: Path, out_docx: str) -> Path:
         raise RuntimeError(f"manager.py failed:\n{result.stderr or result.stdout}")
     log(result.stdout.strip())
     for line in result.stdout.splitlines():
-        if line.startswith("DOCX saved:"):
-            return ROOT / line.split("DOCX saved:", 1)[1].strip()
+        if line.startswith("DOCX saved"):
+            return ROOT / line.split(":", 1)[1].strip()
     return ROOT / out_docx
 
 

@@ -7,21 +7,33 @@ Only 3 commands:
 1. JSON → DOCX
    python resume.py temp.json
    python resume.py temp.json "Palo Alto Networks"
+   python resume.py temp.json 6           # section gap = 6pts
+   python resume.py temp.json 6 4         # section gap = 6pts, sub-section gap = 4pts
+   python resume.py temp.json "Palo Alto Networks" 6
+   python resume.py temp.json "Palo Alto Networks" 6 4
 
 2. DOCX → PDF + archive + delete DOCX
    python resume.py resume.docx
    python resume.py resume.docx "Palo Alto Networks"
 
-   This keeps final PDF in the current folder, copies one PDF into archives/YYYY-MM-DD/,
-   and deletes the DOCX from the current folder.
+   This keeps DOCX files in Resume-word, keeps final PDFs in Resume-pdf,
+   copies one PDF into Resume-pdf/archives/YYYY-MM-DD/, and deletes the DOCX.
 
-3. Clear current folder
+3. Clear generated DOCX/PDF files
    python resume.py clear
+
+Gap args (only for JSON → DOCX):
+  - One numeric arg  → section gap in pts   (default: 4)
+  - Two numeric args → section gap, then sub-section gap in pts   (default: 4, 4)
+  Section gap    = space added after each rendered section block.
+  Sub-section gap = space added between entries inside a section
+                    (e.g. between two jobs, or between two projects).
 
 Rules:
   - config.type controls resume type: backend, fullstack, aiml, aitool
   - config.level controls base level: 2=Entry/SWE I, 3=Mid, 4=Intern
   - config.layout_profile controls section order and experience order when present
+  - Skills render near the top for cold-apply layouts
   - If layout_profile is missing, level 3 renders TCS first and level 2/4 renders internship first
   - Python never changes role titles. It renders titles exactly from JSON.
   - Company passed in command overrides company/output filename only.
@@ -48,7 +60,6 @@ from docx.shared import Inches, Pt
 
 
 # ── Formatting constants ─────────────────────────────────────────────────────
-# Keep readable sizing. The real pagination fix is removing trailing blank gaps.
 DEFAULT_FONT = "Calibri"
 BODY_PT = Pt(10.5)
 SUB_PT = Pt(11)
@@ -65,40 +76,43 @@ M_LEFT = Inches(0.40)
 M_RIGHT = Inches(0.23)
 TAB_PAD = Inches(0.05)
 
+DEFAULT_SECTION_GAP = 4   # pts between sections
+DEFAULT_SUB_GAP = 4       # pts between entries within a section
+
 RESUME_STEM = "Keval_Shah"
 ARCHIVES_DIR = "archives"
+WORD_DIR = "Resume-word"
+PDF_DIR = "Resume-pdf"
 
 
 # ── Configs ──────────────────────────────────────────────────────────────────
 CONFIGS = {
-    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("backend", 3): {"label": "SWE Backend Mid", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
     ("backend", 4): {"label": "SWE Backend Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("fullstack", 2): {"label": "Fullstack Entry", "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("fullstack", 3): {"label": "Fullstack Mid", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
     ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aiml", 2): {"label": "AI/ML Entry", "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aiml", 3): {"label": "AI/ML Mid", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aiml", 4): {"label": "AI/ML Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aitool", 2): {"label": "AI Tooling Entry", "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aitool", 3): {"label": "AI Tooling Mid", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 4): {"label": "AI Tooling Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "projects", "experience"]},
+    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
 }
 
 
 LAYOUT_ORDERS = {
-    "student_entry": ["education", "skills", "experience", "projects"],
-    "professional_entry": ["summary", "skills", "experience", "projects", "education"],
-    "mid": ["summary", "skills", "experience", "projects", "education"],
-    "aiml_entry": ["education", "skills", "experience", "projects"],
-    "aiml_mid_product": ["summary", "skills", "experience", "projects", "education"],
-    "aiml_mid_platform": ["summary", "skills", "experience", "projects", "education"],
-    "aitool_mid": ["summary", "skills", "experience", "projects", "education"],
-    "internship": ["education", "skills", "experience", "projects"],
+    "student_entry":       ["education", "skills", "experience", "projects"],
+    "professional_entry":  ["summary", "skills", "experience", "projects", "education"],
+    "mid":                 ["summary", "skills", "experience", "projects", "education"],
+    "aiml_entry":          ["education", "skills", "projects", "experience"],
+    "aitool_mid":          ["summary", "skills", "experience", "projects", "education"],
+    "internship":          ["education", "skills", "experience", "projects"],
 }
 
-GHI_FIRST_LAYOUTS = {"student_entry", "aiml_entry", "aiml_mid_product", "internship"}
-TCS_FIRST_LAYOUTS = {"professional_entry", "mid", "aiml_mid_platform", "aitool_mid"}
+GHI_FIRST_LAYOUTS = {"student_entry", "aiml_entry", "internship"}
+TCS_FIRST_LAYOUTS = {"professional_entry", "mid", "aitool_mid"}
 
 ATS_KEYWORDS = {
     "backend": "Software Engineer, Backend Engineer, Java, Python, Spring Boot, AWS, Microservices, Docker, REST APIs, Distributed Systems, PostgreSQL, Redis, Kubernetes",
@@ -135,8 +149,41 @@ def load_json(path: str) -> Dict[str, Any]:
         fail(f"Invalid JSON: {e}")
 
 
-def get_company_arg(args: list[str]) -> str:
-    return clean(" ".join(args[2:])) if len(args) > 2 else ""
+def parse_extra_args(args: list[str]) -> tuple[str, int, int]:
+    """
+    Parse everything after the first positional arg (json/docx path).
+
+    Returns (company, section_gap, sub_gap).
+
+    Accepted patterns (args = sys.argv[2:]):
+      []                        -> ("", 4, 4)
+      ["6"]                     -> ("", 6, 4)
+      ["6", "4"]                -> ("", 6, 4)
+      ["Palo Alto Networks"]    -> ("Palo Alto Networks", 4, 4)
+      ["Palo Alto Networks", "6"]      -> ("Palo Alto Networks", 6, 4)
+      ["Palo Alto Networks", "6", "4"] -> ("Palo Alto Networks", 6, 4)
+
+    Numeric-only tokens at the END of the arg list are treated as gap values.
+    Everything before those is joined as the company name.
+    """
+    section_gap = DEFAULT_SECTION_GAP
+    sub_gap = DEFAULT_SUB_GAP
+    company = ""
+
+    extras = list(args)
+
+    # Pull up to 2 trailing numeric tokens as gap values.
+    gap_vals: list[int] = []
+    while extras and extras[-1].isdigit() and len(gap_vals) < 2:
+        gap_vals.insert(0, int(extras.pop()))
+
+    if len(gap_vals) >= 1:
+        section_gap = gap_vals[0]
+    if len(gap_vals) >= 2:
+        sub_gap = gap_vals[1]
+
+    company = clean(" ".join(extras))
+    return company, section_gap, sub_gap
 
 
 def normalize_type(value: Any) -> str:
@@ -176,11 +223,13 @@ def normalize_level(value: Any) -> int:
     }
     return aliases.get(raw, 3)
 
+
 def clean_bullet_text(text: Any) -> str:
     text = clean(text)
     while text.endswith((".", ";", ":")):
         text = text[:-1].rstrip()
     return text
+
 
 def normalize_layout_profile(value: Any, rtype: str, level: int) -> str:
     raw = clean(value).lower().replace("-", "_").replace(" ", "_")
@@ -198,13 +247,13 @@ def normalize_layout_profile(value: Any, rtype: str, level: int) -> str:
         "aiml_entry": "aiml_entry",
         "ai_entry": "aiml_entry",
         "ml_entry": "aiml_entry",
-        "aiml_mid_product": "aiml_mid_product",
-        "ai_mid_product": "aiml_mid_product",
-        "llm_product": "aiml_mid_product",
-        "rag_product": "aiml_mid_product",
-        "aiml_mid_platform": "aiml_mid_platform",
-        "ai_mid_platform": "aiml_mid_platform",
-        "ml_platform": "aiml_mid_platform",
+        "aiml_mid_product": "mid",
+        "ai_mid_product": "mid",
+        "llm_product": "mid",
+        "rag_product": "mid",
+        "aiml_mid_platform": "mid",
+        "ai_mid_platform": "mid",
+        "ml_platform": "mid",
         "aitool_mid": "aitool_mid",
         "ai_tooling_mid": "aitool_mid",
         "developer_productivity": "aitool_mid",
@@ -216,17 +265,15 @@ def normalize_layout_profile(value: Any, rtype: str, level: int) -> str:
     if raw in aliases:
         return aliases[raw]
 
-    # Backward-compatible fallback when older JSON has no layout_profile.
     if level == 4:
         return "internship"
     if level == 3:
         if rtype == "aiml":
-            return "aiml_mid_product"
+            return "mid"
         if rtype == "aitool":
             return "aitool_mid"
         return "mid"
     return "student_entry"
-
 
 
 def config(data: dict) -> dict:
@@ -276,7 +323,6 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
     if layout_profile in GHI_FIRST_LAYOUTS:
         return ghi + others
 
-    # Backward-compatible fallback.
     return others + ghi if level == 3 else ghi + others
 
 
@@ -373,7 +419,9 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
 
     company = company_override or infer_company_from_docx(docx_path)
     company_safe = safe_name(company)
-    work_dir = os.path.dirname(os.path.abspath(docx_path)) or "."
+    source_dir = os.path.dirname(os.path.abspath(docx_path)) or "."
+    pdf_dir = os.path.abspath(PDF_DIR)
+    os.makedirs(pdf_dir, exist_ok=True)
     now = datetime.now()
 
     try:
@@ -386,14 +434,14 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
         except Exception as libre_error:
             fail(f"Could not convert DOCX to PDF. Word error: {word_error}. LibreOffice error: {libre_error}")
 
-    final_pdf = os.path.join(work_dir, f"{RESUME_STEM}_{company_safe}_Resume.pdf")
+    final_pdf = os.path.join(pdf_dir, f"{RESUME_STEM}_{company_safe}_Resume.pdf")
 
     if os.path.abspath(pdf_path) != os.path.abspath(final_pdf):
         if os.path.exists(final_pdf):
             os.remove(final_pdf)
         shutil.move(pdf_path, final_pdf)
 
-    archive_dir = os.path.join(work_dir, ARCHIVES_DIR, now.strftime("%Y-%m-%d"))
+    archive_dir = os.path.join(pdf_dir, ARCHIVES_DIR, now.strftime("%Y-%m-%d"))
     os.makedirs(archive_dir, exist_ok=True)
 
     archive_pdf = os.path.join(archive_dir, f"{RESUME_STEM}_{company_safe}_{now.strftime('%H-%M-%S')}.pdf")
@@ -405,7 +453,7 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
         print(f"Warning: could not delete DOCX: {e}")
 
     lock_name = "~$" + os.path.basename(docx_path)[2:]
-    lock_path = os.path.join(work_dir, lock_name)
+    lock_path = os.path.join(source_dir, lock_name)
     if os.path.exists(lock_path):
         try:
             os.remove(lock_path)
@@ -420,14 +468,20 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
 
 def clear_folder() -> None:
     deleted = 0
-    for name in os.listdir("."):
-        if name.lower().endswith((".docx", ".pdf")) or name.startswith("~$"):
-            try:
-                os.remove(name)
-                deleted += 1
-                print(f"Deleted: {name}")
-            except Exception as e:
-                print(f"Could not delete {name}: {e}")
+    for folder in [".", WORD_DIR, PDF_DIR]:
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if os.path.isdir(path):
+                continue
+            if name.lower().endswith((".docx", ".pdf")) or name.startswith("~$"):
+                try:
+                    os.remove(path)
+                    deleted += 1
+                    print(f"Deleted: {path}")
+                except Exception as e:
+                    print(f"Could not delete {path}: {e}")
     print(f"Done. Removed {deleted} file(s).")
 
 
@@ -628,7 +682,7 @@ def bullet(doc: Document, text: str, bold_markers: bool = True) -> None:
 
 
 # ── Section renderers ────────────────────────────────────────────────────────
-def render_summary(doc: Document, data: dict, bold_markers: bool) -> bool:
+def render_summary(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -> bool:
     summary = clean(data.get("summary", ""))
     if not summary:
         return False
@@ -639,7 +693,7 @@ def render_summary(doc: Document, data: dict, bold_markers: bool) -> bool:
     return True
 
 
-def render_education(doc: Document, data: dict, grad: str, level: int, bold_markers: bool) -> bool:
+def render_education(doc: Document, data: dict, grad: str, level: int, bold_markers: bool, sub_gap: int) -> bool:
     education = data.get("education") or []
     if not education:
         return False
@@ -665,7 +719,9 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
             r2 = p.add_run(clean(edu.get("location", "")))
             rf(r2, sz=SUB_PT, italic=True)
 
-        display_grad = grad if i == 0 else clean(edu.get("graduation", ""))
+        # Prefer the graduation value from JSON so Prompt/Story remain source of truth.
+        # Fall back to config default only when JSON omits the field.
+        display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
         if display_grad:
             tab = p.add_run("\t")
             rf(tab, sz=SUB_PT)
@@ -680,14 +736,13 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
         if i == 0 and render_ta and clean(edu.get("ta_bullet", "")):
             bullet(doc, edu.get("ta_bullet", ""), bold_markers)
 
-        # Gap only between schools. Section-level gap is handled in build_docx.
         if i < len(education) - 1:
-            gap(doc)
+            gap(doc, sub_gap)
 
     return True
 
 
-def render_skills(doc: Document, data: dict, bold_markers: bool) -> bool:
+def render_skills(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -> bool:
     rows = get_skills_rows(data)
     if not rows:
         return False
@@ -702,7 +757,7 @@ def render_skills(doc: Document, data: dict, bold_markers: bool) -> bool:
     return True
 
 
-def render_experience(doc: Document, data: dict, level: int, layout_profile: str, bold_markers: bool) -> bool:
+def render_experience(doc: Document, data: dict, level: int, layout_profile: str, bold_markers: bool, sub_gap: int) -> bool:
     jobs = ordered_experience(data, level, layout_profile)
     if not jobs:
         return False
@@ -713,12 +768,12 @@ def render_experience(doc: Document, data: dict, level: int, layout_profile: str
         for b in job.get("bullets") or []:
             bullet(doc, b, bold_markers)
         if i < len(jobs) - 1:
-            gap(doc)
+            gap(doc, sub_gap)
 
     return True
 
 
-def render_projects(doc: Document, data: dict, bold_markers: bool) -> bool:
+def render_projects(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -> bool:
     projects = get_projects(data)
     if not projects:
         return False
@@ -729,13 +784,13 @@ def render_projects(doc: Document, data: dict, bold_markers: bool) -> bool:
         for b in project.get("bullets") or []:
             bullet(doc, b, bold_markers)
         if i < len(projects) - 1:
-            gap(doc)
+            gap(doc, sub_gap)
 
     return True
 
 
 # ── Build DOCX ───────────────────────────────────────────────────────────────
-def build_docx(json_path: str, company_override: str = "") -> None:
+def build_docx(json_path: str, company_override: str = "", section_gap: int = DEFAULT_SECTION_GAP, sub_gap: int = DEFAULT_SUB_GAP) -> None:
     data = load_json(json_path)
     cfg = config(data)
 
@@ -751,12 +806,15 @@ def build_docx(json_path: str, company_override: str = "") -> None:
     company = company_override or clean(cfg.get("company", ""))
 
     if company_override:
-        output = f"{RESUME_STEM}_{safe_name(company_override)}_Resume.docx"
+        output_name = f"{RESUME_STEM}_{safe_name(company_override)}_Resume.docx"
     else:
-        output = clean(cfg.get("output", "")) or f"{RESUME_STEM}_{safe_name(company or rtype)}_Resume.docx"
+        output_name = clean(cfg.get("output", "")) or f"{RESUME_STEM}_{safe_name(company or rtype)}_Resume.docx"
 
-    if not output.lower().endswith(".docx"):
-        output += ".docx"
+    if not output_name.lower().endswith(".docx"):
+        output_name += ".docx"
+
+    os.makedirs(WORD_DIR, exist_ok=True)
+    output = os.path.join(WORD_DIR, os.path.basename(output_name))
 
     bold_markers = bool_value(cfg.get("bold_markers"), default=True)
 
@@ -785,55 +843,54 @@ def build_docx(json_path: str, company_override: str = "") -> None:
     r = p_name.add_run(clean(data.get("name", "")))
     rf(r, sz=NAME_PT, bold=True)
 
-    p_contact = doc.add_paragraph()
-    p_contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    sp(p_contact)
-
     contact = clean(data.get("contact", ""))
-    parts = [p.strip() for p in contact.split(" | ")] if " | " in contact else [contact]
+    contact_lines = [line.strip() for line in contact.splitlines() if line.strip()] or [contact]
 
-    for i, part in enumerate(parts):
-        low = part.lower()
-        if "linkedin" in low:
-            hyperlink(p_contact, part, data.get("linkedin_url", ""), size=CONTACT_PT)
-        elif "github" in low:
-            hyperlink(p_contact, part, data.get("github_url", ""), size=CONTACT_PT)
-        else:
-            rr = p_contact.add_run(part)
-            rf(rr, sz=CONTACT_PT)
+    for line_index, line in enumerate(contact_lines):
+        p_contact = doc.add_paragraph()
+        p_contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sp(p_contact)
 
-        if i < len(parts) - 1:
-            sep = p_contact.add_run(" | ")
-            rf(sep, sz=CONTACT_PT)
+        parts = [p.strip() for p in line.split(" | ")] if " | " in line else [line]
+        for i, part in enumerate(parts):
+            low = part.lower()
+            if "linkedin" in low:
+                hyperlink(p_contact, part, data.get("linkedin_url", ""), size=CONTACT_PT)
+            elif "github" in low:
+                hyperlink(p_contact, part, data.get("github_url", ""), size=CONTACT_PT)
+            else:
+                rr = p_contact.add_run(part)
+                rf(rr, sz=CONTACT_PT)
+
+            if i < len(parts) - 1:
+                sep = p_contact.add_run(" | ")
+                rf(sep, sz=CONTACT_PT)
 
     gap(doc, 6)
 
     renderers = {
-        "summary": lambda: render_summary(doc, data, bold_markers),
-        "education": lambda: render_education(doc, data, conf["grad"], level, bold_markers),
-        "skills": lambda: render_skills(doc, data, bold_markers),
-        "experience": lambda: render_experience(doc, data, level, layout_profile, bold_markers),
-        "projects": lambda: render_projects(doc, data, bold_markers),
+        "summary":    lambda: render_summary(doc, data, bold_markers, sub_gap),
+        "education":  lambda: render_education(doc, data, conf["grad"], level, bold_markers, sub_gap),
+        "skills":     lambda: render_skills(doc, data, bold_markers, sub_gap),
+        "experience": lambda: render_experience(doc, data, level, layout_profile, bold_markers, sub_gap),
+        "projects":   lambda: render_projects(doc, data, bold_markers, sub_gap),
     }
 
-    rendered_count = 0
     for section in section_order:
         rendered = renderers[section]()
         if rendered:
-            rendered_count += 1
-            # Add space after every rendered section except the final rendered section.
-            # We cannot know the final rendered section until after checking the remaining sections,
-            # so we add a gap and remove it later if needed.
-            gap(doc)
+            gap(doc, section_gap)
 
     remove_final_empty_gap(doc)
 
     doc.save(output)
 
-    print(f"DOCX saved: {output}")
-    print(f"Type: {rtype}")
-    print(f"Level: {level} ({'Entry/SWE I' if level == 2 else 'Mid' if level == 3 else 'Intern'})")
+    print(f"DOCX saved   : {output}")
+    print(f"Type         : {rtype}")
+    print(f"Level        : {level} ({'Entry/SWE I' if level == 2 else 'Mid' if level == 3 else 'Intern'})")
     print(f"Layout profile: {layout_profile}")
+    print(f"Section gap  : {section_gap}pt")
+    print(f"Sub-section gap: {sub_gap}pt")
     print(f"Experience order: {'TCS first' if layout_profile in TCS_FIRST_LAYOUTS else 'Internship/GHI first'}")
 
 
@@ -844,17 +901,19 @@ def main() -> None:
         sys.exit(0)
 
     target = sys.argv[1]
-    company = get_company_arg(sys.argv)
 
     if target.lower() == "clear":
         clear_folder()
         return
 
     if target.lower().endswith(".json"):
-        build_docx(target, company)
+        company, section_gap, sub_gap = parse_extra_args(sys.argv[2:])
+        build_docx(target, company, section_gap, sub_gap)
         return
 
     if target.lower().endswith(".docx"):
+        # For DOCX → PDF, only the company name matters. Gap args are ignored.
+        company, _, _ = parse_extra_args(sys.argv[2:])
         docx_to_pdf(target, company)
         return
 

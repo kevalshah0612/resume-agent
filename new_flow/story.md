@@ -1,57 +1,94 @@
-# Keval Shah Story Bank - Clean Version
-## Evidence-only source of truth for JD-driven resume generation
+# Story.md — Keval Shah Evidence Bank vFinal Safe
 
-Purpose:
-This file stores authenticated evidence for JD-driven resume tailoring. It is not final resume wording.
-The resume prompt must select only the stories that match the JD.
+## 0. Control Rules
+This file is the single evidence source for JD-driven resume generation.
+It is not final resume wording.
+It is not a biography.
+It is not permission to use every fact in every resume.
 
 Core rule:
-JD decides what matters. Story decides what is allowed.
+The JD decides what matters.
+Story.md decides what is allowed.
+If a JD term is not supported in ACTIVE EVIDENCE, create a DES candidate and wait for approval.
 
-Do not invent:
-- tools, metrics, users, outcomes, domains, roles, dates, project claims, leadership scope, or architecture ownership
-- dollar amounts in final resume output
-- direct domain experience when evidence is only adjacent
+Prompt.md controls structure, schema, config, layout, project count, TA placement, header format, and output behavior.
+Story.md controls evidence only.
+Do not use Story.md to override Prompt.md structure rules.
 
-Evidence labels:
-- HIGH = system + technology + action + scope/metric/outcome
-- MEDIUM = professional use confirmed but metric, exact scope, or outcome is incomplete
-- LOW = exposure or limited detail
-- CANNOT = not enough proof to use
+Use only ACTIVE EVIDENCE sections for resume claims.
+Use COMPRESSED RAW ARCHIVE only to understand context or propose DES.
+Do not write resume bullets directly from raw archive notes.
+
+Evidence strength:
+HIGH = system + technology + action + scope/metric/outcome
+MEDIUM = confirmed professional use, but exact scope/outcome incomplete
+LOW = exposure or limited detail
+CANNOT = not enough proof to use
 
 Resume-use labels:
-- P1 = production experience proof
-- P2 = project proof
-- P3 = current-run Des proof
-- P4 = skill only
-- P5 = cannot defend
+P1 = professional production proof
+P2 = project proof
+P3 = approved current-run DES proof
+P4 = skill-only or partial proof
+P5 = cannot defend
 
----
+Never invent:
+tools, testing types, metrics, users, outcomes, domains, dates, titles, leadership scope, architecture ownership, production status, AI/ML claims, cloud ownership, scale, or business value
 
-# 1. Locked profile
+Never mention dollar values in final resume output.
+Never call TA a Software Engineer role.
+Never use `vibe coding` in resume output.
+Use `AI-assisted development` only for AI tooling/devtools roles when relevant.
 
-Name:
-Keval Shah
+## 1. Required Story Reading Report
+Before PASS 1, the resume creator must output:
+- Story.md found: YES/NO
+- Active evidence cards scanned: count
+- Metric map scanned: YES/NO
+- Technology map scanned: YES/NO
+- DES-needed claims scanned: YES/NO
+- Forbidden claims scanned: YES/NO
+- Evidence IDs selected for this JD
+- Evidence IDs rejected for this JD
+- JD terms not found in active story
 
-Contact:
+Every summary sentence, skill row, experience bullet, and project bullet must trace to an Evidence ID or approved DES ID.
+If a claim has no Evidence ID or approved DES ID, exclude it.
+
+## 2. Locked Profile
+Name: Keval Shah
+
+Default contact:
 New York, NY | (607) 235-1181 | keval.shah61298@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612
 
-LinkedIn:
-https://www.linkedin.com/in/keval-shah0612
+LinkedIn: https://www.linkedin.com/in/keval-shah0612
+GitHub: https://github.com/kevalshah0612
 
-GitHub:
-https://github.com/kevalshah0612
+Header guidance:
+- Final resume header should render as:
+  1. Name
+  2. Target Role | New York, NY | relocation/work-location signal
+  3. phone | email | LinkedIn | GitHub
+- For strict onsite roles outside New York: `[Target Role] | New York, NY | Open to relocate to [Target City, State]`
+- For state/region roles: `[Target Role] | New York, NY | Open to relocate to [Target State/Region]`
+- For broad U.S. roles: `[Target Role] | New York, NY | Open to relocate across the U.S.`
+- For remote U.S. roles: `[Target Role] | New York, NY | Open to remote U.S. roles`
+- For New York / NYC roles: `[Target Role] | New York, NY`
+- Do not write target city as current city unless it is true
+- Do not replace GitHub URL with only `GitHub`
 
 Education:
 1. Binghamton University, State University of New York
-   - Master of Science, Computer Science (AI Specialization), GPA: 4.00
+   - Master of Science, Computer Science, AI Specialization, GPA: 4.00
    - Binghamton, NY
    - Jan 2025 - May 2026
+   - Use AI specialization prominently for AI tooling, AI/ML, automation, and new-grad roles
 
 2. Gujarat Technological University
    - Bachelor of Engineering, Computer Engineering, GPA: 3.85
    - Ahmedabad, India
-   - Aug 2016 - Sep 2020
+   - Graduation: Sep 2020
+   - Resume compact form may use: Bachelor of Engineering, Computer Engineering | 2020
 
 Professional experience:
 1. Global Health Impact
@@ -61,1264 +98,675 @@ Professional experience:
 
 2. Tata Consultancy Services
    - Software Engineer II
-   - Client: Wabtec Corporation (Fortune 500)
    - Gandhinagar, India
    - Oct 2022 - Dec 2024
+   - Client context: Wabtec Corporation, Fortune 500; use only inside bullets when relevant
 
 3. Tata Consultancy Services
    - Software Engineer
-   - Client: Wabtec Corporation (Fortune 500)
    - Gandhinagar, India
    - Mar 2021 - Sep 2022
+   - Remote, India may be used only if true for that period
+   - Client context: Wabtec Corporation, Fortune 500; use only inside bullets when relevant
+
+4. Binghamton University
+   - Teaching Assistant, Database Systems and Object-Oriented Programming
+   - Binghamton, NY
+   - Aug 2025 - Present
+   - Use as experience only for entry/new-grad/internship/code-review/teaching-heavy roles
+   - TA proof is evidence only and must not be written under Education
+   - Final JSON must keep all `education.ta_bullet` values empty
+   - If TA is needed, use a separate Professional Experience object for Binghamton University
 
 Projects:
-1. JobPulse
-   - https://github.com/kevalshah0612/jobpulse
-
-2. FraudSift
-   - https://github.com/kevalshah0612/fraudsift
-
-3. ReviewBot
-   - https://github.com/kevalshah0612/reviewbot
-
-4. FilingQuery
-   - https://github.com/kevalshah0612/filingquery
-
-5. EvalTrace
-   - https://github.com/kevalshah0612/evaltrace
-
----
-
-# 2. Master technology index
-
-Use this index only for evidence lookup. Do not automatically place every term in the resume.
-
-## Languages
-
-Java:
-- TCS1-API-DATA
-- TCS1-CICD
-- TCS2-JAVA-CONCURRENCY
-- TCS2-SECURITY-IDENTITY
-- PROJ-JOBPULSE
-
-Python:
-- TCS2-CLOUD-PLATFORM
-- TCS2-OBSERVABILITY
-- TCS-OPERATIONS-AUTOMATION
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-- GHI-PIPELINE
-- PROJ-FRAUDSIFT
-- PROJ-FILINGQUERY
-- PROJ-EVALTRACE
-
-JavaScript:
-- TCS2-FRONTEND
-- TCS2-OBSERVABILITY
-- GHI-DASHBOARD
-- PROJ-JOBPULSE
-
-TypeScript:
-- TCS2-FRONTEND
-- TCS2-OBSERVABILITY
-- PROJ-JOBPULSE
-
-C#:
-- TCS-CSHARP-DOTNET
-- Use when JD asks C#, .NET, Microsoft stack, enterprise apps, internal tools, APIs, or custom UI
-
-.NET:
-- TCS-CSHARP-DOTNET
-- Use as .NET / C# professional experience only when JD asks Microsoft stack or .NET
-
-Ruby:
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-- Use when JD asks Ruby, scripting, CI/CD automation, GitLab, developer productivity, release engineering, or internal tools
-
-C++:
-- TCS2-JAVA-CONCURRENCY
-- TCS-LOW-LEVEL-SYSTEMS
-- EDU-TA
-- Use for performance, memory management, file processing, OOP, or systems-adjacent roles
-
-C:
-- TCS2-JAVA-CONCURRENCY
-- TCS-LOW-LEVEL-SYSTEMS
-- Use only for systems/performance/support wording, not compiler/kernel ownership unless current-run Des gives exact proof
-
-## Frontend
-
-React:
-- TCS2-FRONTEND
-- TCS2-OBSERVABILITY
-- GHI-DASHBOARD
-- PROJ-JOBPULSE
-- PROJ-FRAUDSIFT
-
-Angular:
-- TCS2-FRONTEND
-
-HTML / CSS:
-- TCS2-FRONTEND
-- GHI-DASHBOARD
-
-Bootstrap:
-- TCS2-FRONTEND
-
-Material UI:
-- TCS-UIUX
-- Use as Material UI or design-system implementation only
-- Do not claim Google Material Design principles unless current-run Des confirms
-
-UI/UX implementation:
-- TCS-UIUX
-- TCS-CSHARP-DOTNET
-- GHI-DASHBOARD
-- Use for custom UI, dashboards, role-based workflows, and internal tools
-- Do not claim user research unless current-run Des confirms
-
-## Backend / APIs / Identity
-
-REST APIs:
-- TCS1-API-DATA
-- TCS2-SECURITY-IDENTITY
-- GHI-API
-
-Spring Boot:
-- TCS1-API-DATA
-- TCS2-SECURITY-IDENTITY
-- PROJ-JOBPULSE
-
-Spring Security:
-- TCS2-SECURITY-IDENTITY
-- TCS-SAST-QUALITY
-
-Microservices / service-to-service communication:
-- TCS1-API-DATA
-- TCS2-CLOUD-PLATFORM
-- TCS2-JAVA-CONCURRENCY
-
-API Gateway:
-- TCS1-API-DATA
-- TCS2-CLOUD-PLATFORM
-
-Redis:
-- TCS1-API-DATA
-- PROJ-JOBPULSE
-
-OAuth 2.0 / OIDC / JWT / SSO:
-- TCS2-SECURITY-IDENTITY
-- TCS-AUTH-STORAGE
-
-OKTA:
-- TCS-AUTH-STORAGE
-- Use when JD asks identity, Okta, enterprise authentication, IAM, SSO, OIDC, or access control
-
-RBAC:
-- TCS2-SECURITY-IDENTITY
-
-TLS/SSL:
-- TCS2-SECURITY-IDENTITY
-- TCS1-LINUX-MIGRATION
-
-## Data / Storage
-
-SQL:
-- TCS1-API-DATA
-- TCS-DATABASES
-- GHI-PIPELINE
-
-MySQL:
-- TCS1-API-DATA
-- TCS-DATABASES
-
-Oracle:
-- TCS-DATABASES
-
-Microsoft SQL Server / Microsoft database:
-- TCS-DATABASES
-
-NoSQL:
-- TCS1-API-DATA
-- TCS-DATABASES
-- GHI-PIPELINE
-
-PostgreSQL:
-- GHI-PIPELINE
-- PROJ-JOBPULSE
-- PROJ-FILINGQUERY
-- PROJ-FRAUDSIFT
-
-MongoDB:
-- GHI-PIPELINE
-
-AWS S3:
-- TCS-AUTH-STORAGE
-- Use when JD asks AWS storage, object storage, file processing, or backend storage
-
-Microsoft SharePoint:
-- TCS2-SECURITY-IDENTITY
-- TCS2-JAVA-CONCURRENCY
-- TCS-AUTH-STORAGE
-- Use for file storage, authentication incident, enterprise document/file workflows
-
-## Cloud / Infrastructure / Operations
-
-AWS:
-- TCS2-CLOUD-PLATFORM
-- TCS1-LINUX-MIGRATION
-- TCS1-API-DATA
-- TCS-AUTH-STORAGE
-- GHI-API
-
-Azure:
-- TCS2-CLOUD-PLATFORM
-- TCS1-LINUX-MIGRATION
-
-Google Cloud / GCP:
-- TCS2-CLOUD-PLATFORM
-
-Docker:
-- TCS2-CLOUD-PLATFORM
-- TCS1-CICD
-- TCS-OPERATIONS-AUTOMATION
-- PROJ-FRAUDSIFT
-- PROJ-FILINGQUERY
-
-Kubernetes:
-- TCS2-CLOUD-PLATFORM
-- TCS1-CICD
-- TCS-OPERATIONS-AUTOMATION
-
-Red Hat OpenShift:
-- TCS2-CLOUD-PLATFORM
-- TCS1-CICD
-
-Terraform:
-- TCS2-CLOUD-PLATFORM
-- TCS1-LINUX-MIGRATION
-
-Linux:
-- TCS1-LINUX-MIGRATION
-- TCS2-CLOUD-PLATFORM
-- TCS-LOW-LEVEL-SYSTEMS
-
-Bash / Shell scripting:
-- TCS1-LINUX-MIGRATION
-- TCS1-CICD
-- TCS2-CLOUD-PLATFORM
-
-Load balancers / Security groups:
-- TCS2-CLOUD-PLATFORM
-- TCS1-LINUX-MIGRATION
-- Use for cloud operations, deployments, and environment support
-- Do not claim network architecture ownership unless current-run Des confirms
-
-Non-production and production environments:
-- TCS1-CICD
-- TCS2-CLOUD-PLATFORM
-- TCS-OPERATIONS-AUTOMATION
-- TCS-OWNERSHIP-LEADERSHIP
-
-## Quality / Delivery / Collaboration
-
-Git:
-- TCS1-CICD
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-- TCS-OWNERSHIP-LEADERSHIP
-- PROJ-REVIEWBOT
-- PROJ-EVALTRACE
-
-Version control:
-- TCS1-CICD
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-- TCS-OWNERSHIP-LEADERSHIP
-
-GitLab:
-- TCS1-CICD
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-
-GitLab CI/CD:
-- TCS1-CICD
-- TCS-CICD-RUBY-GITLAB-AUTOMATION
-
-Jenkins:
-- TCS1-CICD
-
-GitHub Actions:
-- TCS1-CICD
-- PROJ-REVIEWBOT
-- PROJ-EVALTRACE
-
-Automated testing / test gates:
-- TCS1-CICD
-- PROJ-EVALTRACE
-- PROJ-REVIEWBOT
-
-Datadog:
-- TCS2-OBSERVABILITY
-
-CloudWatch:
-- TCS2-OBSERVABILITY
-
-Observability / telemetry dashboards:
-- TCS2-OBSERVABILITY
-- TCS-OPERATIONS-AUTOMATION
-
-Production debugging:
-- TCS2-SECURITY-IDENTITY
-- TCS2-OBSERVABILITY
-- TCS1-API-DATA
-- TCS1-LINUX-MIGRATION
-
-SAST / Polaris / Black Duck:
-- TCS-SAST-QUALITY
-
-Rally:
-- TCS-OWNERSHIP-LEADERSHIP
-- Use for Agile tracking, stakeholder delivery tracking, and release planning
-
-Code reviews:
-- TCS-OWNERSHIP-LEADERSHIP
-- TCS1-CICD
-- EDU-TA
-- PROJ-REVIEWBOT
-
-Design reviews / documentation:
-- TCS-OWNERSHIP-LEADERSHIP
-- TCS-DOCUMENTATION
-
-Stakeholder communication:
-- TCS-CLIENT-COMMUNICATION
-- TCS-OWNERSHIP-LEADERSHIP
-
-Mentoring / junior developer guidance:
-- TCS-OWNERSHIP-LEADERSHIP
-- EDU-TA
-
----
-
-# 3. Locked metric and scope table
-
-Use metrics only with the matching evidence block.
-
-| Metric / scope | Evidence block | Allowed use |
-|---|---|---|
-| 10,000+ enterprise users | TCS2-SECURITY-IDENTITY, TCS2-JAVA-CONCURRENCY | authentication, access, large-file upload, enterprise reliability |
-| 48 hours / 2 days | TCS2-SECURITY-IDENTITY | Microsoft SharePoint authentication production incident |
-| 60 seconds to 10 seconds | TCS2-JAVA-CONCURRENCY | large 3D file upload or transfer time |
-| 83% reduction | TCS2-JAVA-CONCURRENCY | derived from 60 seconds to 10 seconds |
-| 40 to 50 seconds saved per file | TCS2-JAVA-CONCURRENCY | large 3D file upload |
-| 5 member team | TCS2-JAVA-CONCURRENCY | multithreaded Java upload feature |
-| 9 developer team | TCS-OWNERSHIP-LEADERSHIP, TCS1-CICD | team guidance, release delivery, development workflow |
-| 5 junior developers | TCS-OWNERSHIP-LEADERSHIP | mentoring, technical guidance |
-| 40+ production releases | TCS1-CICD, TCS-OWNERSHIP-LEADERSHIP | production delivery, CI/CD, SDLC |
-| 40+ production-ready code deployments | TCS-OWNERSHIP-LEADERSHIP | delivery quality and ownership |
-| 7+ applications | TCS1-CICD, TCS1-LINUX-MIGRATION, TCS-OWNERSHIP-LEADERSHIP | release automation, migration, application ownership |
-| 10+ applications | TCS-CICD-RUBY-GITLAB-AUTOMATION, TCS1-LINUX-MIGRATION, TCS-OPERATIONS-AUTOMATION | CI/CD, migration, dashboards, automation |
-| 10 enterprise applications | TCS2-SECURITY-IDENTITY, TCS2-CLOUD-PLATFORM | RBAC, cloud automation, operational workflows |
-| 22% reduction | TCS2-SECURITY-IDENTITY | access-request ticket reduction |
-| 30% improvement | TCS-CSHARP-DOTNET, TCS-OPERATIONS-AUTOMATION, TCS2-CLOUD-PLATFORM | API/admin panel performance, team performance, infrastructure overhead |
-| 95% reduction | TCS-CICD-RUBY-GITLAB-AUTOMATION | manual deployment time reduction |
-| 90% reduction | TCS-OPERATIONS-AUTOMATION, GHI-PIPELINE | manual health checks / data preparation |
-| 3 connected applications | TCS2-OBSERVABILITY | monitoring, telemetry, API dashboards |
-| hours to minutes | TCS2-OBSERVABILITY | incident diagnosis or triage |
-| 3 Java/Spring Boot applications | TCS1-API-DATA | REST API integration and data consistency |
-| 9 engineering teams | TCS1-API-DATA | independent deployments and data consistency |
-| 2 months | TCS1-API-DATA | Java 11 rebuild and Redis caching |
-| zero downtime | TCS1-CICD, TCS1-LINUX-MIGRATION | releases or migrations |
-| 3+ client appreciations | TCS-AWARDS | quality recognition |
-| 150+ countries | GHI-API | disease burden API queries |
-| hours to 30 seconds | GHI-API | reporting turnaround |
-| 6 research teams | GHI-DASHBOARD | React dashboard replacing spreadsheet exports |
-| 10M+ weekly WHO health records | GHI-PIPELINE | backend data processing |
-| 10,000+ job postings | PROJ-JOBPULSE | job ingestion |
-| 22,000+ transactions | PROJ-FRAUDSIFT | transaction analysis |
-| 5,000+ SEC filings | PROJ-FILINGQUERY | document search / RAG |
-| 23% to 4% | PROJ-EVALTRACE | hallucination reduction |
-| 120+ students | EDU-TA | teaching assistant work |
-
-Forbidden in final resume:
-- Do not mention dollar values
-- Do not mention product financial value
+- JobPulse: https://github.com/kevalshah0612/jobpulse
+- FraudSift: https://github.com/kevalshah0612/fraudsift
+- ReviewBot: https://github.com/kevalshah0612/reviewbot
+- FilingQuery: https://github.com/kevalshah0612/filingquery
+- EvalTrace: https://github.com/kevalshah0612/evaltrace
+- Resume Agent: https://github.com/kevalshah0612/resume-agent
+- JobFill AI Extension: https://github.com/kevalshah0612/jobfill-ai-extension
+
+## 3. Resume Family Routing
+Backend / platform roles:
+Use TCS API, CI/CD, cloud, Linux, observability, Java/Spring Boot, Redis, SQL/NoSQL, production support, release ownership.
+
+Full-stack roles:
+Use TCS frontend/dashboard, REST APIs, auth/RBAC, GHI dashboard, JobPulse, JobFill, Resume Agent if automation/product tooling helps.
+
+AI tooling / developer productivity roles:
+Use Resume Agent, JobFill, ReviewBot, EvalTrace, FilingQuery, AI-assisted development process, CI/CD automation, Python tooling, GHI when relevant.
+
+AI/ML entry roles:
+Use MS CS AI specialization, GHI ML/data pipeline, FraudSift, FilingQuery, EvalTrace, Resume Agent, JobPulse as relevant.
+
+Entry/new-grad SWE roles:
+Education first, Technical Skills second, GHI first when recent U.S. internship is strongest, combined TCS second, TA as Professional Experience if relevant, project count controlled by Prompt.md layout contract.
+
+Mid-level SWE roles:
+Summary first, Technical Skills second, TCS SWE II first, TCS SWE second, GHI short, normally 2 projects by Prompt.md layout contract, Education bottom.
+
+Internship roles:
+Education first, Technical Skills second, GHI/TA/projects emphasized, TCS included only when it helps the JD.
+
+## 4. Section Order Rules
+student_entry:
+Education -> Technical Skills -> Professional Experience -> Projects
+
+professional_entry:
+Summary -> Technical Skills -> Professional Experience -> Projects -> Education
+
+mid:
+Summary -> Technical Skills -> Professional Experience -> Projects -> Education
+
+aiml_entry:
+Education -> Technical Skills -> Projects -> Professional Experience
+
+aitool_mid:
+Summary -> Technical Skills -> Professional Experience -> Projects -> Education
+
+internship:
+Education -> Technical Skills -> Professional Experience -> Projects
+
+## 5. Summary Strategy
+Entry summary:
+MS Computer Science candidate specializing in AI with 3+ years of prior software engineering experience. Focus on JD stack, current U.S. education, internship/project proof, and production transferability.
+
+Mid summary:
+Software engineer with 3+ years building production APIs, full-stack workflows, CI/CD pipelines, observability, security/access-control, and enterprise systems. Mention MS CS AI specialization only as additive depth.
+
+AI tooling summary:
+Software engineer and MS Computer Science AI specialization candidate building LLM-assisted automation, developer tooling, workflow systems, and production software.
+
+Do not claim direct AI/ML engineer identity unless the JD and evidence support it.
+Do not claim cybersecurity/fintech/healthcare/product domain ownership unless evidence is direct.
+
+## 6. Metric Map
+10,000+ users -> TCS2-SECURITY-IDENTITY, TCS2-JAVA-CONCURRENCY
+48 hours / 2 days -> TCS2-SECURITY-IDENTITY
+60 seconds to 10 seconds -> TCS2-JAVA-CONCURRENCY
+83% reduction -> TCS2-JAVA-CONCURRENCY
+40 to 50 seconds saved per file -> TCS2-JAVA-CONCURRENCY
+5-member team -> TCS2-JAVA-CONCURRENCY
+9-developer team -> TCS-OWNERSHIP-LEADERSHIP, TCS1-CICD
+5 junior developers -> TCS-OWNERSHIP-LEADERSHIP
+40+ production releases -> TCS1-CICD, TCS-OWNERSHIP-LEADERSHIP
+40+ production-ready deployments -> TCS-OWNERSHIP-LEADERSHIP
+7+ applications -> TCS1-CICD, TCS1-LINUX-MIGRATION, TCS-OWNERSHIP-LEADERSHIP
+10+ applications -> TCS2-CLOUD-PLATFORM, TCS-OPERATIONS-AUTOMATION, TCS-CICD-RUBY-GITLAB-AUTOMATION
+10 enterprise applications -> TCS2-SECURITY-IDENTITY, TCS2-CLOUD-PLATFORM
+22% ticket reduction -> TCS2-SECURITY-IDENTITY
+30% improvement -> TCS2-CLOUD-PLATFORM, TCS-OPERATIONS-AUTOMATION, TCS-CSHARP-DOTNET
+95% manual deployment reduction -> TCS-CICD-RUBY-GITLAB-AUTOMATION
+90% manual health/data-prep reduction -> TCS-OPERATIONS-AUTOMATION, GHI-PIPELINE
+3 connected applications -> TCS2-OBSERVABILITY
+hours to minutes -> TCS2-OBSERVABILITY
+3 Java/Spring Boot applications -> TCS1-API-DATA
+9 engineering teams -> TCS1-API-DATA
+2 months -> TCS1-API-DATA
+zero downtime -> TCS1-CICD, TCS1-LINUX-MIGRATION
+3+ appreciations -> TCS-AWARDS
+150+ countries -> GHI-API
+hours to 30 seconds -> GHI-API
+6 research teams -> GHI-DASHBOARD
+10M+ weekly WHO health records -> GHI-PIPELINE
+10,000+ job postings -> PROJ-JOBPULSE
+22,000+ transactions -> PROJ-FRAUDSIFT
+5,000+ SEC filings -> PROJ-FILINGQUERY
+23% to 4% hallucination reduction -> PROJ-EVALTRACE
+120+ students -> EDU-TA-CODE-REVIEW
+
+Forbidden metric use:
+- Do not use dollar values in final resume
+- Do not mention $1.2M or $30K monthly in resume
 - Do not invent exact savings beyond allowed non-dollar metrics
 
----
-
-# 4. TCS evidence blocks
-
-## TCS-OWNERSHIP-LEADERSHIP
-
-Role:
-Tata Consultancy Services, Software Engineer / Software Engineer II
-
-Confidence:
-HIGH
-
-Supported JD terms:
-ownership, leadership, end-to-end development, code reviews, design reviews, mentoring, SDLC, Agile, Rally, production delivery, stakeholder communication, technical decision-making, documentation, production releases
-
-Facts:
-- Guided a 9 developer team over 2+ years
-- Mentored and guided 5 junior developers during TCS Software Engineer II period
-- Delivered 40+ production releases for Wabtec Corporation applications
-- Had 40+ production-ready code deployments across multiple enterprise applications
-- Took ownership of stakeholder meetings, requirements understanding, design decisions, development planning, documentation, QA support, and production delivery when tied to selected technical story
-- Used Rally to track development, sprint work, requirements, and delivery progress
-- Reviewed code and coding practices for junior developers
-- Took technical sessions for junior developers
-- Received 3+ client or HR appreciations for coding practice and delivery quality
-
-Best use:
-Mid-level SWE, backend, full-stack, platform, DevOps, leadership, ownership, client-facing, code review, documentation, Agile/SDLC roles
-
-Limits:
-- Do not claim formal engineering manager role
-- Do not claim people-manager title
-- Do not claim product owner title
-- Do not claim formal architect title
-- Use “guided,” “led development,” “coordinated,” or “owned delivery” only when the selected system story supports it
-
----
-
-## TCS-CLIENT-COMMUNICATION
-
-Role:
-TCS / Wabtec Corporation client work
-
-Confidence:
-HIGH
-
-Supported JD terms:
-stakeholder communication, client communication, vendor collaboration, cross-functional collaboration, requirements, technical discussions, production incident response, design decisions
-
-Facts:
-- Communicated with US client Wabtec Corporation during feature delivery and production support
-- Participated in stakeholder meetings for requirements, technical decisions, status, and delivery planning
-- Worked with Microsoft engineers during Microsoft SharePoint authentication production failure
-- Worked with Amazon engineers during Amazon Linux migration and package dependency resolution
-- Supported client-facing delivery across multiple enterprise applications
-
-Best use:
-Roles requiring stakeholder collaboration, production ownership, client-facing engineering, incident response, requirement translation, and design alignment
-
-Limits:
-- Do not write generic collaboration bullets
-- Pair communication with a technical system, decision, or outcome
-
----
-
-## TCS-CSHARP-DOTNET
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-HIGH for professional use of C#/.NET across TCS enterprise applications
-MEDIUM for exact per-application scope unless current-run JD needs more detail
-
-Supported JD terms:
-C#, .NET, Microsoft stack, enterprise applications, backend APIs, frontend/backend development, custom UI, admin panel, internal tools, performance improvement
-
-Facts:
-- Used C# and .NET during TCS enterprise application work
-- Worked across frontend and backend areas for multiple TCS applications
-- Built or enhanced enterprise admin panel features and custom UI workflows
-- Improved API or application/admin-panel performance by 30% when using the C#/.NET/admin-panel story
-- Integrated custom UI workflows with backend APIs and enterprise application logic
-
-Best use:
-C#/.NET roles, Microsoft stack roles, full-stack roles, admin panels, enterprise internal tools, API performance, custom UI
-
-Limits:
-- Do not claim .NET Core, ASP.NET MVC, WPF, WinForms, or Blazor unless current-run Des confirms
-- Do not claim ownership of all C#/.NET applications unless current-run Des confirms exact scope
-- Do not lead with C# unless JD prioritizes C#/.NET or Microsoft stack
-
----
-
-## TCS-CICD-RUBY-GITLAB-AUTOMATION
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Ruby, Git, version control, GitLab, GitLab CI/CD, CI/CD pipelines, release automation, deployment automation, scripting, developer productivity, internal tools, DevOps, platform engineering
-
-Facts:
-- Used Git and version control in TCS development and release workflows
-- Used GitLab and GitLab CI/CD across enterprise application delivery
-- Created GitLab CI/CD pipelines from scratch for more than 10 applications
-- Used Ruby scripts in custom GitLab / CI/CD automation workflows
-- Reduced manual deployment time by 95%
-- Created automated release/deployment workflows that supported consistent production delivery
-- Used CI/CD automation with testing and deployment checks before release
-- Improved team performance by 30% when paired with automation and workflow standardization story
-
-Best use:
-DevOps, platform, backend, full-stack, release engineering, developer productivity, CI/CD, GitLab, Git, Ruby scripting roles
-
-Limits:
-- Do not claim company-wide CI/CD ownership
-- Do not claim formal release manager title
-- Do not use Ruby as a primary backend language unless JD asks and the bullet clearly says scripting/automation
-
----
-
-## TCS-OPERATIONS-AUTOMATION
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Python, automation, monitoring, health checks, developer notifications, operational dashboards, cloud operations, server management, Docker, Kubernetes, AWS, infrastructure optimization
-
-Facts:
-- Created Python automation scripts to monitor system health and notify developers
-- Reduced manual health-check or manual verification effort by 90%
-- Automated server cleanup workflows across enterprise applications
-- Created dashboards to manage or monitor applications and server details across environments
-- Built a dashboard workflow where applications could be selected or dragged/dropped and bound to AWS details for operational visibility
-- Rebuilt or refreshed servers using Docker and Kubernetes workflows
-- Managed non-production servers and supported production environment workflows
-- Supported cloud cleanup and operational automation that reduced infrastructure overhead by 30%
-
-Best use:
-Cloud, DevOps, platform, SRE-adjacent, automation, Python, monitoring, internal tools, operational dashboards, production support
-
-Limits:
-- Do not claim full SRE ownership unless current-run Des confirms on-call ownership
-- Do not claim Kubernetes cluster administration unless current-run Des confirms
-- Do not claim exact cloud cost dollar savings in final resume
-
----
-
-## TCS-AUTH-STORAGE
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-HIGH for SharePoint authentication and enterprise storage workflows
-MEDIUM for Okta/OIDC exact scope unless JD requires detailed identity proof
-
-Supported JD terms:
-AWS S3, SharePoint, authentication, custom authentication, Okta, OIDC, OAuth 2.0, SSO, access control, storage, enterprise file workflows, identity integration
-
-Facts:
-- Used Microsoft SharePoint for enterprise file storage and large 3D file workflows
-- Used AWS S3 in TCS storage/application workflows
-- Built or supported custom authentication across multiple enterprise applications
-- Used Okta authentication and OIDC authentication in multiple applications
-- Worked with OAuth 2.0, JWT, SSO, TLS/SSL, and Spring Security concepts in access-control workflows
-- Supported authentication for APIs and application flows across existing and upcoming clients
-
-Best use:
-Identity, backend, platform, cloud storage, enterprise SaaS, file processing, access control, C#/.NET Microsoft ecosystem, AWS roles
-
-Limits:
-- Do not claim IAM administrator role
-- Do not claim Okta admin ownership unless current-run Des confirms
-- Do not claim compliance ownership
-- Do not claim payment or healthcare identity domain unless JD and evidence support adjacency
-
----
-
-## TCS-LOW-LEVEL-SYSTEMS
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-MEDIUM to HIGH for C/C++ memory/performance support around 3D file processing
-LOW for kernel-level ownership unless current-run Des gives exact details
-
-Supported JD terms:
-C, C++, memory management, low-level systems, systems programming, file processing, performance optimization, Linux, server optimization, diagnostics
-
-Facts:
-- Used C and C++ in TCS engineering work
-- Used C++ and C in performance-oriented support around large 3D file workflows where files were divided into parts
-- Worked on memory management considerations for large 3D files and upload workflows
-- Supported system-level Linux/server troubleshooting and performance-oriented diagnostics
-- Work was connected to enterprise file processing, server behavior, and backend performance support
-
-Best use:
-Systems-adjacent SWE roles, C/C++ roles, performance optimization, large-file processing, Linux/server roles
-
-Limits:
-- Do not claim kernel engineering unless current-run Des includes exact kernel module, system call, driver, or kernel debugging proof
-- Do not claim compiler, embedded, GPU, or OS internals ownership
-- Use “systems-adjacent,” “memory-aware,” or “performance-oriented” unless exact low-level proof is required and supplied
-
----
-
-## TCS1-API-DATA
-
-Role:
-Tata Consultancy Services, Software Engineer, Mar 2021 - Sep 2022
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Java, Java 11, Spring Boot, REST APIs, microservices, API Gateway, SQL, NoSQL, MySQL, Oracle, Microsoft database, Redis, caching, distributed systems, database integration, service-to-service communication, production reliability
-
-Facts:
-- Rebuilt a broken/failing production Java application by upgrading dependencies and moving to Java 11
-- Improved throughput using Redis caching
-- Restored production readiness within 2 months
-- Designed REST API integrations across 3 Java / Spring Boot applications
-- Integrated systems using mixed SQL, NoSQL, and MySQL databases
-- Enabled user changes in one application to reflect across connected systems
-- Enabled 9 engineering teams to deploy independently without data inconsistencies
-- Standardized API contracts across Java applications
-- Deployed services into AWS infrastructure using CI/CD and Docker
-
-Best use:
-Backend, Java, Spring Boot, API, database, microservices, distributed systems, reliability, Redis, SQL/NoSQL, enterprise systems
-
-Limits:
-- Do not claim GraphQL, gRPC, or event streaming unless project evidence is used
-- Do not claim DBA ownership
-
----
-
-## TCS1-CICD
-
-Role:
-Tata Consultancy Services, Software Engineer, Mar 2021 - Sep 2022
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Git, version control, GitLab CI/CD, Jenkins, GitHub Actions, CI/CD pipelines, Docker, Kubernetes, OpenShift, Linux, Bash, Shell scripting, automated testing, release automation, deployment automation, zero downtime releases, Agile, SDLC
-
-Facts:
-- Standardized CI/CD pipelines with automated test gates across 7+ applications
-- Used Git, version control, GitLab CI/CD, Jenkins, and GitHub Actions in delivery workflows
-- Enabled 9 developer team to ship 40+ zero-downtime production releases
-- Used Docker, Kubernetes, and OpenShift in validation and deployment workflow contexts
-- Used Linux and Bash/Shell scripting for automation support
-- Supported SDLC and Agile workflows
-- Received 3+ client appreciation awards from Wabtec Corporation
-
-Best use:
-CI/CD, DevOps, platform, release automation, developer productivity, backend engineering, quality engineering, Agile/SDLC roles
-
-Limits:
-- Do not claim sole company-wide CI/CD ownership
-- Do not claim formal release manager title
-
----
-
-## TCS1-LINUX-MIGRATION
-
-Role:
-Tata Consultancy Services, Software Engineer
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Linux, AWS, Azure, Terraform, Bash, Shell scripting, TLS/SSL, load balancing, security groups, package dependencies, cloud operations, migration, server upgrade, standard procedures
-
-Facts:
-- Migrated enterprise workloads from CentOS to Amazon Linux 2 across 7+ applications
-- Later led Amazon Linux 2 to Amazon Linux 3 upgrade across the unit/applications
-- Resolved missing package dependencies across 10+ applications
-- Completed migration with zero downtime
-- Collaborated with Amazon engineers to debug package dependency issues
-- Created standard procedure for future upgrade workflows
-- Used Linux, shell scripting, cloud infrastructure, TLS/SSL, load balancing, and security group concepts during migration and validation
-- Supported non-production and production environment workflows
-
-Best use:
-Linux, cloud migration, infrastructure, platform, backend operations, production support, reliability roles
-
-Limits:
-- Do not claim deep network engineering
-- Do not claim full cloud architecture ownership unless current-run Des confirms
-
----
-
-## TCS2-SECURITY-IDENTITY
-
-Role:
-Tata Consultancy Services, Software Engineer II, Oct 2022 - Dec 2024
-
-Confidence:
-HIGH
-
-Supported JD terms:
-OAuth 2.0, OIDC, JWT, SSO, Okta, TLS/SSL, Spring Security, RBAC, authentication, authorization, access control, enterprise security, production debugging, platform reliability
-
-Facts:
-- Resolved live Microsoft SharePoint authentication failure after Microsoft changed authentication behavior
-- Production issue affected 10,000+ enterprise users
-- Restored access within 48 hours / 2 days
-- Partnered with Microsoft engineers
-- Created custom authentication solution for existing and upcoming clients
-- Deployed custom OAuth 2.0 authentication layer
-- Supported OIDC and Okta authentication across multiple application flows where relevant
-- Designed Spring Security access controls across 10 enterprise applications
-- Supported instant role-change synchronization
-- Reduced user access support tickets by 22%
-- Used JWT, SSO, TLS/SSL, authentication, and authorization concepts
-
-Best use:
-Security, identity, backend, platform, cloud, enterprise SaaS, access control, production incident, IAM-adjacent roles
-
-Limits:
-- Do not claim SOC, threat intelligence, compliance ownership, or Okta admin ownership
-- Do not claim cybersecurity product ownership unless JD allows access-control adjacency
-
----
-
-## TCS2-JAVA-CONCURRENCY
-
-Role:
-Tata Consultancy Services, Software Engineer II
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Java, C, C++, memory management, concurrency, multithreading, backend services, microservices, performance, scalability, load balancing, caching, large file processing, distributed systems, enterprise reliability
-
-Facts:
-- Led a 5 member team on a multithreaded Java upload service
-- Designed workflow to upload large 3D files into Microsoft SharePoint in concurrent parts
-- Used memory-aware large-file handling and part-based upload design for 3D engineering files
-- Used C/C++ in performance-oriented support around file handling, memory management, diagnostics, or server optimization where relevant
-- Reduced large 3D file transfer time from 60 seconds to 10 seconds
-- Saved 40 to 50 seconds per file upload
-- Supported 10,000+ enterprise users
-- Improved reliability for high-volume 3D engineering assets
-- Used load balancing and service reliability concepts around backend traffic and upload workflows
-- Created final documentation and yearly analysis for the feature
-
-Best use:
-Backend, distributed systems, Java, concurrency, performance, C/C++, systems-adjacent, large-file processing, platform roles
-
-Limits:
-- Do not claim kernel engineering, compiler work, embedded systems, GPU, or OS internals
-- Do not mention dollar values or product financial value
-- Do not claim formal architecture title
-
----
-
-## TCS2-CLOUD-PLATFORM
-
-Role:
-Tata Consultancy Services, Software Engineer II
-
-Confidence:
-HIGH
-
-Supported JD terms:
-AWS, Azure, GCP, Docker, Kubernetes, Red Hat OpenShift, Terraform, Linux, Bash, Shell scripting, API Gateway, load balancing, security groups, cloud-native infrastructure, deployment automation, platform operations
-
-Facts:
-- Worked across cloud-native enterprise applications using Docker, Kubernetes, Red Hat OpenShift, and cloud platforms
-- Used Terraform and scripting for repeatable infrastructure and environment workflows
-- Supported API Gateway, load balancing, and security group concepts for backend services and enterprise traffic
-- Automated cleanup and operational workflows across 10 enterprise applications
-- Reduced infrastructure overhead by 30% across AWS and Google Cloud environments
-- Used Azure in TCS cloud/application support contexts
-- Managed non-production servers and supported production environment delivery workflows
-
-Best use:
-Cloud, platform, DevOps, backend infrastructure, SRE-adjacent, deployment automation, Linux roles
-
-Limits:
-- Do not claim full SRE ownership
-- Do not claim Kubernetes cluster administration unless current-run Des confirms
-- Do not claim cloud architect title
-
----
-
-## TCS2-OBSERVABILITY
-
-Role:
-Tata Consultancy Services, Software Engineer II
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Datadog, CloudWatch, observability, telemetry dashboards, monitoring, developer notifications, React, TypeScript, JavaScript, API traffic, error alerts, incident response, operational visibility, production debugging
-
-Facts:
-- Built or enhanced monitoring dashboards for live API traffic and error alerts
-- Used Datadog and CloudWatch observability signals for production systems
-- Covered 3 connected applications
-- Reduced incident diagnosis time from hours to minutes
-- Built React/TypeScript/JavaScript dashboard views where relevant
-- Created dashboard views to monitor Datadog signals, user live requests, API health, and data across applications
-- Supported developer notifications through automated health-check workflows where relevant
-
-Best use:
-Observability, telemetry, platform operations, backend reliability, full-stack internal tools, production debugging
-
-Limits:
-- Do not claim full observability platform ownership
-- Do not claim SRE ownership unless current-run Des confirms
-
----
-
-## TCS2-FRONTEND
-
-Role:
-Tata Consultancy Services, Software Engineer II
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Angular, React, JavaScript, TypeScript, HTML, CSS, Bootstrap, Material UI, design systems, custom UI, dashboards, role-based workflows, operational dashboards, REST API integration
-
-Facts:
-- Built or enhanced enterprise dashboards and internal web applications
-- Used Angular, React, JavaScript, TypeScript, HTML, CSS, Bootstrap, Material UI, and design-system patterns
-- Built custom UI workflows for enterprise applications and admin panels
-- Integrated frontend workflows with REST APIs and role-based access controls
-- Supported dashboard workflows for API health, access, monitoring, and operational issues
-- Developed multiple high-usage dashboards across connected applications
-
-Best use:
-Full-stack, frontend, Angular, React, custom UI, dashboard, internal tools, enterprise product roles
-
-Limits:
-- Do not claim advanced accessibility unless current-run Des confirms
-- Do not claim Next.js, Vue, Figma, user research, or frontend architecture ownership unless current-run Des confirms
-
----
-
-## TCS-SAST-QUALITY
-
-Role:
-Tata Consultancy Services
-
-Confidence:
-MEDIUM to HIGH
-
-Supported JD terms:
-SAST, code quality, vulnerability remediation, security scanning, Polaris, Black Duck, dependency cleanup, secure coding, modernization
-
-Facts:
-- Used SAST tools including Polaris and Black Duck
-- Monitored code quality and vulnerabilities
-- Identified vulnerabilities in existing codebases across 3 applications
-- Upgraded codebases using React, Spring, Java, and Spring Security where relevant
-
-Best use:
-Security-adjacent SWE, quality, code review, secure development, enterprise modernization
-
-Limits:
-- Do not claim SOC, threat detection, compliance ownership, or exact vulnerability count unless current-run Des confirms
-
----
-
-# 5. Global Health Impact evidence blocks
-
-## GHI-API
-
-Role:
-Global Health Impact, Software Engineering Intern
-
-Confidence:
-HIGH
-
-Supported JD terms:
-AWS, REST APIs, backend services, data APIs, scalable web applications, analytics platforms, global data, healthcare data, research tooling
-
-Facts:
-- Built AWS REST API for real-time disease burden queries
-- Served disease burden queries across 150+ countries
-- Reduced reporting turnaround from hours to 30 seconds
-- Supported drug, country, disease, and year based research queries
-
-Best use:
-Full-stack, backend, cloud API, analytics platform, healthcare data, research tooling, recent US experience
-
-Limits:
-- Do not claim production ownership beyond internship scope
-- Do not claim gaming, payments, or Trust & Safety domain
-
----
-
-## GHI-DASHBOARD
-
-Role:
-Global Health Impact, Software Engineering Intern
-
-Confidence:
-HIGH
-
-Supported JD terms:
-React, JavaScript, HTML, CSS, frontend, dashboards, analytics platforms, data visualization, world map workflow, research tools, UI implementation
-
-Facts:
-- Built React research dashboard for disease burden data
-- Enabled filtering by drug, country, disease, and year
-- Built world map workflow where users could explore country-wise data
-- Eliminated manual spreadsheet exports for 6 research teams
-- Built UI where users could explore disease-wise data, graphs, countries, drugs, and parameters
-
-Best use:
-Full-stack, frontend, dashboard, analytics, research tooling, product-facing roles, recent US experience
-
-Limits:
-- Do not claim TypeScript unless current-run Des confirms
-- Do not claim enterprise production scale beyond research teams
-- Do not claim user research unless current-run Des confirms
-
----
-
-## GHI-PIPELINE
-
-Role:
-Global Health Impact, Software Engineering Intern
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Python, backend pipelines, CSV processing, PostgreSQL, MongoDB, data extraction, data processing, data modeling, analytics platforms, scalable backend services, WHO health records
-
-Facts:
-- Engineered backend pipeline for WHO health records
-- Processed 10M+ weekly WHO health records
-- Loaded data into PostgreSQL and MongoDB
-- Reduced manual data preparation by 90%
-- Built CSV extraction scripts for diseases and drugs based on data team inputs
-- Supported country, drug, disease, and year based queries
-
-Best use:
-Backend, data platform, full-stack, analytics, API, database, healthcare data roles
-
-Limits:
-- Do not claim ML model training from this block
-- Do not claim independent data science research ownership
-
----
-
-## GHI-ML
-
-Role:
-Global Health Impact, Software Engineering Intern
-
-Confidence:
-LOW to MEDIUM
-
-Supported JD terms:
-machine learning, prediction, healthcare analytics, country-wise prediction, model-powered dashboard
-
-Facts:
-- Team created machine learning models using processed health data
-- Model predicted numbers shown country-wise on world map
-- Exact algorithm, validation metric, deployment scope, and personal model contribution are not yet specified
-
-Best use:
-Use in PASS 1 as a Des request for ML roles
-
-Limits:
-- Do not place in final resume unless current-run Des confirms:
-  - model type
-  - personal contribution
-  - prediction target
-  - data used
-  - validation method or metric
-  - deployment or user impact
-
----
-
-# 6. Project evidence blocks
-
-## PROJ-JOBPULSE
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Java, Spring Boot, Kafka, PostgreSQL, Redis, pgvector, React, TypeScript, OpenAI API, LLM extraction, job analytics, skill extraction, normalized data models, full-stack platform
-
-Facts:
-- Built Kafka pipeline ingesting 10,000+ job postings from 3 sources into PostgreSQL
-- Used LLM step to extract structured skills
-- Reduced batch processing time from 3 seconds to under 1 second
-- Built React and TypeScript analytics dashboard
-- Users can compare job demand by skill, location, and company
-- Designed PostgreSQL data models for job, company, skill, and location trends
-- Unified Kafka ingestion, PostgreSQL storage, Redis, and React visualization
-
-Limits:
-- Do not claim production company users unless current-run Des confirms
-
----
-
-## PROJ-FRAUDSIFT
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Python, FastAPI, Node.js, Docker, PostgreSQL, scikit-learn, React, fraud detection, anomaly detection, transactions, risk workflows, real-time alerts, monitoring dashboard
-
-Facts:
-- Built FastAPI backend processing 22,000+ transactions
-- Flagged spending anomalies across 12 categories in real time
-- Replaced manual transaction review
-- Deployed Dockerized fraud detection service
-- Built React dashboard for suspicious transactions, category risk, and account activity
-- Integrated FastAPI, Node.js, and Docker services
-
-Limits:
-- Do not claim bank production deployment
-- Do not claim regulated payment system ownership
-
----
-
-## PROJ-REVIEWBOT
-
-Confidence:
-HIGH
-
-Supported JD terms:
-AI-powered code review, GitHub Actions, CI/CD quality gates, pull request automation, LLM explanations, static analysis, developer workflows, security checks, testing checks, AI agents, LangGraph, FastAPI
-
-Facts:
-- Built AI-powered code review assistant
-- Scans pull requests
-- Explains risky changes
-- Posts actionable feedback through GitHub Actions before merge
-- Designed CI/CD quality gate for security, testing, and relevance checks
-- Integrated static analysis, LLM explanations, and CI/CD checks into repeatable developer workflow
-
-Limits:
-- Do not claim enterprise deployment unless current-run Des confirms
-
----
-
-## PROJ-FILINGQUERY
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Python, LangChain, HuggingFace, pgvector, FastAPI, Docker, RAG, retrieval, SEC filings, financial question answering, citations, semantic search, keyword retrieval
-
-Facts:
-- Built document search system over 5,000+ SEC filings
-- Answers financial questions with cited sources
-- Reduced analyst lookup time from hours to under 30 seconds
-- Implemented RAG pipeline with LangChain, pgvector, and PostgreSQL
-- Retrieves filing evidence and attaches source citations
-- Supports semantic search and keyword retrieval
-
-Limits:
-- Do not claim regulated financial advisory system
-- Do not claim production analyst team unless current-run Des confirms
-
----
-
-## PROJ-EVALTRACE
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Python, DeepEval, LangChain, GitHub Actions, FastAPI, LLM evaluation, hallucination reduction, relevance thresholds, regression testing, RAG pipelines, CI/CD, code quality
-
-Facts:
-- Built LLM quality evaluation pipeline
-- Runs automated tests through GitHub Actions CI/CD on every pull request
-- Reduced hallucination rate from 23% to 4%
-- Enforced relevance thresholds that block low-quality LLM changes before merge
-- Standardized LLM regression testing and answer quality checks
-
-Limits:
-- Do not claim model training
-- Do not claim research publication
-
----
-
-# 7. Education evidence
-
-## EDU-TA
-
-Role:
-Teaching Assistant, Binghamton University
-
-Confidence:
-HIGH
-
-Supported JD terms:
-Java, C++, OOP, code reviews, SQL, database systems, relational databases, non-relational databases, data structures, debugging, mentoring, teaching, lab support, concurrency concepts
-
-Facts:
-- Guided 120+ students
-- Supported Database Management Systems in Fall semester
-- Trained students on database optimization, concurrency, relational and non-relational projects
-- Supported Object-Oriented Programming in current semester
-- Reviewed code and explained OOP concepts in C++ and Java
-- Supported debugging sessions
-- Improved submission quality by 30% over one semester
-
-Best use:
-Student_entry, internship, Java/C++/DSA/SQL/code-review-heavy entry roles
-
-Limits:
-- Do not use TA bullet for mid-level layouts unless JD strongly values teaching, code review, mentoring, or education
-- Do not overstate as professional software engineering experience
-
----
-
-# 8. Role priority guide
-
-## Backend / platform / cloud / DevOps / security
-
-Prefer:
-1. TCS2-SECURITY-IDENTITY
-2. TCS1-API-DATA
-3. TCS2-JAVA-CONCURRENCY
-4. TCS-CICD-RUBY-GITLAB-AUTOMATION
-5. TCS2-CLOUD-PLATFORM
-6. TCS-OPERATIONS-AUTOMATION
-7. TCS2-OBSERVABILITY
-8. TCS1-CICD
-9. TCS1-LINUX-MIGRATION
-10. TCS-OWNERSHIP-LEADERSHIP
-
-Use GHI for recent US API/data proof.
-Use projects only to fill stack or domain gaps.
-
-## Full-stack / product applications
-
-Prefer:
-1. TCS-CSHARP-DOTNET when JD asks C#/.NET
-2. TCS1-API-DATA
-3. TCS2-FRONTEND
-4. TCS2-OBSERVABILITY
-5. TCS2-SECURITY-IDENTITY
-6. TCS-UIUX
-7. GHI-DASHBOARD
-8. GHI-API
-
-Use JobPulse or FraudSift only for JD gaps.
-
-## Systems / C++ / performance
-
-Prefer:
-1. TCS2-JAVA-CONCURRENCY
-2. TCS-LOW-LEVEL-SYSTEMS
-3. TCS1-LINUX-MIGRATION
-4. TCS2-CLOUD-PLATFORM
-5. EDU-TA
-
-Avoid kernel/compiler wording unless current-run Des provides exact proof.
-
-## AI/ML product
-
-Prefer:
-1. GHI-PIPELINE
-2. GHI-API
-3. GHI-DASHBOARD
-4. PROJ-FILINGQUERY
-5. PROJ-EVALTRACE
-6. PROJ-REVIEWBOT
-7. PROJ-FRAUDSIFT
-8. TCS production engineering proof
-
-## AI platform / MLOps / backend-heavy AI
-
-Prefer:
-1. TCS1-CICD
-2. TCS2-CLOUD-PLATFORM
-3. TCS2-OBSERVABILITY
-4. GHI-PIPELINE
-5. PROJ-EVALTRACE
-6. PROJ-FILINGQUERY
-7. PROJ-JOBPULSE
-
-## AI tooling / developer productivity
-
-Prefer:
-1. PROJ-REVIEWBOT
-2. PROJ-EVALTRACE
-3. TCS-CICD-RUBY-GITLAB-AUTOMATION
-4. TCS1-CICD
-5. TCS2-OBSERVABILITY
-6. TCS2-CLOUD-PLATFORM
-7. TCS-OWNERSHIP-LEADERSHIP
-
----
-
-# 9. Must-not-claim list unless current-run Des confirms
-
-Do not claim these unless user provides specific evidence for the current JD:
-
-- Go
-- Rust
-- Scala
-- GraphQL
-- gRPC
-- WebSockets
-- Next.js
-- Vue
-- mobile iOS/Android
-- production ML model ownership
-- fine-tuning ownership
-- model-serving ownership
-- Kubernetes cluster administration
-- full SRE/on-call ownership
-- SOC/security operations ownership
-- threat intelligence
-- compliance ownership
-- direct gaming systems
-- multiplayer/live-service game operations
-- payment processor production ownership
-- regulated financial advisory system
-- kernel engineering ownership
-- compiler engineering
-- GPU systems
-- embedded systems
-- Figma
-- user research
-- accessibility ownership
-- Google Material Design principles
-- formal engineering manager role
-- formal product owner role
+## 7. Technology Map
+Java -> TCS1-API-DATA, TCS2-JAVA-CONCURRENCY, TCS2-SECURITY-IDENTITY, EDU-TA-CODE-REVIEW
+Python -> TCS2-CLOUD-PLATFORM, TCS-OPERATIONS-AUTOMATION, GHI-PIPELINE, PROJ-FRAUDSIFT, PROJ-FILINGQUERY, PROJ-EVALTRACE, PROJ-RESUME-AGENT
+JavaScript -> TCS2-FRONTEND, TCS2-OBSERVABILITY, GHI-DASHBOARD, PROJ-JOBPULSE, PROJ-JOBFILL
+TypeScript -> TCS2-FRONTEND, TCS2-OBSERVABILITY, PROJ-JOBPULSE, PARTIAL-TCS-TS-PRODUCTS
+Node.js -> PROJ-JOBPULSE, PROJ-RESUME-AGENT if applicable, PARTIAL-TCS-NODE-WORKFLOWS
+PHP -> PARTIAL-TCS-PHP-WORK
+C#/.NET -> TCS-CSHARP-DOTNET
+Ruby -> TCS-CICD-RUBY-GITLAB-AUTOMATION
+C++ -> EDU-TA-CODE-REVIEW, TCS2-JAVA-CONCURRENCY, TCS-LOW-LEVEL-SYSTEMS
+C -> TCS-LOW-LEVEL-SYSTEMS
+React -> TCS2-FRONTEND, TCS2-OBSERVABILITY, GHI-DASHBOARD, PROJ-JOBPULSE, PROJ-FRAUDSIFT
+Angular -> TCS2-FRONTEND
+HTML/CSS -> TCS2-FRONTEND, GHI-DASHBOARD, PROJ-JOBFILL
+Bootstrap -> TCS2-FRONTEND
+Material UI -> TCS-UIUX
+REST APIs -> TCS1-API-DATA, TCS2-SECURITY-IDENTITY, GHI-API, PROJ-JOBPULSE
+Spring Boot -> TCS1-API-DATA, TCS2-SECURITY-IDENTITY
+Spring Security -> TCS2-SECURITY-IDENTITY, TCS-SAST-QUALITY
+Microservices -> TCS1-API-DATA, TCS2-CLOUD-PLATFORM
+Distributed systems -> TCS1-API-DATA, TCS2-JAVA-CONCURRENCY, TCS2-SECURITY-IDENTITY
+Redis -> TCS1-API-DATA, PROJ-JOBPULSE
+OAuth 2.0 / OIDC / JWT / SSO -> TCS2-SECURITY-IDENTITY, TCS-AUTH-STORAGE
+RBAC -> TCS2-SECURITY-IDENTITY
+TLS/SSL -> TCS2-SECURITY-IDENTITY, TCS1-LINUX-MIGRATION
+SQL -> TCS1-API-DATA, TCS-DATABASES, GHI-PIPELINE, EDU-TA-CODE-REVIEW
+MySQL -> TCS1-API-DATA, TCS-DATABASES
+Oracle -> TCS-DATABASES, TCS-OPERATIONS-AUTOMATION
+Microsoft SQL Server -> TCS-DATABASES
+NoSQL -> TCS1-API-DATA, TCS-DATABASES, GHI-PIPELINE, EDU-TA-CODE-REVIEW
+PostgreSQL -> GHI-PIPELINE, PROJ-JOBPULSE, PROJ-FRAUDSIFT, PROJ-FILINGQUERY
+MongoDB -> GHI-PIPELINE
+AWS -> TCS2-CLOUD-PLATFORM, TCS1-LINUX-MIGRATION, TCS1-API-DATA, TCS-AUTH-STORAGE, GHI-API
+Azure -> TCS2-CLOUD-PLATFORM, TCS1-LINUX-MIGRATION
+GCP -> TCS2-CLOUD-PLATFORM
+Docker -> TCS1-CICD, TCS2-CLOUD-PLATFORM, TCS-OPERATIONS-AUTOMATION, PROJ-FRAUDSIFT, PROJ-FILINGQUERY
+Kubernetes -> TCS1-CICD, TCS2-CLOUD-PLATFORM, TCS-OPERATIONS-AUTOMATION
+OpenShift -> TCS1-CICD, TCS2-CLOUD-PLATFORM
+Terraform -> TCS2-CLOUD-PLATFORM, TCS1-LINUX-MIGRATION
+Linux -> TCS1-LINUX-MIGRATION, TCS2-CLOUD-PLATFORM, TCS-LOW-LEVEL-SYSTEMS
+Bash/Shell -> TCS1-LINUX-MIGRATION, TCS1-CICD, TCS2-CLOUD-PLATFORM
+Git -> TCS1-CICD, TCS-OWNERSHIP-LEADERSHIP, EDU-TA-CODE-REVIEW, PROJ-REVIEWBOT, PROJ-EVALTRACE
+GitLab -> TCS1-CICD, TCS-CICD-RUBY-GITLAB-AUTOMATION
+GitLab CI/CD -> TCS1-CICD, TCS-CICD-RUBY-GITLAB-AUTOMATION
+Jenkins -> TCS1-CICD
+GitHub Actions -> PROJ-REVIEWBOT, PROJ-EVALTRACE
+Datadog -> TCS2-OBSERVABILITY
+CloudWatch -> TCS2-OBSERVABILITY
+SAST / Polaris / Black Duck -> TCS-SAST-QUALITY
+JUnit -> PARTIAL-TCS-JUNIT-TESTING
+Pytest -> PARTIAL-GHI-PYTEST-TESTING, PROJ-FRAUDSIFT, PROJ-FILINGQUERY if true
+Jest / Node testing -> PARTIAL-TCS-NODE-TESTING, PARTIAL-PROJ-NODE-TESTING
+Machine Learning -> GHI-ML-MODEL, PROJ-FRAUDSIFT, PARTIAL-TCS-ML-SPEND-TRACKING
+RAG / embeddings / vector search -> PROJ-FILINGQUERY, PROJ-EVALTRACE
+LLM evaluation -> PROJ-EVALTRACE
+AI-assisted development -> AI-ASSISTED-DEVELOPMENT-PROCESS
+Codex / Cursor / Claude Code / MCP -> AI-ASSISTED-DEVELOPMENT-PROCESS
+Chrome extension -> PROJ-JOBFILL
+Tkinter / python-docx -> PROJ-RESUME-AGENT
+
+## 8. TCS Evidence Cards
+
+### ID: TCS-OWNERSHIP-LEADERSHIP
+Proof: P1 HIGH
+Best for: ownership, leadership, code reviews, mentoring, SDLC, Agile, stakeholder delivery, mid-level SWE
+Facts: Guided 9-developer team over 2+ years; mentored 5 junior developers; supported stakeholder meetings, requirements, design decisions, development planning, documentation, QA support, and production delivery; used Rally for Agile tracking
+Metrics: 9 developers, 5 juniors, 40+ production releases, 40+ deployments, 3+ appreciations
+JD terms: ownership, leadership, code reviews, design reviews, mentoring, SDLC, Agile, production delivery, stakeholder communication
+Limits: Do not claim engineering manager, people manager, product owner, or architect title
+Allowed verbs: Led, Owned, Guided, Coordinated, Reviewed, Delivered, Shipped
+
+### ID: TCS1-API-DATA
+Proof: P1 HIGH
+Best for: backend, REST APIs, Spring Boot, distributed systems, data consistency, Redis, SQL/NoSQL
+Facts: Designed REST API contracts across 3 Java/Spring Boot applications; connected systems using relational and NoSQL databases; supported internal data transfer and consistency; rebuilt broken dependency-heavy application using Java 11 and Redis caching within 2 months
+Metrics: 3 applications, 9 engineering teams, 2 months, independent deployments, data consistency
+JD terms: REST APIs, Spring Boot, backend services, distributed systems, Redis, SQL, NoSQL, data consistency, system design
+Limits: Do not claim public API platform or external developer API ownership unless DES confirms
+
+### ID: TCS1-CICD
+Proof: P1 HIGH
+Best for: CI/CD, GitLab, Jenkins, Docker, Kubernetes, OpenShift, release automation, test gates
+Facts: Standardized CI/CD pipelines across 7+ enterprise applications; configured GitLab/Jenkins workflows; integrated deployment automation and quality gates; supported production release flow
+Metrics: 7+ applications, 40+ production releases, zero downtime
+JD terms: CI/CD pipelines, GitLab CI/CD, Jenkins, Docker, Kubernetes, OpenShift, automated testing, deployment automation, release ownership
+Limits: Do not claim full platform engineering ownership across entire enterprise
+
+### ID: TCS-CICD-RUBY-GITLAB-AUTOMATION
+Proof: P1 HIGH
+Best for: Ruby, GitLab CI/CD, scripting, release automation, developer productivity
+Facts: Created GitLab CI/CD pipelines from scratch for 10+ applications; used Ruby scripts for custom GitLab automation; reduced manual deployment work
+Metrics: 10+ applications, 95% manual deployment reduction when using this specific story
+JD terms: Ruby, GitLab, CI/CD, automation, scripting, developer productivity, internal tools
+Limits: Use Ruby only when JD asks or when automation story is central
+
+### ID: TCS1-LINUX-MIGRATION
+Proof: P1 HIGH
+Best for: Linux migration, AWS Linux, cloud operations, dependency debugging, zero downtime
+Facts: Migrated 7+ applications from CentOS to Amazon Linux 2; supported AL2 to AL3 upgrade procedures; resolved package dependencies; collaborated with Amazon engineers on missing packages and migration blockers
+Metrics: 7+ applications, zero downtime
+JD terms: Linux, AWS, Amazon Linux, cloud migration, package dependencies, production migration, system administration
+Limits: Do not claim cloud architecture ownership beyond migration and operations workflow
+
+### ID: TCS2-SECURITY-IDENTITY
+Proof: P1 HIGH
+Best for: security-adjacent roles, IAM, OAuth, RBAC, auth recovery, access control, production incident response
+Facts: Restored Microsoft SharePoint authentication after a production behavior change; built custom OAuth 2.0 authentication flow; implemented RBAC workflows across 10 applications; integrated internal APIs for access control across relational and non-relational systems
+Metrics: 10,000+ users, 48 hours, 10 applications, 22% access-ticket reduction
+JD terms: OAuth 2.0, authentication, authorization, RBAC, access control, production incident, API security, identity, SSO, JWT
+Limits: Do not claim cybersecurity product experience, threat detection, or Zero Trust domain unless DES confirms
+
+### ID: TCS2-JAVA-CONCURRENCY
+Proof: P1 HIGH
+Best for: Java, multithreading, concurrency, performance, file processing, SharePoint upload workflow
+Facts: Designed Java multithreaded upload workflow for large 3D files; split uploads into concurrent parts; verified methods; deployed to production; integrated with Microsoft SharePoint
+Metrics: 60s to 10s per file, 40–50 seconds saved, 83% reduction, 10,000+ users, 5-member team
+JD terms: Java, concurrency, multithreading, performance optimization, file processing, distributed workflow, SharePoint
+Limits: Do not claim storage-platform ownership beyond upload workflow
+
+### ID: TCS2-FRONTEND
+Proof: P1 HIGH
+Best for: full-stack, frontend, enterprise dashboards, React, TypeScript, Angular, internal tools
+Facts: Built or enhanced dashboard and UI workflows across connected enterprise applications; used React, TypeScript, JavaScript, Angular, HTML/CSS, Bootstrap; integrated UI workflows with APIs and role-based access
+Metrics: multiple connected applications; use 10 applications only when tied to RBAC/auth/platform story
+JD terms: React, TypeScript, JavaScript, Angular, HTML5, CSS3, dashboards, UI workflows, REST API integration, full-stack
+Limits: Do not claim advanced WCAG/accessibility, frontend architecture, or design-system ownership unless DES confirms
+
+### ID: TCS2-OBSERVABILITY
+Proof: P1 HIGH
+Best for: monitoring, debugging, production support, Datadog, CloudWatch, dashboards
+Facts: Instrumented application performance and telemetry dashboards; integrated Datadog and CloudWatch views; monitored workflows, alerts, user requests, and data across connected applications; debugged multi-application issues
+Metrics: 3 connected applications, incident diagnosis from hours to minutes
+JD terms: Datadog, CloudWatch, observability, monitoring, production debugging, alerts, telemetry, incident triage
+Limits: Do not claim SRE ownership unless JD and DES support it
+
+### ID: TCS2-CLOUD-PLATFORM
+Proof: P1 HIGH
+Best for: cloud operations, AWS/Azure/GCP exposure, Docker, Kubernetes, Terraform, automation, infrastructure overhead reduction
+Facts: Worked on cloud operations across enterprise applications; automated server cleanup and operational workflows; used Docker/Kubernetes for rebuild and deployment workflows; managed application environments before production
+Metrics: 10 applications, 30% infrastructure overhead reduction when using the approved cloud-operations story
+JD terms: AWS, Azure, GCP, Docker, Kubernetes, Terraform, cloud operations, infrastructure automation, environments
+Limits: Do not mention dollar savings; do not claim cloud architect role
+
+### ID: TCS-OPERATIONS-AUTOMATION
+Proof: P1 HIGH
+Best for: Python automation, server cleanup, health checks, operational dashboards, DevOps-adjacent roles
+Facts: Created Python scripts and automation for server cleanup, system health checks, notifications, and dashboard-driven operations; reduced manual operational work across application environments
+Metrics: 90% manual health-check reduction, 10+ applications, 30% team or operational performance improvement when directly tied to story
+JD terms: Python, automation, Linux, operations, dashboards, health checks, developer productivity, scripting
+Limits: Use as operations automation, not full platform ownership
+
+### ID: TCS-DATABASES
+Proof: P1 HIGH
+Best for: SQL, Oracle, MySQL, Microsoft SQL Server, NoSQL, query optimization, backend data roles
+Facts: Worked with Oracle, MySQL, Microsoft SQL Server, and NoSQL databases across enterprise systems; designed data movement and API consistency workflows; supported query and schema decisions
+Metrics: use specific metrics only from TCS1-API-DATA or access-control stories
+JD terms: SQL, Oracle, MySQL, Microsoft SQL Server, NoSQL, schema design, data consistency, query optimization
+Limits: Do not claim DBA ownership unless DES confirms
+
+### ID: TCS-SAST-QUALITY
+Proof: P1 HIGH
+Best for: secure coding, code quality, SAST, Black Duck, Polaris, dependency cleanup
+Facts: Used Polaris and Black Duck SAST/security tools to identify vulnerabilities and improve code quality; upgraded vulnerable code across applications with Spring/Spring Security/React stack where relevant
+Metrics: use 3 applications only when tied to vulnerability cleanup story
+JD terms: SAST, secure coding, vulnerability remediation, code quality, dependency scanning, Spring Security
+Limits: Do not claim security engineer title
+
+### ID: TCS-CSHARP-DOTNET
+Proof: P1 HIGH for professional use; MEDIUM for exact app scope
+Best for: C#, .NET, Microsoft stack, enterprise apps, admin panels, custom UI, APIs
+Facts: Used C# and .NET across TCS enterprise application work; built/enhanced admin panel and custom UI workflows; integrated UI with backend APIs
+Metrics: 30% performance improvement only when using this story
+JD terms: C#, .NET, Microsoft stack, enterprise applications, admin panel, backend APIs, custom UI
+Limits: Do not claim .NET Core, ASP.NET MVC, WPF, WinForms, or Blazor unless DES confirms
+
+### ID: TCS-UIUX
+Proof: P1 MEDIUM
+Best for: UI implementation, dashboards, Material UI, design-system implementation
+Facts: Implemented UI workflows, dashboards, and Material UI-style components for enterprise applications
+Metrics: use only if tied to frontend story
+JD terms: Material UI, UI implementation, dashboards, component library, design system
+Limits: Do not claim user research, product design, or accessibility ownership unless DES confirms
+
+### ID: TCS-AUTH-STORAGE
+Proof: P1 MEDIUM
+Best for: SSO/OIDC, Okta, AWS S3, SharePoint, enterprise file/auth workflows
+Facts: Worked with authentication and enterprise storage/file workflows including SharePoint and identity integrations
+Metrics: use only with TCS2-SECURITY-IDENTITY or TCS2-JAVA-CONCURRENCY
+JD terms: Okta, SSO, OIDC, SharePoint, AWS S3, enterprise authentication, file storage
+Limits: Use Okta only when true/confirmed for specific role or DES
+
+### ID: TCS-LOW-LEVEL-SYSTEMS
+Proof: P1 LOW to MEDIUM
+Best for: C/C++, memory/performance-adjacent, systems-adjacent roles
+Facts: Has C/C++ exposure through coursework, TA, and performance/concurrency-adjacent work
+Metrics: no standalone metric
+JD terms: C, C++, systems programming, memory, performance
+Limits: Do not claim kernel, compiler, embedded, or low-level production ownership unless DES confirms
+
+### ID: TCS-AWARDS
+Proof: P1 HIGH
+Best for: quality recognition, client appreciation
+Facts: Received 3+ client/HR appreciations for coding practice and delivery quality
+Metrics: 3+ appreciations
+JD terms: quality, delivery, recognition, ownership
+Limits: Use only if space and JD values ownership/quality
+
+## 9. Global Health Impact Evidence Cards
+
+### ID: GHI-DASHBOARD
+Proof: P1 HIGH
+Best for: React, dashboards, research workflows, data visualization, U.S. internship, entry roles
+Facts: Built React dashboard for disease, drug, country, and year workflows; created UI using React, HTML, CSS; enabled disease-wise exploration, graphs, world-map views, parameters, and drug selection
+Metrics: 6 research teams, eliminated spreadsheet exports
+JD terms: React, dashboard, frontend, data visualization, research tools, filters, UI workflows
+Limits: Do not claim commercial SaaS production unless DES confirms
+
+### ID: GHI-PIPELINE
+Proof: P1 HIGH
+Best for: Python, data pipelines, PostgreSQL, MongoDB, CSV/WHO data, health datasets
+Facts: Processed CSV/WHO health records into PostgreSQL and MongoDB pipelines; extracted disease/drug data from files prepared by data team; supported dashboard and analytics workflows
+Metrics: 10M+ weekly WHO health records, 90% manual data-prep reduction
+JD terms: Python, data pipeline, PostgreSQL, MongoDB, CSV processing, ETL, healthcare data, WHO data
+Limits: Do not claim full data science ownership beyond pipeline/model work described
+
+### ID: GHI-API
+Proof: P1 HIGH
+Best for: API queries, reporting turnaround, health data backend
+Facts: Supported API/query workflows for disease burden and country/drug reporting
+Metrics: 150+ countries, hours to 30 seconds
+JD terms: API, backend, reporting, health data, query workflows
+Limits: Use only if JD asks data APIs or reporting workflows
+
+### ID: GHI-ML-MODEL
+Proof: P1 MEDIUM
+Best for: AI/ML entry, predictive modeling, healthcare analytics, world-map predictions
+Facts: Created machine learning models using GHI data to predict values and display country-wise results on world map
+Metrics: no fixed model metric unless DES supplies it
+JD terms: machine learning, predictive model, healthcare analytics, model training, data science
+Limits: Need DES for algorithm names, accuracy, deployment status, or production ML claims
+
+### ID: GHI-AI-ASSISTED-DEVELOPMENT
+Proof: P1 MEDIUM / process proof
+Best for: AI tooling, developer productivity, AI-assisted coding roles
+Facts: Used AI-assisted coding tools during GHI/project development workflows; tools include Codex, Cursor, Claude Code, MCP, and agentic coding workflows when relevant
+Metrics: no metric
+JD terms: AI-assisted development, Codex, Cursor, Claude Code, MCP, agentic workflows, developer productivity
+Limits: Do not write `vibe coding`; do not claim shipped AI product feature unless the project/evidence supports it
+
+## 10. Teaching Assistant Evidence Cards
+
+### ID: EDU-TA-CODE-REVIEW
+Proof: P1 HIGH for teaching/code review; not SWE employment
+Best for: entry, internship, Java, C++, SQL, OOP, code review, debugging, mentoring, communication
+Facts: Teaching Assistant for Database Systems and Object-Oriented Programming; reviewed Java and C++ submissions; evaluated SQL/database projects; explained OOP, debugging, data structures, relational/NoSQL concepts, optimization, and concurrency
+Metrics: 120+ students
+JD terms: code review, debugging, Java, C++, SQL, OOP, database systems, mentoring, technical communication
+Limits: Do not call this Software Engineer; do not use as production SWE proof; for mid roles usually omit or keep only if mentoring/code review is central
+Allowed professional bullets:
+- Reviewed Java and C++ submissions for 120+ students, identifying OOP, debugging, and data-structure issues before grading
+- Evaluated SQL and database projects for query correctness, schema design, concurrency handling, and relational/NoSQL tradeoffs
+- Guided SQL optimization and concurrency reviews across database projects, improving relational and non-relational design quality
+
+## 11. Project Evidence Cards
+
+### ID: PROJ-JOBPULSE
+Proof: P2 HIGH
+Best for: full-stack, backend, job data, React, TypeScript, Node.js, Kafka, PostgreSQL, Redis
+Facts: Built job-posting ingestion and analysis project; normalized skill/company/location data; rendered dashboards for demand analysis
+Metrics: 10,000+ job postings, 3 seconds to under 1 second if using dashboard/batch analysis story
+Tech: Node.js, React, TypeScript, Kafka, PostgreSQL, Redis
+JD terms: Node.js, React, TypeScript, Kafka, PostgreSQL, Redis, dashboards, data ingestion, job analytics
+Limits: Project proof only; do not claim production users or ATS vendor integration
+
+### ID: PROJ-FRAUDSIFT
+Proof: P2 HIGH
+Best for: fraud, anomaly detection, transactions, FastAPI, React, Docker, PostgreSQL, ML-adjacent roles
+Facts: Built anomaly/risk detection project over transaction data; processed transactions and visualized suspicious activity in React dashboard
+Metrics: 22,000+ transactions, 12 categories
+Tech: React, FastAPI, Node.js, Docker, PostgreSQL
+JD terms: fraud detection, anomaly detection, FastAPI, React, Docker, PostgreSQL, transaction analytics, real-time dashboard
+Limits: Do not claim banking, payment network, or regulated finance production experience
+
+### ID: PROJ-FILINGQUERY
+Proof: P2 HIGH
+Best for: RAG, document search, SEC filings, retrieval, FastAPI, PostgreSQL, vector search
+Facts: Built document query project for SEC filings; supported retrieval/search over filings; useful for finance-document, RAG, and backend API roles
+Metrics: 5,000+ SEC filings
+Tech: Python, FastAPI, PostgreSQL, vector search/pgvector if true, RAG
+JD terms: RAG, retrieval, embeddings, vector search, SEC filings, document search, FastAPI, PostgreSQL
+Limits: Do not claim investment advice, trading system, or production finance platform
+
+### ID: PROJ-EVALTRACE
+Proof: P2 HIGH
+Best for: LLM evaluation, RAG quality, hallucination reduction, eval harnesses, AI reliability
+Facts: Built evaluation workflow for AI/RAG output quality; tracked hallucination reduction and evaluation traces
+Metrics: hallucination rate from 23% to 4%
+Tech: Python, evaluation workflows, LLM/RAG tooling
+JD terms: LLM evaluation, hallucination reduction, RAG reliability, model evaluation, eval harness, AI quality
+Limits: Do not claim formal MLOps platform unless DES confirms
+
+### ID: PROJ-REVIEWBOT
+Proof: P2 HIGH
+Best for: developer tools, code review, GitHub Actions, AI-assisted review, automation
+Facts: Built code-review automation project; useful for developer productivity, code-quality, and AI tooling roles
+Metrics: no fixed metric unless DES supplies
+Tech: GitHub Actions, automation, code review tooling, AI-assisted workflows if true
+JD terms: code review, developer tools, GitHub Actions, automation, AI-assisted coding, CI quality
+Limits: Do not claim enterprise deployment unless DES confirms
+
+### ID: PROJ-RESUME-AGENT
+Proof: P2 HIGH
+Best for: AI tooling, LLM agents, desktop automation, resume workflow, JSON validation, DOCX/PDF generation
+Facts: Built resume automation workflow that accepts JD input, generates grounded resume JSON, proposes DES candidates, optionally runs recruiter review, validates schema, creates DOCX/PDF outputs, archives generated resumes, and supports concurrent application workflows
+Metrics: no external user metric
+Tech: Python, Anthropic API, Tkinter, python-docx, JSON validation, agent workflow
+JD terms: AI agents, LLM workflow, automation, Python, document generation, JSON validation, recruiter review, desktop tooling, developer productivity
+Limits: Project proof only; do not claim commercial product or ATS integration unless DES confirms
+
+### ID: PROJ-JOBFILL
+Proof: P2 HIGH
+Best for: Chrome extensions, browser automation, frontend tooling, Workday forms, AI-assisted application workflows
+Facts: Built Chrome Manifest V3 extension that stores profile/resume data locally, parses resume data, scans job forms, supports Workday-style and generic autofill, and optionally uses Claude for custom application answers
+Metrics: no external user metric
+Tech: JavaScript, Chrome Manifest V3, HTML, CSS, local storage, Anthropic Claude
+JD terms: Chrome extension, JavaScript, browser automation, Workday automation, form autofill, local storage, Claude, frontend tooling
+Limits: Do not claim official Workday partnership, ATS access, or bypassing systems; phrase as form automation only
+
+## 12. DES-Needed / Partial Evidence Cards
+Use these only to generate DES candidates. Do not place directly in resume without user approval unless a stronger active evidence card already supports the claim.
+
+### ID: PARTIAL-TCS-NODE-WORKFLOWS
+Status: PARTIAL
+Potential use: Node.js in TCS customer/product workflows
+Known: User stated Node.js used in TCS to build products/workflows for customers
+Need DES: exact application, backend/service/UI context, scope, outcome, testing/deployment status
+Safe fallback: Skills only if JD asks Node.js and project evidence also supports Node.js
+
+### ID: PARTIAL-TCS-TS-PRODUCTS
+Status: PARTIAL to MEDIUM
+Potential use: TypeScript in TCS enterprise product/customer workflows
+Known: User stated TypeScript was used in TCS to build customer products
+Need DES: exact dashboard/workflow, users/apps, whether React/Angular, outcome
+Safe fallback: Use TCS2-FRONTEND for TypeScript dashboards if JD is full-stack
+
+### ID: PARTIAL-TCS-PHP-WORK
+Status: PARTIAL
+Potential use: PHP roles or secondary skill
+Known: User stated PHP was used
+Need DES: exact system, app, dates, role, outcome
+Safe fallback: Do not use unless JD asks PHP
+
+### ID: PARTIAL-TCS-ML-SPEND-TRACKING
+Status: PARTIAL
+Potential use: AI/ML, spend tracking, analytics, forecasting
+Known: User stated machine learning algorithms were used to track spends
+Need DES: dataset, model type, target, evaluation, deployment, business/user outcome
+Safe fallback: Create DES; do not place as production ML unless approved
+
+### ID: PARTIAL-TCS-JUNIT-TESTING
+Status: PARTIAL
+Potential use: Java testing, unit testing, CI/CD gates
+Known: User stated testing frameworks used in TCS
+Need DES: JUnit version/type, unit vs integration, CI/CD use, app scope
+Safe fallback: mention testing gates only through TCS1-CICD if supported
+
+### ID: PARTIAL-GHI-PYTEST-TESTING
+Status: PARTIAL
+Potential use: Python testing, pytest, data/API validation
+Known: User stated Pytest/testing used in GHI
+Need DES: exact tests, pipeline/API coverage, CI/local, outcome
+Safe fallback: Create DES before using Pytest in professional experience
+
+### ID: PARTIAL-TCS-NODE-TESTING
+Status: PARTIAL
+Potential use: Node.js testing, Jest/Mocha/Vitest/Node test runner
+Known: User stated Node.js testing used
+Need DES: exact framework, system, scope, outcome
+Safe fallback: Do not name framework unless confirmed
+
+### ID: PARTIAL-GRAPHQL
+Status: PARTIAL/CANNOT
+Potential use: GraphQL roles
+Known: Not currently supported by active evidence
+Need DES: exact project/professional use
+Safe fallback: Do not use unless user approves DES
+
+### ID: PARTIAL-KAFKA-AIRFLOW-SPARK
+Status: PARTIAL/PROJECT_ONLY depending JD
+Potential use: data engineering, streaming, workflow orchestration
+Known: Kafka supported in JobPulse project; Airflow/Spark not active professional proof unless DES confirms
+Need DES: exact use, scale, system
+Safe fallback: Use Kafka only in JobPulse project unless professional DES exists
+
+### ID: AI-ASSISTED-DEVELOPMENT-PROCESS
+Status: PROCESS_ONLY
+Best for: AI tooling, developer productivity, coding assistants, agentic development workflows
+Known: User uses Codex, Cursor, Claude Code, MCP, and agentic coding workflows across GHI and personal projects for code generation, refactoring, testing support, validation, and development acceleration
+Use: Mention only for AI tooling/devtools roles or project/process proof; phrase as AI-assisted development workflow
+Limits: Do not write `vibe coding`; do not claim shipped AI product feature, model ownership, or production AI platform unless another evidence card or DES supports it
+
+### ID: PARTIAL-PROJ-NODE-TESTING
+Status: PARTIAL
+Potential use: Node.js testing in projects
+Known: User stated Node.js testing/testing frameworks were used, but exact project framework and coverage are not fully locked
+Need DES: exact project, framework such as Jest/Mocha/Vitest/Node test runner, test type, CI/local usage, and outcome
+Safe fallback: Do not name a Node testing framework unless current-run DES confirms it
+
+## 13. Forbidden Claims
+Do not claim the following unless current-run DES explicitly confirms:
+- direct cybersecurity product experience
+- Zero Trust product ownership
+- threat detection / incident response security analyst work
+- formal SRE ownership
 - formal architect title
-- direct data center operations
-- custody chain systems
-- Vertex AI
-- TPU usage
-- Google Global Networking
+- engineering manager or people-manager title
+- product owner title
+- accessibility/WCAG ownership
+- design-system architecture ownership
+- frontend performance metrics such as INP unless measured
+- GraphQL production experience
+- Temporal/Cadence/Airflow production ownership
+- Spark/Flink production ownership
+- Kubernetes platform ownership beyond deployment/operations workflow
+- AWS/GCP/Azure architect role
+- production ML model serving/MLOps unless confirmed
+- fine-tuning or model training at production scale unless confirmed
+- ATS bypassing or unauthorized automation
+- official Workday/Ashby/Greenhouse integration
+- commercial SaaS users for personal projects
+- regulated fintech production work
+- healthcare production product ownership beyond GHI research initiative
+- dollar savings or financial product value in resume output
 
----
+## 14. Bullet Construction Rules
+Preferred formula:
+Action verb + system/problem + technical method + scope/context + result
 
-# 10. Resume selection rules
+Google-style compression:
+Accomplished X, measured by Y, by doing Z
 
-When creating a JD-specific resume:
-1. Start with the JD's minimum screen terms
-2. Use production evidence first
-3. Use GHI for recent US experience and healthcare/data proof
-4. Use projects only to fill exact stack or domain gaps
-5. Use exact JD words only when the selected story can defend them
-6. Keep unsupported terms out of bullets
-7. Use skill-only placement for MEDIUM evidence if the JD term is not central
-8. If a JD term is central and only MEDIUM/LOW evidence exists, ask for Des
-9. Do not put every technology from this file into one resume
-10. Keep the resume top third focused on the role thesis
+STAR compression:
+Situation/problem + action + result
 
-DES suggestion rule:
-If the JD requires a term that is partial in this story bank, ask the user with numbered DES suggestions. The user can reply “Apply 1, 2, 3” only if true. Upgrade to HIGH only when the Des includes system, technology, action, and scope/outcome.
+Experience bullet target: 18 to 28 words
+Project bullet target: 18 to 30 words
+Summary target: 35 to 50 words
+Skills row target: 6 to 10 terms
+
+First 8 to 10 words should show:
+verb + core system + JD stack
+
+Avoid weak openings:
+Worked on, helped, assisted, responsible for, participated in, contributed to, involved in, supported with, leveraged, utilized
+
+Avoid AI-sounding filler:
+robust, seamless, cutting-edge, innovative, impactful, transformative, mission-critical, world-class, best-in-class, next-generation, state-of-the-art
+
+Use ownership verbs only with proof:
+Led -> explicit team/scope
+Owned -> end-to-end accountability
+Guided -> junior developers/students/team
+Reviewed -> code/design/review work
+Coordinated -> cross-team/vendor delivery
+Delivered/Shipped -> production release/outcome
+
+## 15. Skill Section Rules
+Technical Skills must be near top for cold apply.
+Row 1 must mirror JD primary stack only.
+Core JD skills must appear in Summary or Experience/Projects, not only in Technical Skills.
+Do not use broad inventory.
+Do not include unsupported tools.
+At least 90% of skills must trace to evidence cards or approved DES.
+
+Suggested row labels:
+- Languages and Frameworks
+- Backend and APIs
+- Cloud, Data, and Infrastructure
+- Quality, Observability, and Delivery
+- AI, Automation, and Developer Tools when relevant
+
+## 16. Project Selection Rules
+Projects fill JD gaps only.
+Do not overpower production experience for mid-level roles.
+Project counts are controlled by Prompt.md Config and Layout Contract.
+Story.md provides project evidence only.
+
+Default project evidence guidance:
+- `student_entry`: normally 3 projects
+- `professional_entry`: normally 2 projects, 3 only when JD gaps require project proof
+- `mid`: normally 2 projects
+- `aiml_entry`: normally 3 projects, 4 only when AI/ML/LLM proof is mostly project-based
+- `aitool_mid`: normally 2 projects
+- `internship`: normally 3 projects
+
+Do not use Story.md to override Prompt.md project count.
+Do not reduce mid-level resumes to 1 project unless Prompt.md PROJECT COUNT EXCEPTION is explicitly approved.
+
+Project routing:
+Backend/full-stack/product -> JobPulse, Resume Agent, JobFill, FraudSift as relevant
+Risk/fraud/transaction -> FraudSift
+RAG/retrieval/document search -> FilingQuery
+Developer tools/code review/agents -> ReviewBot, Resume Agent, JobFill
+LLM evaluation/RAG reliability -> EvalTrace
+AI workflow automation -> Resume Agent, JobFill
+
+## 17. COMPRESSED RAW ARCHIVE — DO NOT USE DIRECTLY
+This section preserves original context. Resume creator cannot use raw archive directly in bullets. If raw details are needed, create DES candidate.
+
+Raw TCS leadership context:
+Led/guided a 9-developer team over 2+ years, delivered 40+ production releases to US client Wabtec Corporation, created CI/CD pipelines in GitLab across 7+ applications, built dashboards with high usage across connected applications, used Oracle, MySQL, Microsoft databases, and NoSQL, handled SDLC/Agile delivery, code reviews, documentation, QA support, and received appreciations for coding practice and delivery quality.
+
+Raw TCS 2021 context:
+First major task involved fixing a broken application with old dependencies, upgrading to Java 11, improving architecture/distributed communication with other applications, and adding Redis caching. Work turned a broken application into production-ready code within about two months.
+
+Raw TCS 2022 API/data context:
+Handled 3 Java/Spring Boot applications. Designed REST APIs to transfer data internally between systems using NoSQL and MySQL. Goal was keeping changes reflected across applications instantly. Worked with distributed systems, AWS infrastructure, Redis, CI/CD, and Docker.
+
+Raw TCS 2022 observability context:
+Implemented Datadog monitoring and workflows to test configurations, monitor errors/alerts, debug multi-application issues, and create React dashboard views over Datadog, live user requests, and data.
+
+Raw TCS migration context:
+Upgraded servers for 7+ applications from CentOS to Amazon Linux 2. Increased security and created repeatable future-upgrade workflow that became standard practice in the unit. Later supported AL2 to AL3 work with Amazon engineers to resolve missing package/debug issues.
+
+Raw TCS 2023 concurrency/auth context:
+Handled 7+ applications with 5 junior developers. Designed multithreaded system to upload large 3D files into Microsoft SharePoint. Microsoft changed authentication process, causing production environment failure. Worked with Microsoft developers and delivered custom authentication within 2 days for existing and upcoming clients.
+
+Raw TCS performance context:
+Created concurrent multipart upload workflow for large files, verified methods, deployed production feature, saved 40 to 50 seconds per upload, improved one-file upload from about 1 minute to 10 seconds. Dollar value was discussed in raw story but must not appear in final resume.
+
+Raw TCS quality/security context:
+Used SAST tools Polaris and Black Duck for code quality/security. Identified vulnerabilities in existing codebase for applications. Upgraded stack in React, Spring, Java, implemented Spring Security, and cleaned code in measurable time.
+
+Raw TCS 2024 RBAC context:
+Built role-based access control across 10 applications, integrating internal APIs across relational and non-relational databases. Built, tested, deployed across multiple environments with QA and production release. Reduced user access request tickets by 22%.
+
+Raw TCS operations context:
+Used GitLab/CI/CD built by team, managed servers across applications, created dashboards, Python cleanup scripts, Docker/Kubernetes rebuild workflows, and periodic automated operational processes.
+
+Raw GHI context:
+Global Health Impact is a research initiative measuring how pharmaceutical drugs reduce disease burden for TB, malaria, HIV/AIDS, and neglected tropical diseases. Internship work involved a team of 6 developers, processing CSV/WHO health data, extracting disease/drug data, building React/HTML/CSS dashboards, world maps, parameter tuning, drug selection, and ML models for country-wise predictions.
+
+Raw TA context:
+TA for Database Systems and Object-Oriented Programming. Trained/reviewed students on database optimization, concurrency, relational/non-relational projects, OOP, C++, Java, debugging, code review, and 120+ students.
+
+Raw skill hierarchy:
+Must include when relevant: Java, Python, REST APIs, backend development, SQL/relational databases, cloud exposure, testing, CI/CD, GitLab/Git, debugging, impact numbers, collaboration/ownership.
+Strongly recommended when proven: microservices, distributed systems, Docker, Linux, NoSQL, system design, monitoring/observability, performance optimization, code reviews, technical documentation, Agile/SDLC.
+Optional role-specific: React, TypeScript, Node.js, Kubernetes, LLM/RAG/MLOps, GraphQL, AI-assisted tools, ETL/NiFi/Kafka/Spark/Airflow, C++/low-level systems.

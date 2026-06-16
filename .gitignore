@@ -10,6 +10,8 @@ requests/
 runs/
 archives/
 jobs_out/
+Resume-word/
+Resume-pdf/
 *.docx
 *.pdf
 

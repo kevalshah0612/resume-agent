@@ -1,291 +1,159 @@
 # Resume Agent
 
-Resume Agent is a desktop workflow for tailoring a resume to a job description using a compact multi-agent LLM process. It turns a pasted JD into a grounded resume JSON, runs an optional recruiter-style review, builds a DOCX, and archives the final PDF.
+Desktop resume automation for turning a pasted job description into resume JSON, optional recruiter-reviewed JSON, DOCX, PDF, and short application-question answers.
 
-## What It Does
+## Providers
 
-- Accepts company, role title, job description, keywords, mode overrides, and optional DES evidence.
-- Runs a resume-generation agent that reads the prompt and story bank.
-- Produces a short DES Candidate Bank instead of a long audit.
-- Lets the user approve DES evidence with simple text such as `Approved: DES 1 to 6` or `1,2,3`.
-- Generates a final resume JSON.
-- Optionally runs a recruiter-review agent to fix red flags and validate the JSON.
-- Builds a DOCX resume.
-- Converts the reviewed DOCX to PDF, archives the PDF, and deletes the DOCX.
-- Supports concurrent applications using GUI tabs.
+Only two providers are supported:
 
-## Agent Flow
+- `PROVIDER_MODE=1` = NVIDIA endpoint through the OpenAI SDK
+- `PROVIDER_MODE=2` = direct Claude through the Anthropic SDK
 
-The system uses prompt files in `new_flow/` as the agent instructions and evidence source.
-
-### 1. Resume Generation Agent
-
-Files:
-
-- `new_flow/prompt.md`
-- `new_flow/prompt_short.md`
-- `new_flow/story.md`
-
-Purpose:
-
-- Reads the JD and story bank.
-- Classifies role fit, keywords, evidence coverage, and gaps.
-- Outputs a compact DES Candidate Bank.
-- Generates the final resume JSON after DES approval.
-
-PASS 1 is intentionally short:
-
-```text
-COVERAGE SUMMARY
-DES CANDIDATE BANK
-APPROVAL
-```
-
-Each DES line is formatted like:
-
-```text
-DES 1 | keyword: ... | use when: ... | bullet: ... | story/context: ... | number: ... | safe wording: ...
-```
-
-### 2. Recruiter Review Agent
-
-Files:
-
-- `new_flow/recruiter.md`
-- `new_flow/recruiter_short.md`
-
-Purpose:
-
-- Reviews the generated resume JSON like a recruiter and hiring manager.
-- Checks JD coverage, top-bullet strength, skills traceability, red flags, and schema validity.
-- Produces the final recruiter-reviewed JSON used for DOCX generation.
-
-### 3. Document Manager
-
-File:
-
-- `manager.py`
-
-Purpose:
-
-- Converts final JSON to DOCX.
-- Converts DOCX to PDF using Microsoft Word first, then LibreOffice fallback.
-- Archives PDFs under `archives/YYYY-MM-DD/`.
-- Deletes the working DOCX after PDF conversion.
-- Clears generated DOCX/PDF files from the project root.
-
-## How To Use
-
-### Setup
-
-Install dependencies:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Set your Anthropic API key:
-
-```powershell
-$env:ANTHROPIC_API_KEY="your_key_here"
-```
-
-Optional local config:
-
-```powershell
-Copy-Item pipeline_config.example.json pipeline_config.json
-```
-
-Do not commit `pipeline_config.json`; it is ignored because it may contain secrets.
-
-### Provider Mode
-
-The app can read provider settings from `.env`.
-
-Create your local `.env`:
+Create `.env` from the example:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Set:
-
-```text
-PROVIDER_MODE=1
-```
-
-Mode mapping:
-
-- `1` = NVIDIA Nemotron
-- `2` = direct Anthropic Claude
-
-### NVIDIA Setup
-
-For NVIDIA mode:
+NVIDIA setup:
 
 ```text
 PROVIDER_MODE=1
 NVIDIA_API_KEY=your_nvidia_api_key
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_MODEL=nvidia/nemotron-3-super-120b-a12b
+ANTHROPIC_API_KEY=your_key
 ```
 
-To change NVIDIA models quickly, edit only:
+To change NVIDIA models, edit only:
 
 ```text
 NVIDIA_MODEL=nvidia/your-other-model
 ```
 
-The app reloads `.env` when it starts a model call, so a new run can pick up that line without changing code.
+Claude-only setup:
 
-The app uses NVIDIA's OpenAI-compatible endpoint through the OpenAI Python SDK. The request enables thinking with:
-
-```json
-{
-  "chat_template_kwargs": {"enable_thinking": true},
-  "reasoning_budget": 16384
-}
+```text
+PROVIDER_MODE=2
+ANTHROPIC_API_KEY=your_key
 ```
 
-If NVIDIA fails and `fallback_to_anthropic` is `true`, the app falls back to direct Anthropic using `ANTHROPIC_API_KEY`.
-
-If you want direct Anthropic only:
-
-```json
-{
-  "provider_mode": "2",
-  "model_sonnet": "claude-sonnet-4-6"
-}
-```
-
-### Start The App
+## Setup
 
 ```powershell
+pip install -r requirements.txt
 python gui.py
 ```
 
-### GUI Workflow
+Local secret/config files are ignored by Git:
 
-1. Paste the company, title, JD, optional words, optional mode, and optional DES.
+- `.env`
+- `pipeline_config.json`
+
+## GUI Flow
+
+Each tab is one application. Tabs run independently in background threads.
+
+Manual path:
+
+1. Paste company, title, JD, words, mode, and optional DES evidence.
 2. Click `Run PASS 1`.
-3. Review the compact DES Candidate Bank.
-4. Approve DES evidence:
-
-```text
-Approved: DES 1 to 6
-```
-
-or:
-
-```text
-1,2,3
-```
-
-or:
-
-```text
-Confirm
-```
-
+3. Review the organized DES Candidate Bank.
+4. Approve DES with `Approved: DES 1 to 6`, `1,2,3`, or `Confirm`.
 5. Click `Generate JSON`.
 6. Optional: click `Recruiter Review`.
 7. Click `Build DOCX`.
-8. Review and save the DOCX in Word.
+8. Review the DOCX.
 9. Click `PDF + Archive`.
 
-## Concurrent Applications
+Fast path:
 
-The GUI supports multiple applications in one window.
+1. Paste the input.
+2. Click `Auto JSON`.
+3. The app runs PASS 1, approves all DES candidates, and generates JSON.
+4. Recruiter review remains optional.
 
-- `New Application Tab` starts a separate job.
-- `Duplicate Current` copies the current tab inputs into a new tab.
-- Each tab runs independently in a background thread.
-- You can run PASS 1 for multiple companies at the same time.
+Application questions:
 
-## Cost Tracking
+1. Paste salary, sponsorship, work authorization, or other application questions into `Application Questions`.
+2. Click `Answer Questions`.
+3. The app uses recruiter JSON if available; otherwise it uses the PASS 2 final JSON.
+4. Answers are short, human, and grounded in the JD plus resume JSON.
 
-The GUI shows estimated model API cost in two places:
+## DES Display
 
-- Per tab: cost for that application tab.
-- Session cost: total estimated cost since the GUI was opened.
-
-Each request folder also saves:
+PASS 1 raw output is saved exactly as returned by the model:
 
 ```text
+requests/<request_id>/02_pass1_des_bank.txt
+```
+
+The GUI displays the same DES candidates in a readable format:
+
+```text
+DES 1
+  Keyword: ...
+  Use when: ...
+  Bullet: ...
+  Story/context: ...
+  Number: ...
+  Safe wording: ...
+```
+
+The raw PASS 1 text is still used for PASS 2 so formatting the display does not weaken the model flow.
+
+## Status Tracking
+
+Every request gets a readable ID:
+
+```text
+<company>_<title>_<timestamp>
+```
+
+The top status board shows:
+
+- request ID
+- company
+- title
+- current stage
+- tab cost
+
+Double-click a row to jump to that tab. `Print Status` writes the same summary to PowerShell.
+
+Model log lines also include request ID, company, and title, so concurrent jobs are easier to trace.
+
+## Output Folders
+
+Generated resume documents are not stored in the project root.
+
+- DOCX files: `Resume-word/`
+- final PDFs: `Resume-pdf/`
+- PDF archive copies: `Resume-pdf/archives/YYYY-MM-DD/`
+- request logs and JSON: `requests/<request_id>/`
+
+The manager deletes the working DOCX after successful PDF conversion.
+
+## Saved Request Files
+
+Typical request folder:
+
+```text
+00_request.txt
+01_jd.txt
+02_pass1_des_bank.txt
+03_approval.txt
+04_final_raw.txt
+05_final_resume.json
+06_recruiter_raw.txt
+07_recruiter_final_resume.json
+08_application_questions.txt
+09_application_answers.txt
 costs.json
 ```
 
-For direct Claude calls, the estimate is calculated from token usage returned by the Anthropic API response:
+## CLI
 
-- input tokens
-- output tokens
-- cache creation input tokens
-- cache read input tokens
-
-The app uses the official Claude Sonnet 4.6 pricing structure by default:
-
-- base input: `$3 / MTok`
-- 5-minute prompt cache write: `$3.75 / MTok`
-- prompt cache read: `$0.30 / MTok`
-- output: `$15 / MTok`
-
-The normal Messages API response gives token usage, not live billing balance. Because of that, the app can show estimated spend per call, tab, and session, but it cannot automatically show the real account balance from a normal model call.
-
-To show an estimated remaining balance in the GUI, create `pipeline_config.json` from the example and set:
-
-```json
-{
-  "manual_starting_balance_usd": 5
-}
-```
-
-For official billing totals, use the Anthropic Console or Anthropic's usage/cost reporting tools.
-
-For NVIDIA calls, the OpenAI-compatible streaming response may not return token usage, so the app records the provider/model but may show `$0.00` unless usage metadata is returned.
-
-## Mode Behavior
-
-Mode is optional and blank by default.
-
-If blank, the prompt infers the resume type and layout from the JD.
-
-Use Mode only when you want to force a direction:
-
-- `mid + backend`
-- `entry + backend`
-- `mid + fullstack`
-- `aiml_entry`
-- `aitool_mid`
-- `internship`
-
-Keywords such as `Kafka`, `MySQL`, `Linux`, or `Solr` should go in Words, not Mode.
-
-## Saved Files
-
-Each application is saved under:
-
-```text
-requests/<company>_<timestamp>/
-```
-
-Typical files:
-
-- `00_request.txt`
-- `01_jd.txt`
-- `02_pass1_des_bank.txt`
-- `03_approval.txt`
-- `04_final_raw.txt`
-- `05_final_resume.json`
-- `06_recruiter_raw.txt`
-- `07_recruiter_final_resume.json`
-- `06_docx_build.txt`
-- `07_pdf_archive.txt`
-
-These generated folders are ignored by Git.
-
-## CLI Commands
-
-Build DOCX from JSON:
+Build DOCX:
 
 ```powershell
 python manager.py requests/company_timestamp/07_recruiter_final_resume.json "Company Name"
@@ -294,40 +162,33 @@ python manager.py requests/company_timestamp/07_recruiter_final_resume.json "Com
 Convert DOCX to PDF and archive:
 
 ```powershell
-python manager.py Keval_Shah_Company_Resume.docx "Company Name"
+python manager.py Resume-word/Keval_Shah_Company_Resume.docx "Company Name"
 ```
 
-Clear root DOCX/PDF files:
+Clear generated DOCX/PDF files:
 
 ```powershell
 python manager.py clear
 ```
 
-## Quality Controls
+## Cost Tracking
 
-The project includes several guardrails:
+The GUI tracks estimated cost per tab and session. Claude calls use token usage returned by the Anthropic API. NVIDIA streaming calls may not return token usage, so the app records provider/model but can show `$0.00` when usage metadata is unavailable.
 
-- DES approval before final JSON.
-- Story-bank evidence grounding.
-- Recruiter-review pass.
-- JSON schema validation.
-- Banned-key detection.
-- Duplicate opening-verb repair.
-- Bullet period cleanup.
-- DOCX/PDF archive automation.
+To show an estimated remaining balance, set this in `pipeline_config.json`:
 
-## Resume Project Description
+```json
+{
+  "manual_starting_balance_usd": 5
+}
+```
 
-You can describe this project as:
+## Project Summary
 
-> Built a desktop AI resume-tailoring agent that converts job descriptions into evidence-grounded resume JSON, uses DES approval to prevent hallucinated claims, runs a recruiter-style validation pass, and automates DOCX/PDF generation with archival workflow support.
+Built a Python/Tkinter resume automation agent that converts job descriptions into evidence-grounded resume JSON, supports DES approval or automated DES acceptance, optional recruiter review, application-question answers, per-tab status tracking, API cost estimates, and DOCX/PDF generation with organized output folders.
 
-Short bullet version:
-
-> Developed a multi-agent resume automation tool using Python, Anthropic API, Tkinter, and python-docx, supporting JD analysis, DES evidence approval, recruiter review, JSON validation, DOCX generation, and PDF archival.
-
-## Security Notes
+## Security
 
 - Never commit API keys.
-- Use `ANTHROPIC_API_KEY` as an environment variable.
-- `pipeline_config.json`, generated resumes, PDFs, archives, and request logs are ignored by Git.
+- Keep `.env` and `pipeline_config.json` local.
+- Generated requests, resumes, PDFs, and archives are ignored by Git.

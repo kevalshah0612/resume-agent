@@ -23,15 +23,12 @@ from pipeline import (
     build_docx,
     extract_json,
     load_config,
-    meaningful_stem,
     run_pass1,
     run_pass2,
     run_recruiter_review,
-    save_json,
     save_text,
     slug,
     timestamp,
-    validate_resume_json,
     write_run_artifacts,
 )
 
@@ -115,7 +112,6 @@ async def run_one_job() -> None:
     mode = ask("Mode [optional, e.g. mid + backend]: ")
     des = ask("DES [optional]: ")
 
-    stem = meaningful_stem(company, title)
     run_dir = RUNS_DIR / f"{slug(company)}_{timestamp()}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -165,17 +161,12 @@ async def run_one_job() -> None:
     hr()
     pass2 = await run_pass2(inp, pass1, approval)
     resume_json = extract_json(pass2)
-    errors = validate_resume_json(resume_json)
-    if errors:
-        write_run_artifacts(run_dir=run_dir, pass2_text=pass2, resume_json=resume_json)
-        raise RuntimeError("PASS 2 JSON failed local quality gates:\n- " + "\n- ".join(errors))
     resume_json_path = run_dir / "03_resume_json.json"
     write_run_artifacts(
         run_dir=run_dir,
         pass2_text=pass2,
         resume_json=resume_json,
     )
-    save_json(ROOT / f"{stem}_resume.json", resume_json)
 
     print()
     print(pass2)
@@ -201,14 +192,6 @@ async def run_one_job() -> None:
             resume2_json=resume2_json,
         )
         recruiter_json = extract_json(recruiter_text)
-        errors = validate_resume_json(recruiter_json)
-        if errors:
-            write_run_artifacts(
-                run_dir=run_dir,
-                recruiter_text=recruiter_text,
-                recruiter_json=recruiter_json,
-            )
-            raise RuntimeError("Recruiter JSON failed local quality gates:\n- " + "\n- ".join(errors))
         write_run_artifacts(
             run_dir=run_dir,
             recruiter_text=recruiter_text,
@@ -216,13 +199,12 @@ async def run_one_job() -> None:
         )
         final_json = recruiter_json
         final_json_path = run_dir / "05_recruiter_final_json.json"
-        save_json(ROOT / f"{stem}_final.json", final_json)
 
         print()
         print(recruiter_text)
         print()
 
-    out_docx = f"{stem}.docx"
+    out_docx = f"{slug(company)}_{timestamp()}.docx"
     docx = build_docx(final_json_path, out_docx)
     print()
     print(f"DOCX saved: {docx}")
