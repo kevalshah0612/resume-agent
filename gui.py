@@ -82,7 +82,7 @@ class JobTab(ttk.Frame):
 
     def _build(self) -> None:
         self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.columnconfigure(1, weight=2)
         self.rowconfigure(1, weight=1)
 
         toolbar = ttk.Frame(self)
@@ -113,18 +113,17 @@ class JobTab(ttk.Frame):
         left = ttk.Frame(self)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         left.columnconfigure(0, weight=1)
-        left.rowconfigure(9, weight=1)
 
-        self.company = self._labeled_text(left, "Company", 0, height=2)
-        self.title_text = self._labeled_text(left, "Title", 2, height=2)
+        self.company = self._labeled_text(left, "Company", 0, height=1)
+        self.title_text = self._labeled_text(left, "Title", 2, height=1)
         self.title_text.insert("1.0", "Software Engineer")
         self.words = self._labeled_text(left, "Words / Keywords", 4, height=2)
-        self.mode = self._labeled_text(left, "Mode", 6, height=2)
-        self.des = self._labeled_text(left, "DES / Existing Evidence", 8, height=3)
+        self.mode_value = ""
+        self.des = self._labeled_text(left, "DES / Existing Evidence", 6, height=3)
 
-        ttk.Label(left, text="Job Description").grid(row=10, column=0, sticky="w", pady=(8, 0))
-        self.jd = tk.Text(left, wrap="word", undo=True, height=8)
-        self.jd.grid(row=11, column=0, sticky="ew")
+        ttk.Label(left, text="Job Description").grid(row=8, column=0, sticky="w", pady=(8, 0))
+        self.jd = tk.Text(left, wrap="word", undo=True, height=7)
+        self.jd.grid(row=9, column=0, sticky="ew")
 
         right = ttk.Frame(self)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
@@ -132,23 +131,23 @@ class JobTab(ttk.Frame):
         right.rowconfigure(1, weight=5)
         right.rowconfigure(7, weight=1)
 
-        ttk.Label(right, text="Organized PASS 1: DES Candidate Bank").grid(row=0, column=0, sticky="w")
-        self.pass1 = tk.Text(right, wrap="word", undo=True)
+        ttk.Label(right, text="DES Suggestions from PASS 1").grid(row=0, column=0, sticky="w")
+        self.pass1 = tk.Text(right, wrap="word", undo=True, height=20)
         self.pass1.grid(row=1, column=0, sticky="nsew")
 
         ttk.Label(right, text="Approval: Approved: DES 1 to 6  |  1,2,3  |  Confirm").grid(
             row=2, column=0, sticky="w", pady=(8, 0)
         )
-        self.approval = tk.Text(right, wrap="word", undo=True, height=5)
+        self.approval = tk.Text(right, wrap="word", undo=True, height=3)
         self.approval.insert("1.0", "Approved: ")
         self.approval.grid(row=3, column=0, sticky="nsew")
 
         ttk.Label(right, text="Application Questions").grid(row=4, column=0, sticky="w", pady=(8, 0))
-        self.app_questions = tk.Text(right, wrap="word", undo=True, height=5)
+        self.app_questions = tk.Text(right, wrap="word", undo=True, height=4)
         self.app_questions.grid(row=5, column=0, sticky="nsew")
 
         ttk.Label(right, text="Application Answers").grid(row=6, column=0, sticky="w", pady=(8, 0))
-        self.app_answers = tk.Text(right, wrap="word", undo=True)
+        self.app_answers = tk.Text(right, wrap="word", undo=True, height=8)
         self.app_answers.grid(row=7, column=0, sticky="nsew")
 
     def _labeled_text(self, parent: ttk.Frame, label: str, row: int, height: int) -> tk.Text:
@@ -225,7 +224,7 @@ class JobTab(ttk.Frame):
             title=self.text_value(self.title_text) or "Software Engineer",
             jd=jd,
             words=self.text_value(self.words),
-            mode=self.text_value(self.mode),
+            mode=self.mode_value,
             des=self.text_value(self.des),
         )
 
@@ -263,7 +262,6 @@ class JobTab(ttk.Frame):
                 f"Company: {inp.company}",
                 f"Title: {inp.title}",
                 f"Words: {inp.words}",
-                f"Mode: {inp.mode}",
                 f"DES: {inp.des}",
             ]),
         )
@@ -650,7 +648,7 @@ class JobTab(ttk.Frame):
             box.delete("1.0", "end")
         self.title_text.delete("1.0", "end")
         self.title_text.insert("1.0", "Software Engineer")
-        self.mode.delete("1.0", "end")
+        self.mode_value = ""
         self.approval.insert("1.0", "Approved: ")
         self.request_dir = None
         self.final_json_path = None
@@ -796,7 +794,6 @@ class ResumeApp(tk.Tk):
             (current.company, new.company),
             (current.title_text, new.title_text),
             (current.words, new.words),
-            (current.mode, new.mode),
             (current.des, new.des),
             (current.jd, new.jd),
             (current.app_questions, new.app_questions),
