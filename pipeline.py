@@ -69,7 +69,8 @@ PASS2_COMPACT_INSTRUCTION = """
 Generate the final resume JSON now using the approved DES IDs below.
 Output only:
 1. a short confidence summary under 8 lines
-2. one JSON code block
+2. LinkedIn message and recruiter/HM search strings when requested by the main prompt
+3. one JSON code block
 Do not print long audits or extra tables.
 """
 
@@ -518,31 +519,25 @@ async def run_application_answers(
     cost_cb=None,
     request_label: str = "",
 ) -> str:
-    system_blocks = [
-        cached_text_block(
-            "You answer job application form questions for Keval Shah. "
-            "Use the job description, company, role title, and resume JSON as evidence. "
-            "Write concise, natural, human answers. Avoid generic filler. "
-            "Do not invent sponsorship, salary, clearance, relocation, or legal facts. "
-            "If a question requires a factual value that is not present, say what to enter as a safe placeholder or ask the user to confirm."
-        )
-    ]
+    system_blocks = [cached_text_block(read_prompt("questions.md"))]
     user_message = "\n".join([
-        f"Company: {company}",
-        f"Title: {title}",
-        "JD:",
-        jd.strip(),
-        "",
-        "Resume JSON:",
+        "Candidate Resume JSON:",
         json.dumps(resume_json, indent=2),
         "",
-        "Application questions to answer:",
+        "Job Description:",
+        jd.strip(),
+        "",
+        f"Company: {company}",
+        f"Title: {title}",
+        "",
+        "Application Questions:",
         questions.strip(),
         "",
-        "Output format:",
-        "- For each question, repeat a short version of the question.",
-        "- Then give Answer: <short human answer>.",
-        "- Keep most answers 1-3 sentences unless the question asks for more.",
+        "Cover Letter:",
+        "Only if explicitly requested in Application Questions.",
+        "",
+        "Candidate Profile / Fixed Answers:",
+        "Use only details explicitly included in Application Questions or resume JSON. If missing, output NEED USER INPUT.",
     ])
     return await call_model(
         system_blocks=system_blocks,

@@ -81,8 +81,8 @@ class JobTab(ttk.Frame):
         self._build()
 
     def _build(self) -> None:
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=2)
+        self.columnconfigure(0, weight=1, uniform="job_panes")
+        self.columnconfigure(1, weight=1, uniform="job_panes")
         self.rowconfigure(1, weight=1)
 
         toolbar = ttk.Frame(self)
@@ -114,16 +114,23 @@ class JobTab(ttk.Frame):
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         left.columnconfigure(0, weight=1)
 
-        self.company = self._labeled_text(left, "Company", 0, height=1)
-        self.title_text = self._labeled_text(left, "Title", 2, height=1)
-        self.title_text.insert("1.0", "Software Engineer")
-        self.words = self._labeled_text(left, "Words / Keywords", 4, height=2)
-        self.mode_value = ""
-        self.des = self._labeled_text(left, "DES / Existing Evidence", 6, height=3)
+        quick_fields = ttk.Frame(left)
+        quick_fields.grid(row=0, column=0, sticky="ew")
+        quick_fields.columnconfigure(0, weight=1, uniform="quick_fields")
+        quick_fields.columnconfigure(1, weight=1, uniform="quick_fields")
 
-        ttk.Label(left, text="Job Description").grid(row=8, column=0, sticky="w", pady=(8, 0))
-        self.jd = tk.Text(left, wrap="word", undo=True, height=7)
-        self.jd.grid(row=9, column=0, sticky="ew")
+        self.company = self._field_cell(quick_fields, "Company", 0, 0, height=1)
+        self.title_text = self._field_cell(quick_fields, "Title", 0, 1, height=1)
+        self.title_text.insert("1.0", "Software Engineer")
+        self.words = self._field_cell(quick_fields, "Words / Keywords", 1, 0, height=2)
+        self.mode_value = ""
+        self.des = self._field_cell(quick_fields, "DES / Existing Evidence", 1, 1, height=2)
+
+        ttk.Label(left, text="Job Description").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.jd = self._text_box(left, 2, height=7)
+
+        ttk.Label(left, text="LinkedIn / Recruiter Search").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        self.linkedin_outreach = self._text_box(left, 4, height=6)
 
         right = ttk.Frame(self)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
@@ -132,29 +139,61 @@ class JobTab(ttk.Frame):
         right.rowconfigure(7, weight=1)
 
         ttk.Label(right, text="DES Suggestions from PASS 1").grid(row=0, column=0, sticky="w")
-        self.pass1 = tk.Text(right, wrap="word", undo=True, height=20)
-        self.pass1.grid(row=1, column=0, sticky="nsew")
+        self.pass1 = self._text_box(right, 1, height=20, sticky="nsew")
 
         ttk.Label(right, text="Approval: Approved: DES 1 to 6  |  1,2,3  |  Confirm").grid(
             row=2, column=0, sticky="w", pady=(8, 0)
         )
-        self.approval = tk.Text(right, wrap="word", undo=True, height=3)
+        self.approval = self._text_box(right, 3, height=3, sticky="nsew")
         self.approval.insert("1.0", "Approved: ")
-        self.approval.grid(row=3, column=0, sticky="nsew")
 
         ttk.Label(right, text="Application Questions").grid(row=4, column=0, sticky="w", pady=(8, 0))
-        self.app_questions = tk.Text(right, wrap="word", undo=True, height=4)
-        self.app_questions.grid(row=5, column=0, sticky="nsew")
+        self.app_questions = self._text_box(right, 5, height=4, sticky="nsew")
 
         ttk.Label(right, text="Application Answers").grid(row=6, column=0, sticky="w", pady=(8, 0))
-        self.app_answers = tk.Text(right, wrap="word", undo=True, height=8)
-        self.app_answers.grid(row=7, column=0, sticky="nsew")
+        self.app_answers = self._text_box(right, 7, height=8, sticky="nsew")
 
     def _labeled_text(self, parent: ttk.Frame, label: str, row: int, height: int) -> tk.Text:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w")
-        box = tk.Text(parent, wrap="word", undo=True, height=height)
-        box.grid(row=row + 1, column=0, sticky="ew", pady=(0, 4))
+        return self._text_box(parent, row + 1, height=height)
+
+    def _field_cell(self, parent: ttk.Frame, label: str, row: int, column: int, height: int) -> tk.Text:
+        cell = ttk.Frame(parent)
+        cell.grid(row=row, column=column, sticky="ew", padx=(0 if column == 0 else 6, 6 if column == 0 else 0))
+        cell.columnconfigure(0, weight=1)
+        return self._labeled_text(cell, label, 0, height)
+
+    def _text_box(self, parent: ttk.Frame, row: int, height: int, sticky: str = "ew") -> tk.Text:
+        frame = ttk.Frame(parent)
+        frame.grid(row=row, column=0, sticky=sticky, pady=(0, 4))
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+
+        box = tk.Text(frame, wrap="word", undo=True, height=height, width=1)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=box.yview)
+        box.configure(yscrollcommand=scrollbar.set)
+        box.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self._bind_text_scroll(box)
         return box
+
+    def _bind_text_scroll(self, box: tk.Text) -> None:
+        def on_mousewheel(event):
+            if event.delta:
+                box.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        def on_linux_scroll_up(_event):
+            box.yview_scroll(-1, "units")
+            return "break"
+
+        def on_linux_scroll_down(_event):
+            box.yview_scroll(1, "units")
+            return "break"
+
+        box.bind("<MouseWheel>", on_mousewheel)
+        box.bind("<Button-4>", on_linux_scroll_up)
+        box.bind("<Button-5>", on_linux_scroll_down)
 
     def text_value(self, box: tk.Text) -> str:
         return box.get("1.0", "end").strip()
@@ -211,6 +250,54 @@ class JobTab(ttk.Frame):
         if cleaned_tail:
             output.append("\n".join(cleaned_tail))
         return "\n\n".join(part for part in output if part.strip())
+
+    def extract_linkedin_outreach(self, text: str) -> str:
+        without_json = re.sub(r"```json\s*\{.*?\}\s*```", "", text, flags=re.DOTALL | re.IGNORECASE)
+        lines = without_json.splitlines()
+
+        def normalized(line: str) -> str:
+            clean = re.sub(r"^\s*(?:#+\s*)?(?:\d+[\).]\s*)?", "", line).strip().lower()
+            return clean.strip("*: ")
+
+        def is_outreach_heading(line: str) -> bool:
+            clean = normalized(line)
+            return (
+                ("linkedin" in clean and ("message" in clean or "outreach" in clean or "connection" in clean))
+                or ("connection message" in clean)
+                or ("message under 300" in clean)
+                or ("recruiter" in clean and "search" in clean and "string" in clean)
+                or ("hiring manager" in clean and "search" in clean and "string" in clean)
+                or ("hm" in clean and "search" in clean and "string" in clean)
+                or clean.startswith("search string")
+                or clean.startswith("recruiter search string")
+                or ("follow" in clean and "message" in clean)
+            )
+
+        start_idx: int | None = None
+        for i, line in enumerate(lines):
+            if is_outreach_heading(line):
+                start_idx = i
+                break
+
+        if start_idx is None:
+            linkedin_lines = [line for line in lines if "site:linkedin.com/in" in line.lower()]
+            return "\n".join(linkedin_lines).strip()
+
+        selected: list[str] = []
+        for line in lines[start_idx:]:
+            clean = normalized(line)
+            if clean.startswith("final json") or line.strip().lower().startswith("```json"):
+                break
+            selected.append(line.rstrip())
+        return "\n".join(selected).strip()
+
+    def show_and_save_linkedin_outreach(self, request_dir: Path, raw_text: str, filename: str = "10_linkedin_outreach.txt") -> None:
+        outreach = self.extract_linkedin_outreach(raw_text)
+        if not outreach:
+            return
+        self.linkedin_outreach.delete("1.0", "end")
+        self.linkedin_outreach.insert("1.0", outreach)
+        save_text(request_dir / filename, outreach)
 
     def make_input(self) -> ResumeInput:
         company = self.text_value(self.company)
@@ -367,19 +454,27 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
             ))
-            data = extract_json(raw)
-            return raw, data, events
+            save_text(request_dir / "04_final_raw.txt", raw)
+            try:
+                data = extract_json(raw)
+                return raw, data, events, ""
+            except Exception as exc:
+                save_text(request_dir / "04_final_json_extract_error.txt", str(exc))
+                return raw, None, events, str(exc)
 
         def done(result, err):
-            self.set_busy(False, "JSON ready" if not err else "JSON failed")
+            self.set_busy(False, "JSON ready" if not err else "Generate call failed")
             if err:
-                messagebox.showerror("Generate JSON failed", str(err), parent=self)
+                messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
-            raw, data, events = result
-            save_text(request_dir / "04_final_raw.txt", raw)
+            raw, data, events, parse_error = result
+            self.show_and_save_linkedin_outreach(request_dir, raw)
+            self.add_cost_events(events)
+            if parse_error:
+                self.set_stage("Raw response saved; JSON not extracted")
+                return
             self.final_json_path = request_dir / "05_final_resume.json"
             save_json(self.final_json_path, data)
-            self.add_cost_events(events)
             self.set_stage(f"JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -415,15 +510,20 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
             ))
-            data = extract_json(pass2_raw)
-            return pass1_raw, approval_raw, approval, pass2_raw, data, events
+            save_text(request_dir / "04_final_raw.txt", pass2_raw)
+            try:
+                data = extract_json(pass2_raw)
+                return pass1_raw, approval_raw, approval, pass2_raw, data, events, ""
+            except Exception as exc:
+                save_text(request_dir / "04_final_json_extract_error.txt", str(exc))
+                return pass1_raw, approval_raw, approval, pass2_raw, None, events, str(exc)
 
         def done(result, err):
-            self.set_busy(False, "AUTO JSON ready" if not err else "AUTO failed")
+            self.set_busy(False, "AUTO JSON ready" if not err else "AUTO call failed")
             if err:
-                messagebox.showerror("Auto JSON failed", str(err), parent=self)
+                messagebox.showerror("Auto JSON call failed", str(err), parent=self)
                 return
-            pass1_raw, approval_raw, approval, pass2_raw, data, events = result
+            pass1_raw, approval_raw, approval, pass2_raw, data, events, parse_error = result
             self.pass1_raw = pass1_raw
             self.pass1.delete("1.0", "end")
             self.pass1.insert("1.0", self.format_pass1_display(pass1_raw))
@@ -431,10 +531,13 @@ class JobTab(ttk.Frame):
             self.approval.insert("1.0", approval_raw)
             save_text(request_dir / "02_pass1_des_bank.txt", pass1_raw)
             save_text(request_dir / "03_approval.txt", approval_raw + "\n\nNormalized:\n" + approval)
-            save_text(request_dir / "04_final_raw.txt", pass2_raw)
+            self.show_and_save_linkedin_outreach(request_dir, pass2_raw)
+            self.add_cost_events(events)
+            if parse_error:
+                self.set_stage("AUTO raw response saved; JSON not extracted")
+                return
             self.final_json_path = request_dir / "05_final_resume.json"
             save_json(self.final_json_path, data)
-            self.add_cost_events(events)
             self.set_stage(f"AUTO JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -470,20 +573,28 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
             ))
-            data = extract_json(raw)
-            return raw, data, events
+            save_text(request_dir / "06_recruiter_raw.txt", raw)
+            try:
+                data = extract_json(raw)
+                return raw, data, events, ""
+            except Exception as exc:
+                save_text(request_dir / "06_recruiter_json_extract_error.txt", str(exc))
+                return raw, None, events, str(exc)
 
         def done(result, err):
-            self.set_busy(False, "Recruiter JSON ready" if not err else "Recruiter failed")
+            self.set_busy(False, "Recruiter JSON ready" if not err else "Recruiter call failed")
             if err:
-                messagebox.showerror("Recruiter review failed", str(err), parent=self)
+                messagebox.showerror("Recruiter review call failed", str(err), parent=self)
                 return
-            raw, data, events = result
-            save_text(request_dir / "06_recruiter_raw.txt", raw)
+            raw, data, events, parse_error = result
+            self.show_and_save_linkedin_outreach(request_dir, raw, "10_recruiter_linkedin_outreach.txt")
+            self.add_cost_events(events)
+            if parse_error:
+                self.set_stage("Recruiter raw response saved; JSON not extracted")
+                return
             self.recruiter_json_path = request_dir / "07_recruiter_final_resume.json"
             save_json(self.recruiter_json_path, data)
             self.final_json_path = self.recruiter_json_path
-            self.add_cost_events(events)
             self.set_stage(f"Recruiter JSON: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -534,6 +645,7 @@ class JobTab(ttk.Frame):
             answers, events, used_json_path = result
             self.app_answers.delete("1.0", "end")
             self.app_answers.insert("1.0", answers)
+            save_text(request_dir / "09_application_answers_raw.txt", answers)
             save_text(
                 request_dir / "09_application_answers.txt",
                 f"Source JSON: {used_json_path.name}\n\n{answers}",
@@ -640,6 +752,7 @@ class JobTab(ttk.Frame):
             self.words,
             self.des,
             self.jd,
+            self.linkedin_outreach,
             self.pass1,
             self.approval,
             self.app_questions,
@@ -796,6 +909,7 @@ class ResumeApp(tk.Tk):
             (current.words, new.words),
             (current.des, new.des),
             (current.jd, new.jd),
+            (current.linkedin_outreach, new.linkedin_outreach),
             (current.app_questions, new.app_questions),
         ]:
             target.delete("1.0", "end")
