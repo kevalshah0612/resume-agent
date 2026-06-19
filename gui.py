@@ -291,8 +291,24 @@ class JobTab(ttk.Frame):
             selected.append(line.rstrip())
         return "\n".join(selected).strip()
 
+    def clean_paste_text(self, text: str) -> str:
+        replacements = {
+            "\u2014": "-",
+            "\u2013": "-",
+            "\u2212": "-",
+            "\u2018": "'",
+            "\u2019": "'",
+            "\u201c": '"',
+            "\u201d": '"',
+            "\u2026": "...",
+            "\u00a0": " ",
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
+
     def show_and_save_linkedin_outreach(self, request_dir: Path, raw_text: str, filename: str = "10_linkedin_outreach.txt") -> None:
-        outreach = self.extract_linkedin_outreach(raw_text)
+        outreach = self.clean_paste_text(self.extract_linkedin_outreach(raw_text))
         if not outreach:
             return
         self.linkedin_outreach.delete("1.0", "end")
@@ -643,12 +659,13 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("Application answers failed", str(err), parent=self)
                 return
             answers, events, used_json_path = result
+            clean_answers = self.clean_paste_text(answers)
             self.app_answers.delete("1.0", "end")
-            self.app_answers.insert("1.0", answers)
+            self.app_answers.insert("1.0", clean_answers)
             save_text(request_dir / "09_application_answers_raw.txt", answers)
             save_text(
                 request_dir / "09_application_answers.txt",
-                f"Source JSON: {used_json_path.name}\n\n{answers}",
+                f"Source JSON: {used_json_path.name}\n\n{clean_answers}",
             )
             self.add_cost_events(events)
             self.set_stage("Application answers ready")

@@ -512,6 +512,7 @@ All answers must be:
 - honest
 - role-matched
 - easy to paste into an application form
+- written with ASCII punctuation only
 
 Avoid:
 - long paragraphs
@@ -523,6 +524,9 @@ Avoid:
 - unsupported details
 - keyword stuffing
 - AI-sounding phrases
+- em dashes or en dashes
+
+Use commas, periods, semicolons, parentheses, or simple hyphens instead of em dashes or en dashes.
 
 Use plain language:
 - “I built…”

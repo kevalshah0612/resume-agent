@@ -72,6 +72,14 @@ Output only:
 2. LinkedIn message and recruiter/HM search strings when requested by the main prompt
 3. one JSON code block
 Do not print long audits or extra tables.
+Style rule for LinkedIn/message text: use ASCII punctuation only. Do not use em dashes or en dashes. Use commas, periods, semicolons, or simple hyphens instead.
+"""
+
+HUMAN_TEXT_STYLE_RULE = """
+Output style rule:
+- Use ASCII punctuation only in LinkedIn messages, recruiter outreach, cover letters, and application answers.
+- Do not use em dashes or en dashes.
+- Use commas, periods, semicolons, parentheses, or simple hyphens instead.
 """
 
 
@@ -491,6 +499,8 @@ async def run_recruiter_review(
 ) -> str:
     parts = [
         read_prompt("recruiter_short.md"),
+        HUMAN_TEXT_STYLE_RULE.strip(),
+        "",
         "JD:",
         jd.strip(),
         "",
@@ -521,6 +531,8 @@ async def run_application_answers(
 ) -> str:
     system_blocks = [cached_text_block(read_prompt("questions.md"))]
     user_message = "\n".join([
+        HUMAN_TEXT_STYLE_RULE.strip(),
+        "",
         "Candidate Resume JSON:",
         json.dumps(resume_json, indent=2),
         "",
