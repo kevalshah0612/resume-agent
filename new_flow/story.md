@@ -40,6 +40,34 @@ Never call TA a Software Engineer role.
 Never use `vibe coding` in resume output.
 Use `AI-assisted development` only for AI tooling/devtools roles when relevant.
 
+## 0A. FAANG-Style Evidence Framing
+
+Story.md remains evidence only. It should not invent Big Tech scale, but every evidence card should be interpreted with FAANG-level clarity:
+
+Use this lens:
+- system: what production system, workflow, pipeline, dashboard, API, or automation existed
+- mechanism: how Keval changed it technically
+- scope: applications, users, records, teams, releases, students, or workflows affected
+- outcome: speed, reliability, release quality, visibility, access recovery, data prep, consistency, or reduced manual effort
+- defensibility: exact evidence ID, metric, and limit
+
+Prefer precise engineering nouns over generic enterprise wording:
+- access-control workflows
+- release automation
+- service integrations
+- operational dashboards
+- data ingestion pipelines
+- production debugging
+- observability workflows
+- CI/CD validation
+- API contracts
+- role-based workflows
+
+Do not overuse `enterprise applications` when a more precise supported system is available.
+Do not convert client delivery into unsupported product ownership.
+Do not inflate TCS work into FAANG-scale consumer traffic.
+Make existing evidence sound specific, technical, and interview-defensible.
+
 ## 1. Required Story Reading Report
 Before PASS 1, the resume creator must output:
 - Story.md found: YES/NO
@@ -81,7 +109,9 @@ Education:
 1. Binghamton University, State University of New York
    - Master of Science, Computer Science, AI Specialization, GPA: 4.00
    - Binghamton, NY
-   - Jan 2025 - May 2026
+   - Jan 2025 - May 2026 for non-internship full-time roles
+   - Jan 2025 - Dec 2026 for internship, co-op, student intern, or summer intern roles
+   - Graduation date usage lock: final JSON must use the full date range, not only May 2026 or Dec 2026
    - Use AI specialization prominently for AI tooling, AI/ML, automation, and new-grad roles
 
 2. Gujarat Technological University
@@ -180,6 +210,32 @@ Software engineer and MS Computer Science AI specialization candidate building L
 
 Do not claim direct AI/ML engineer identity unless the JD and evidence support it.
 Do not claim cybersecurity/fintech/healthcare/product domain ownership unless evidence is direct.
+
+## 5A. Resume-Ready Evidence Lenses
+
+Use these lenses to translate evidence into strong resume bullets without inventing facts:
+
+TCS production/platform lens:
+- release automation across connected applications
+- Java/Spring Boot service integrations and API contracts
+- production access-control recovery and secure workflow delivery
+- observability dashboards for live requests, errors, and operational diagnosis
+- Linux/cloud migration and deployment standardization
+- mentoring/release preparation only when team/scope evidence is selected
+
+GHI current U.S. internship lens:
+- React research dashboards tied to real research workflows
+- REST API filters for disease, drug, country, and year analysis
+- WHO data ingestion into PostgreSQL/MongoDB pipelines
+- 10M+ weekly record processing and manual data-prep reduction
+
+TA lens:
+- code review, debugging, Java/C++/SQL/OOP evaluation, database systems, and mentoring
+- never final resume wording under Education
+
+Project lens:
+- select projects only when they fill a JD gap better than professional experience
+- write project bullets as working systems with users/data/workflows, not as tool lists
 
 ## 6. Metric Map
 10,000+ users -> TCS2-SECURITY-IDENTITY, TCS2-JAVA-CONCURRENCY

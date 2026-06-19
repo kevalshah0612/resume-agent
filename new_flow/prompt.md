@@ -117,6 +117,85 @@ Preferred bullet shape:
 
 Do not write tool lists as bullets.
 
+## JD Keyword Coverage Engine
+
+This resume is recruiter-first and ATS-clean. ATS coverage matters, but forced keywords weaken human screening.
+
+Keyword extraction:
+- Extract JD keywords from requirements, qualifications, responsibilities, preferred qualifications, tech stack, domain, and repeated phrases
+- Classify each keyword as `PRIMARY`, `SECONDARY`, or `CONTEXT`
+- `PRIMARY` = required term, repeated term, minimum qualification, core stack, core responsibility, or exact role identity
+- `SECONDARY` = preferred/nice-to-have/adjacent term
+- `CONTEXT` = domain/company/team language that helps positioning but may not need exact repetition
+
+Coverage target:
+- Target at least 90% natural coverage of JD-important terms
+- Do not count forced, unsupported, skills-only, awkward, or misleading placement toward the 90%
+- If 90% natural coverage is impossible without inventing or stuffing, explain the gap in PASS 1 and use DES candidates or exclusions
+
+Primary keyword placement:
+- Every supported `PRIMARY` keyword should appear 2 to 3 times naturally across the resume
+- At least one supported `PRIMARY` keyword placement must be in Professional Experience when professional evidence exists
+- Best placement order: summary or skills row 1, production/professional bullet, project bullet only when project proof is relevant
+- A `PRIMARY` keyword placed only in Technical Skills is weak coverage and must be marked as `SKILLS-ONLY / WEAK` in the coverage table
+- Do not repeat any keyword more than 3 times unless the JD itself makes that term unavoidable
+
+Natural Fit Test before placing any keyword:
+1. Does the keyword fit the existing system/workflow without changing meaning?
+2. Does the sentence still sound human?
+3. Is the metric, scope, stack, domain, and ownership still accurate?
+
+If any answer is NO, do not place the keyword. Mark it as DES needed or suggestion/excluded.
+
+PASS 1 must include KEYWORD COVERAGE PLAN:
+- total JD keywords
+- primary keyword count
+- secondary keyword count
+- exact match count
+- phrasing gap count
+- missing count
+- projected natural coverage percentage
+- primary keywords with planned 2 to 3 natural placements
+- primary keywords that are skills-only, DES-needed, or excluded
+
+## Recruiter-First Quality System
+
+Optimize in this order:
+1. recruiter can understand fit in 7 to 15 seconds
+2. hiring manager sees real technical proof
+3. ATS sees natural JD keyword coverage
+4. every claim is interview-defensible
+5. writing sounds human, specific, and non-AI-generated
+
+Resume must answer:
+- What job is Keval targeting?
+- What exact JD stack/system does he match?
+- What production or project proof supports that match?
+- What scale, reliability, performance, security, data, AI/ML, release, or ownership proof reduces hiring risk?
+- Why should a recruiter call Keval instead of another applicant with similar keywords?
+
+Do not optimize for keyword count at the expense of readability.
+Do not write a generic resume with JD keywords sprinkled in.
+
+## Recruiter and ATS Mistake Taxonomy
+
+Before PASS 2 final JSON, scan for mistakes across these categories:
+
+1. Evidence mistakes: unsupported tools, unsupported metrics, unsupported users, unsupported domains, unsupported ownership, unsupported production claims
+2. ATS mistakes: missing primary keywords, primary keywords only in skills, nonstandard section headings, invalid links, keyword stuffing, acronyms without clear context when useful
+3. Recruiter-scan mistakes: weak summary, weak first two bullets, unclear target role, buried strongest proof, generic tools without outcomes
+4. Hiring-manager trust mistakes: vague systems, no mechanism, no tradeoff/risk reducer, no debugging/reliability/performance/security proof when JD values it
+5. Bullet mistakes: responsibility language, passive voice, repeated verbs, too many tools, no result/scope, same rhythm across bullets
+6. Project mistakes: projects selected by coolness instead of JD gap, projects overpower production experience, weak GitHub relevance, tool-list project bullets
+7. Skills mistakes: broad inventory, weak/partial skills in row 1, unsupported skill rows, duplicate terms, primary stack not reflected in bullets
+8. Summary mistakes: keyword paragraph, motivation language, unsupported identity, repeating bullets instead of giving call reason
+9. Header/location mistakes: target city claimed as current location, missing relocation signal, broken LinkedIn/GitHub, awkward current-location phrasing
+10. International-candidate mistakes: hiding U.S. signal, overusing India context unnecessarily, not reducing location risk when onsite role requires relocation
+11. Formatting/schema mistakes: wrong JSON keys, TA under education, `ta_active` true, wrong graduation date, invalid config, project count mismatch
+12. Human-writing mistakes: buzzwords, filler, AI-sounding stacked adjectives, unnatural keyword insertions, repeated phrases, inconsistent number/date capitalization style
+
+These categories are dynamic. Do not list hundreds of individual mistakes in output; use the taxonomy to find and fix them.
+
 ## Bullet Alignment Engine
 
 Every experience section must be ordered by recruiter signal, not chronology.
@@ -297,6 +376,28 @@ Rules:
 - If a core JD term is skills-only, mark it PARTIAL in PASS 1 coverage
 - At least 90% of listed skills must trace to Story.md Evidence IDs or approved DES
 
+
+## Number, Date, and Tense Standards
+
+Number style:
+- Use numerals for technical resume metrics and counts: `3 applications`, `7+ applications`, `10,000+ users`, `40+ releases`, `2 months`, `48 hours`, `90%`
+- Use comma-separated large numbers: `10,000+`, not `10k`
+- `10M+` is allowed for million-scale data when evidence uses it and space is limited
+- Use `+` only when evidence supports at-least scale
+- Do not invent precision or convert rough evidence into false exactness
+- Do not mention dollar figures in final resume output
+
+Graduation date lock:
+- If input Title or JD clearly includes intern, internship, co-op, student intern, summer intern, or internship program, Binghamton graduation must be `Jan 2025 - Dec 2026`
+- For all non-internship full-time roles, Binghamton graduation must be `Jan 2025 - May 2026`
+- Do not output only `May 2026` or only `Dec 2026`; use the full date range
+
+Tense and active voice:
+- Every bullet must start with a strong action verb
+- Past roles use past tense verbs: Built, Designed, Engineered, Restored, Standardized, Migrated, Optimized
+- Current ongoing roles may use present tense only when the work is ongoing
+- Current completed projects use past tense
+- Do not use passive voice or responsibility phrasing: was responsible for, was used to, was implemented, worked on, helped with, duties included
 
 ## Valid Config Values
 
@@ -558,6 +659,22 @@ Accepted approvals:
 If user approves DES but does not say CONFIRM, update the slot plan and wait.
 If user says CONFIRM after approval or No DES, generate final JSON.
 
+## FAANG-Quality Signal Ladder
+
+FAANG-quality means clear engineering evidence, not fake FAANG scale.
+Prefer evidence in this order:
+1. production system impact with measurable result
+2. reliability, performance, security, incident recovery, scale, or data-volume proof
+3. API/service/platform/data pipeline ownership
+4. release automation, CI/CD validation, observability, testing, or quality proof
+5. cross-functional delivery with explicit engineering scope
+6. strong project proof that fills a JD gap
+7. coursework or TA proof only when role-relevant
+
+Write evidence as system + mechanism + scope + outcome.
+Do not overuse generic phrases such as `enterprise applications`; prefer precise systems such as access-control workflows, release automation, service integrations, operational dashboards, data pipelines, or production debugging when supported.
+Do not inflate TCS work into FAANG/company scale. Make the existing work read with FAANG-level clarity and specificity.
+
 ## Top-Third Call Reason Gate
 
 Before final JSON, create this one sentence:
@@ -590,21 +707,37 @@ For student_entry, aiml_entry, and internship, the top third must include:
 
 ## Summary Rules
 
-Summary should be:
+Summary is the recruiter call-reason, not a biography and not a keyword paragraph.
+
+Length and shape:
 - 35 to 50 words preferred
-- 2 sentences maximum
-- exact JD-aligned role identity
-- no target-title inflation
-- no motivation language
-- no keyword dump
-- no unsupported domain claim
+- 1 to 2 sentences maximum
+- sentence 1 = target role identity + years/scope + JD-primary system/stack
+- sentence 2 = strongest risk reducer: production, reliability, performance, security, data, release ownership, AI/ML evaluation/deployment, or project proof
+
+Summary must answer:
+`I can do this job because I have built [closest JD system] using [supported JD stack] with [scope/risk reducer].`
+
+Do:
+- include exact JD role identity without title inflation
+- include 2 to 4 JD-primary terms only when supported
+- include 1 concrete scope/risk reducer
+- adapt for entry, mid, internship, AI/ML, and AI tooling
+
+Do not:
+- list every tool
+- repeat exact bullets
+- use motivation language such as passionate, motivated, dynamic, results-driven, team player
+- claim direct domain experience unless Story.md or approved DES supports it
+- overstate AI/ML, cloud, security, payments, healthcare, semiconductor, or platform ownership
 
 Use MS Computer Science AI specialization smartly:
 - For entry roles: frame as `MS Computer Science candidate specializing in AI with 3+ years of prior software engineering experience...`
-- For mid roles: frame as production SWE first, then AI specialization as added depth
+- For mid roles: frame as production SWE first, then AI specialization as additive depth only when relevant
 - For AI tooling roles: combine production SWE + MS CS AI specialization + LLM/tooling/automation proof
 
 Do not claim pure ML researcher identity unless JD and evidence support it.
+
 
 ## Technical Skills Rules
 
@@ -619,6 +752,8 @@ Rules:
 6. do not include broad career inventory
 7. at least 90% of skills must trace to experience, projects, or approved DES
 8. use exact JD terms when authentic and supported
+9. every supported PRIMARY JD keyword should appear 2 to 3 times naturally across summary, production/professional bullets, and/or relevant project bullets
+10. primary keywords must not remain only in Technical Skills
 
 Recommended row labels:
 - Languages and Frameworks
@@ -843,7 +978,7 @@ Opening verbs must be unique across all resume bullets whenever there is an accu
 Before final JSON, audit the first word of every experience and project bullet.
 
 Rules:
-- Do not repeat the same opening verb across professional experience and projects unless no accurate alternative exists
+- Do not repeat the same opening verb anywhere across professional experience and projects
 - If a verb repeats, rewrite one bullet with a different accurate verb
 - Do not use weak verbs
 - Do not use ownership verbs unless scope supports them
@@ -890,7 +1025,7 @@ Banned weak openings:
 
 PASS 1 EXPERIENCE SLOT PLAN must include planned opening verbs.
 PASS 1 PROJECT SLOT PLAN must include planned opening verbs.
-Final JSON must not repeat opening verbs unless the final audit explains why.
+Final JSON must not repeat opening verbs across the entire resume.
 
 ## Production/Shipped Work Rule
 
@@ -1100,7 +1235,7 @@ Final JSON must follow this structure exactly:
       "university": "Binghamton University, State University of New York",
       "degree": "Master of Science, Computer Science, AI Specialization, GPA: 4.00",
       "location": "Binghamton, NY",
-      "graduation": "May 2026",
+      "graduation": "[Jan 2025 - May 2026 for full-time OR Jan 2025 - Dec 2026 for internship]",
       "ta_bullet": ""
     },
     {
@@ -1192,13 +1327,17 @@ Final JSON generation rules for this template:
 13. do not claim current target location unless confirmed
 14. project object count must match `layout_profile` unless an approved PROJECT COUNT EXCEPTION exists
 15. each project must have exactly 2 bullets
-16. opening verbs must be unique where accurate alternatives exist
+16. opening verbs must be unique across the entire resume
 17. remove optional bullet placeholders if not used
 18. never leave `[placeholder]` text in final JSON
 19. never leave unresolved option groups such as `backend | fullstack`, `student_entry | mid`, or `JobPulse | FraudSift`
 20. contact separators using `|` are allowed and must not be treated as unresolved option text
 21. never add `gpa`, `institution`, `dates` inside education, `client`, `url`, `link`, `repository`, `technologies`, `row`, or nested `skills`
 22. final JSON must parse successfully before output
+23. Binghamton graduation must be `Jan 2025 - Dec 2026` for internship roles and `Jan 2025 - May 2026` for non-internship full-time roles
+24. supported PRIMARY JD keywords must appear 2 to 3 times naturally, with at least one professional/production bullet placement when professional evidence exists
+25. final resume should target 90% natural JD keyword coverage without forced or unsupported placement
+26. no opening verb may repeat across the entire resume
 
 Project count by `layout_profile`:
 - `student_entry` = exactly 3 projects
@@ -1225,15 +1364,27 @@ PASS 1 must output these sections in this exact order:
 9. DONE / CAN / NOT PROVEN TABLE
 10. JD COVERAGE AND PLACEMENT TABLE
 11. WORDS AUDIT TABLE if Words provided
-12. SKILLS STRATEGY
-13. EXPERIENCE SLOT PLAN
-14. BULLET ALIGNMENT PLAN
-15. PROJECT SLOT PLAN
-16. MISSING OR PARTIAL EVIDENCE
-17. DES CANDIDATE BANK
-18. APPLY PRIORITY SCORES
-19. APPROVAL BOX
-20. CHECKPOINT LINE
+12. KEYWORD COVERAGE PLAN
+13. SKILLS STRATEGY
+14. EXPERIENCE SLOT PLAN
+15. BULLET ALIGNMENT PLAN
+16. PROJECT SLOT PLAN
+17. MISSING OR PARTIAL EVIDENCE
+18. DES CANDIDATE BANK
+19. APPLY PRIORITY SCORES
+20. APPROVAL BOX
+21. CHECKPOINT LINE
+
+KEYWORD COVERAGE PLAN must include:
+- total JD keywords identified
+- primary keywords
+- secondary keywords
+- exact matches
+- phrasing gaps
+- fully missing keywords
+- projected natural coverage percentage with target 90%
+- each supported primary keyword and its 2 to 3 planned placements
+- primary keywords that are skills-only, DES-needed, unsupported, or excluded
 
 BULLET ALIGNMENT PLAN must include:
 - experience entry
@@ -1293,6 +1444,70 @@ If user approves DES IDs but does not say CONFIRM:
 
 Do not generate final JSON until the user says CONFIRM.
 
+## LinkedIn Outreach and Search Strings
+
+After CONFIRM, provide LinkedIn outreach support outside the final JSON.
+
+Generate:
+1. one LinkedIn connection message under 300 characters
+2. 4 to 6 recruiter/HM search strings
+3. optional follow-up message under 300 characters
+
+LinkedIn message rules:
+- short, human, specific to company and role
+- mention one supported JD-aligned proof point
+- do not ask for a referral in the first message unless user explicitly asks
+- do not sound desperate or generic
+
+Message pattern:
+`Hi [Name], I applied for the [Role] role at [Company]. I’m a software engineer with [closest supported JD proof]. I’d appreciate the chance to connect or learn whether this team is still actively hiring.`
+
+Search string patterns:
+- `site:linkedin.com/in ("Recruiter" OR "Talent Acquisition") "[Company]" "[City or Region]"`
+- `site:linkedin.com/in ("Engineering Manager" OR "Software Engineering Manager") "[Company]" "[City or Region]"`
+- `site:linkedin.com/in "[Company]" "[Target Role]" "[City or Region]"`
+- `site:linkedin.com/in "[Company]" ("Backend" OR "Full Stack" OR "Machine Learning" OR "AI") "[City or Region]"`
+
+Do not place LinkedIn messages or search strings inside final JSON.
+
+
+## Integrated Resume Quality Standards
+
+Use the user's ResumeWorded-style materials and public recruiter/ATS guidance as dynamic quality standards, not as one-off fixes.
+
+Core quality principles:
+- recruiter readability comes first, ATS coverage second, evidence defensibility always controls
+- use simple, parser-friendly formatting and standard sections
+- write accomplishments, not responsibilities
+- use Google-style X-Y-Z thinking: accomplished X as measured by Y by doing Z
+- use active voice and strong action verbs
+- quantify impact when true and useful
+- remove buzzwords, filler, passive voice, and weak responsibility phrasing
+- keep bullets human, specific, and interview-defensible
+- target 90% natural JD keyword coverage without forced placement
+- supported PRIMARY JD keywords should appear 2 to 3 times naturally, including at least one production/professional placement when evidence exists
+- no opening verb should repeat across the final resume
+- primary JD terms must not remain only in Technical Skills
+- Story.md evidence should be interpreted as system + mechanism + scope + outcome + limits
+
+Dynamic mistake taxonomy to check before final JSON:
+- ATS/parser mistakes
+- recruiter scan mistakes
+- hiring-manager trust mistakes
+- evidence and overclaiming mistakes
+- keyword-stuffing mistakes
+- summary mistakes
+- bullet construction mistakes
+- project selection mistakes
+- skills classification mistakes
+- header/location/relocation mistakes
+- international-candidate risk mistakes
+- date/tense/number-format mistakes
+- AI-generated writing mistakes
+- schema/key-order mistakes
+
+Do not add a claim only to increase keyword coverage. If a keyword fails the Natural Fit Test, place it in DES, suggestions, or exclusions instead of final resume text.
+
 ## PASS 2 Final Output After CONFIRM
 
 After CONFIRM, output:
@@ -1341,9 +1556,13 @@ Before printing final JSON, silently verify:
 - valid JSON parse
 - no bullet periods
 - no em dashes
-- opening verbs unique where accurate alternatives exist
+- opening verbs unique across the entire resume
 - first two bullets of every experience pass JD signal gate and are different proof types
 - central JD skills appear outside skills when supported
+- supported PRIMARY JD keywords appear 2 to 3 times naturally and at least once in production/professional proof when available
+- natural JD keyword coverage target is 90% or the gap is explained with DES/exclusions
+- no opening verb repeats anywhere across final bullets
+- Binghamton graduation date follows internship vs non-internship rule
 - no unsupported claims
 - no keyword stuffing
 - project count matches `layout_profile` unless approved PROJECT COUNT EXCEPTION exists

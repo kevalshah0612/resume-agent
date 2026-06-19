@@ -31,3 +31,12 @@ Additional strict repair rules:
 - Cross-stack bullets must describe a real connected workflow, not a keyword list
 - Do not invent missing projects to satisfy project count
 - If project count cannot be fixed blindly, flag `NEEDS CREATOR REGENERATION`
+
+Additional critical rules:
+- Target 90% natural JD keyword coverage from visible JSON/DES only
+- Supported PRIMARY JD keywords should appear 2 to 3 times naturally when visible evidence allows
+- No opening verb may repeat across the final resume
+- Preserve visible experience records and projects by default; do not delete entire records/projects unless duplicate, empty, schema-breaking, unsupported beyond repair, or explicitly requested
+- Repair internship vs non-internship Binghamton graduation date when JD/title makes it obvious
+- Flag `NEEDS CREATOR REGENERATION` if a fix requires unseen Story.md evidence
+- Detect AI-sounding bullets, keyword stuffing, skills-only primary terms, repeated verbs, weak summaries, bad header/location, TA under Education, and project count mismatch

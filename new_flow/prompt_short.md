@@ -47,3 +47,12 @@ Additional strict controls:
 - Top two bullets of every experience must be strongest JD signals and different proof types
 - Cross-stack bullets must describe one connected workflow, not a tool list
 - Opening verbs must be audited and should not repeat
+
+Additional critical rules:
+- Target 90% natural JD keyword coverage without forced or unsupported placement
+- Supported PRIMARY JD keywords should appear 2 to 3 times naturally, with production/professional placement when evidence exists
+- No opening verb may repeat across the entire final resume
+- Binghamton graduation must be `Jan 2025 - Dec 2026` for internship/co-op/student intern roles and `Jan 2025 - May 2026` for non-internship full-time roles
+- Story.md evidence must be interpreted with FAANG-level clarity: system, mechanism, scope, outcome, and limits
+- Final output after CONFIRM must include LinkedIn message and recruiter/HM search strings outside JSON
+- Do not force keywords that fail the Natural Fit Test; use DES, exclusion, or suggestions instead

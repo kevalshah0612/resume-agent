@@ -61,6 +61,67 @@ Do not optimize for keyword dumping.
 Do not add facts.
 Do not create new evidence.
 
+## Keyword Coverage and Natural Fit Audit
+
+Target 90% natural coverage of JD-important terms.
+
+Classify JD keywords:
+- PRIMARY = required term, repeated term, minimum qualification, core stack, core responsibility, or exact role identity
+- SECONDARY = preferred/nice-to-have/adjacent term
+- CONTEXT = domain/company/team language
+
+Rules:
+- supported PRIMARY keywords should appear 2 to 3 times naturally
+- at least one supported PRIMARY placement should be in professional/production bullets when visible evidence exists
+- skills-only placement is weak coverage and must be flagged
+- do not force keywords that fail the Natural Fit Test
+- do not add missing tools, metrics, domains, users, outcomes, or testing types
+
+Natural Fit Test:
+1. Does the keyword fit the bullet context without changing meaning?
+2. Does it sound human?
+3. Is the metric, stack, domain, and claim still accurate?
+
+If NO to any item, mark as MISSING / NEEDS DES or NEEDS CREATOR REGENERATION.
+
+## Recruiter Red Flag Taxonomy
+
+Classify red flags as:
+
+BLOCKER:
+- invalid JSON
+- unsupported required JD claim
+- fake location claim
+- wrong title/seniority
+- TA under Education
+- `education.ta_bullet` not empty
+- `config.ta_active` true
+- config/layout mismatch
+- missing core JD stack from summary/bullets when supported
+- obvious overclaiming
+- broken contact, LinkedIn, or GitHub
+
+MAJOR:
+- summary generic
+- first two bullets weak
+- primary JD terms only in skills
+- repeated opening verbs
+- project count mismatch
+- projects overpower professional experience
+- unsupported domain wording
+- too many tools in one bullet
+- bullet sounds AI-written
+- tense inconsistency
+- graduation date mismatch for internship vs full-time
+
+MINOR:
+- small phrasing gaps
+- repeated nouns
+- weak ordering
+- slightly long bullet
+- inconsistent number style
+- missing acronym expansion when useful
+
 ## Allowed Fixes
 
 You may:
@@ -72,7 +133,7 @@ You may:
 - strengthen wording using visible facts
 - replace synonyms with exact JD wording when same meaning is visible
 - move central visible skills into summary/bullets if supported by the same resume or DES
-- remove weak projects if stronger visible projects exist
+- preserve visible projects by default; tighten or reorder weak projects instead of deleting them unless deletion is explicitly justified
 - fix schema keys and invalid JSON
 - remove bullet periods
 - repair repeated opening verbs
@@ -125,9 +186,39 @@ Projects:
 
 Bullets:
 - top two bullets of every experience must be strongest JD signals and different proof types
-- opening verbs should not repeat when an accurate alternative exists
+- opening verbs must not repeat across the entire resume
 - do not create AI-sounding keyword piles
 - cross-stack bullets must describe a real connected workflow, not a tool list
+
+## Human Writing, Number, and Tense Guard
+
+Human-writing guard:
+- avoid AI-sounding keyword piles
+- write one real system/workflow per bullet
+- use 1 to 3 technical terms naturally unless JD requires a stack cluster
+- do not overuse scalable, robust, seamless, innovative, dynamic, cutting-edge, leveraged, utilized
+- vary sentence rhythm
+
+Number style:
+- use `10,000+`, not `10k`
+- use `7+ applications`, `40+ releases`, `48 hours`, `90%`
+- `10M+` is allowed for million-scale data if already visible
+- do not invent precision
+- do not mention dollar figures
+
+Graduation date repair:
+- if visible JD/title is internship/co-op/student intern/summer intern, Binghamton graduation should be `Jan 2025 - Dec 2026`
+- otherwise full-time/non-internship should be `Jan 2025 - May 2026`
+- use full date range, not only month/year
+
+Tense:
+- past roles use past tense verbs
+- current roles use present tense only for ongoing work and past tense for completed work
+- no passive voice or responsibility phrasing
+
+Opening verbs:
+- no opening verb may repeat across final bullets
+- if a duplicate exists, repair with an accurate strong verb using visible meaning only
 
 ## Exact JD Wording Rule
 
@@ -152,6 +243,30 @@ Preserve meaning unless old wording is:
 - too generic for recruiter scan
 
 Every changed bullet must appear in OLD -> NEW format before final JSON.
+
+## Preserve-Do-Not-Delete Rule
+
+Do not delete an entire professional experience entry or project by default.
+
+Allowed:
+- reorder bullets
+- tighten bullets
+- replace weak wording
+- remove unsupported keywords from bullets
+- move TA from Education to Professional Experience when visible JSON contains enough TA wording
+- reduce an irrelevant project to cleaner wording if it is already present
+- flag weak project relevance
+
+Do not delete an entire record or project unless it is:
+- duplicate
+- empty
+- schema-breaking
+- unsupported beyond repair
+- explicitly requested by the user
+- impossible to preserve without fabricating facts
+
+If needed evidence is missing, output:
+`NEEDS CREATOR REGENERATION`
 
 ## JD Intelligence
 
@@ -297,7 +412,7 @@ Do not let projects overpower production experience unless JD is entry, internsh
 
 Allowed project fixes:
 - reorder visible projects
-- remove weak visible project
+- preserve weak visible project when possible and tighten its JD alignment
 - tighten project bullets
 - use exact JD wording when visible facts support it
 
@@ -428,6 +543,48 @@ Output these sections:
 
 Do not add anything after the final JSON block.
 
+
+## Integrated Recruiter Repair Checklist
+
+Use this checklist as the blind review standard when visible JSON/DES evidence allows repair:
+
+Recruiter-first checks:
+- target role is clear in header and summary
+- top third answers why Keval deserves a call in 7 to 15 seconds
+- summary is specific and not a keyword paragraph
+- first two bullets of each experience are the strongest JD signals and different proof types
+- projects fill JD gaps without overpowering stronger production experience
+
+ATS and keyword checks:
+- target 90% natural JD keyword coverage
+- supported PRIMARY JD keywords appear 2 to 3 times naturally when visible evidence allows
+- primary keywords do not remain only in Technical Skills
+- skills row 1 mirrors JD primary stack only
+- forced or unsupported terms go to DES/suggestions/exclusion, not resume text
+
+Repair boundaries:
+- preserve visible records/projects by default
+- do not delete projects unless duplicate, empty, schema-breaking, unsupported beyond repair, or explicitly requested
+- do not invent missing projects, tools, metrics, domains, users, dates, titles, or outcomes
+- if unseen Story.md evidence is required, output `NEEDS CREATOR REGENERATION`
+
+Writing checks:
+- active voice only
+- past roles use past tense
+- current roles use present tense only for ongoing work
+- no repeated opening verbs across the entire resume
+- no weak openers, buzzwords, filler, em dashes, or bullet periods
+- one system/workflow per bullet
+- bullets describe system + mechanism + scope + outcome when visible evidence supports it
+
+Formatting/schema checks:
+- header uses required two-line contact field
+- `education.ta_bullet` is empty
+- `config.ta_active` is false
+- internship/co-op/student intern graduation = Jan 2025 - Dec 2026
+- non-internship full-time graduation = Jan 2025 - May 2026
+- final JSON keeps locked schema and parses cleanly
+
 ## Final Self-Check
 
 Before final JSON, silently verify:
@@ -437,12 +594,15 @@ Before final JSON, silently verify:
 - no bullet periods
 - no unsupported facts
 - no new tools or metrics
-- no repeated opening verbs where avoidable
+- no repeated opening verbs across the entire resume
 - first two bullets of every experience pass recruiter screen and are different proof types
 - contact uses required two-line header format when visible data supports it
 - education.ta_bullet is empty
 - config.ta_active is false
 - core JD skills appear outside skills when supported
+- natural keyword coverage target is 90% or missing terms are clearly marked
+- supported PRIMARY keywords appear 2 to 3 times naturally when visible evidence allows
+- Binghamton graduation date matches internship vs non-internship rule
 - skills row 1 matches JD primary stack
 - TA not duplicated
 - project count matches layout when visible projects allow it or NEEDS CREATOR REGENERATION is flagged
