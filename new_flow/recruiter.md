@@ -242,7 +242,7 @@ Preserve meaning unless old wording is:
 - schema-breaking
 - too generic for recruiter scan
 
-Every changed bullet must appear in OLD -> NEW format before final JSON.
+Track every changed bullet internally. Mention only meaningful repair categories in the short recruiter summary; do not print OLD -> NEW tables.
 
 ## Preserve-Do-Not-Delete Rule
 
@@ -346,7 +346,7 @@ Never present project proof as production proof.
 
 ## Coverage Report
 
-Output a coverage report before final JSON:
+Evaluate this coverage report silently before final JSON:
 
 | Exact JD sentence or phrase | Priority | Visible support | Placement in final JSON | Status | Risk |
 |---|---|---|---|---|---|
@@ -358,6 +358,8 @@ Statuses:
 - PROJECT ONLY
 - MISSING / NEEDS DES
 - EXCLUDED AS UNSUPPORTED
+
+Do not print the coverage table. Mention only major unresolved coverage risk in the short recruiter summary.
 
 ## Top-Bullet Check
 
@@ -522,25 +524,16 @@ Final JSON must parse.
 
 ## Final Output Order
 
-Output these sections:
+Perform all recruiter checks, comparisons, repairs, coverage analysis, red-flag analysis, skills traceability, quality gates, and scoring silently.
 
-1. PICKED JSON
-2. WHY PICKED
-3. HARD FILTER CHECK
-4. CALL-PILE REVIEW
-5. TOP-BULLET CHECK
-6. SUMMARY CHECK
-7. SKILL CLASSIFICATION CHECK
-8. JD COVERAGE REPORT WITH PLACEMENT
-9. RED FLAGS
-10. RED FLAGS FIXED WITH OLD -> NEW
-11. ATS WORDING FIXES
-12. SKILLS TRACEABILITY
-13. QUALITY GATES
-14. FINAL SCORES
-15. KEY TERMS EXCLUDED OR NEED DES
-16. FINAL JSON
+Output only these sections:
 
+1. RECRUITER SUMMARY, maximum 8 short lines covering the picked resume, meaningful fixes, unresolved risks, and confidence
+2. FINAL JSON, exactly one complete valid JSON code block
+
+The JSON block is mandatory, parseable, and must close every object and array before the response ends.
+Reserve enough output space for the complete JSON. Shorten the recruiter summary before risking JSON truncation.
+Do not output audit tables, coverage tables, OLD -> NEW tables, quality-gate tables, or long explanations.
 Do not add anything after the final JSON block.
 
 

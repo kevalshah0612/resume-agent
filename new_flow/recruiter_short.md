@@ -13,13 +13,14 @@ Task:
 1. Pick stronger JSON, or review Resume 1 only
 2. Check hard filters, JD coverage, exact wording, call-pile strength, top two bullets, summary, skills traceability, projects, TA usage, and schema
 3. Fix only meaningful red flags
-4. Show OLD -> NEW for every changed bullet
+4. Track changes silently and summarize only meaningful repair categories
 5. Do not add new tools, metrics, domains, users, testing types, projects, titles, dates, or leadership claims
-6. Print coverage report with exact JD terms and final placement
-7. Output one final valid JSON block only at the end
+6. Evaluate coverage silently and mention only major unresolved risk in the short summary
+7. Output a recruiter summary of no more than 8 short lines, then one complete parseable JSON block with every object and array closed
 
 Final JSON must preserve exact schema from Recruiter.md and must not include banned keys.
 Do not add anything after the final JSON block.
+Do not output audit tables, coverage matrices, OLD -> NEW tables, or quality-gate tables.
 
 
 Additional strict repair rules:

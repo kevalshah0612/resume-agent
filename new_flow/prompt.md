@@ -1351,85 +1351,30 @@ Project count by `layout_profile`:
 
 On first run, do not output final JSON.
 
-PASS 1 must output these sections in this exact order:
+Perform source verification, story reading, hard-filter analysis, JD intelligence, mode/layout selection, coverage planning, bullet alignment, project selection, and evidence checks silently.
 
-1. SOURCE VERIFICATION
-2. STORY READING REPORT
-3. INPUT QUALITY GATE
-4. HARD FILTER GATE
-5. INTERNATIONAL CANDIDATE RISK
-6. JD INTELLIGENCE
-7. MODE AND LAYOUT DECISION
-8. RECRUITER CALL REASON DRAFT
-9. DONE / CAN / NOT PROVEN TABLE
-10. JD COVERAGE AND PLACEMENT TABLE
-11. WORDS AUDIT TABLE if Words provided
-12. KEYWORD COVERAGE PLAN
-13. SKILLS STRATEGY
-14. EXPERIENCE SLOT PLAN
-15. BULLET ALIGNMENT PLAN
-16. PROJECT SLOT PLAN
-17. MISSING OR PARTIAL EVIDENCE
-18. DES CANDIDATE BANK
-19. APPLY PRIORITY SCORES
-20. APPROVAL BOX
-21. CHECKPOINT LINE
+PASS 1 must output exactly these sections:
 
-KEYWORD COVERAGE PLAN must include:
-- total JD keywords identified
-- primary keywords
-- secondary keywords
-- exact matches
-- phrasing gaps
-- fully missing keywords
-- projected natural coverage percentage with target 90%
-- each supported primary keyword and its 2 to 3 planned placements
-- primary keywords that are skills-only, DES-needed, unsupported, or excluded
+```text
+COVERAGE SUMMARY:
+- Coverage confidence: HIGH | MEDIUM | LOW, NN%
+- Covered keywords: comma-separated exact JD terms with story evidence
+- Partial keywords: comma-separated exact JD terms with partial or adjacent evidence
+- Needs DES: comma-separated exact JD terms requiring approval
+- Apply risk: LOW | MEDIUM | HIGH
 
-BULLET ALIGNMENT PLAN must include:
-- experience entry
-- planned bullet 1 signal
-- planned bullet 2 signal
-- JD terms covered
-- evidence IDs
-- planned opening verbs
-- why bullet 1 and bullet 2 are different proof types
+DES CANDIDATE BANK:
+DES 1 | keyword: <exact JD keyword> | use when: <why it matters> | bullet: <experience/project and slot> | story/context: <evidence ID or user-confirmable context> | number: <metric/scope or none> | safe wording: <one bullet-ready sentence>
 
-PROJECT SLOT PLAN must include:
-- required project count for selected `layout_profile`
-- selected project names
-- rejected project names
-- reason for each selected project
-- planned opening verbs
-- reason if fewer than the default project count is used
-- exact text `PROJECT COUNT EXCEPTION` if fewer than required count is planned
+APPROVAL: Reply Approved: DES 1 to 3, or Approved: 1,2,3, or Confirm with no DES.
+```
 
-STORY READING REPORT must include:
-- Story.md found: YES/NO
-- Active evidence cards scanned: count
-- Metric map scanned: YES/NO
-- Technology map scanned: YES/NO
-- DES-needed claims scanned: YES/NO
-- Forbidden claims scanned: YES/NO
-- Evidence IDs selected for this JD
-- Evidence IDs rejected for this JD
-- JD terms not found in active story
-
-JD COVERAGE AND PLACEMENT TABLE columns:
-| Exact JD sentence or phrase | Priority | Evidence class | Placement | Exact resume wording plan | Risk |
-
-APPROVAL BOX:
-Reply one of:
-- Approved DES-1
-- Approved DES-1, DES-3
-- Apply DES-2 fallback
-- No DES
-- Change Mode to [mode]
-- Replace project [name] with [name]
-- CONFIRM
-
-CHECKPOINT LINE:
-`CHECKPOINT: Mode/schema/JD-stack/DES/slot-plan validation = PASS or RISK`
+Strict PASS 1 rules:
+- output 3 to 8 high-value DES candidates
+- every candidate must be one line beginning exactly with `DES <number> |`
+- do not output tables, long audits, JSON, scratch work, or additional sections
+- do not omit the DES CANDIDATE BANK
+- stop immediately after the APPROVAL line
 
 Stop after PASS 1.
 
@@ -1449,18 +1394,22 @@ Do not generate final JSON until the user says CONFIRM.
 After CONFIRM, provide LinkedIn outreach support outside the final JSON.
 
 Generate:
-1. one LinkedIn connection message under 300 characters
-2. 4 to 6 recruiter/HM search strings
-3. optional follow-up message under 300 characters
+1. exactly one LinkedIn connection message with a hard maximum of 300 characters, including spaces
+2. exactly 4 recruiter/HM search strings
+
+Do not generate a follow-up message in this app flow.
+Count the LinkedIn message characters before output. If it exceeds 300 characters, rewrite it until it is 300 characters or fewer.
 
 LinkedIn message rules:
 - short, human, specific to company and role
 - mention one supported JD-aligned proof point
 - do not ask for a referral in the first message unless user explicitly asks
 - do not sound desperate or generic
+- use ASCII punctuation only
+- do not use em dashes or en dashes
 
 Message pattern:
-`Hi [Name], I applied for the [Role] role at [Company]. I’m a software engineer with [closest supported JD proof]. I’d appreciate the chance to connect or learn whether this team is still actively hiring.`
+`Hi [Name], I applied for the [Role] role at [Company]. I'm a software engineer with [closest supported JD proof]. I'd appreciate the chance to connect or learn whether this team is still actively hiring.`
 
 Search string patterns:
 - `site:linkedin.com/in ("Recruiter" OR "Talent Acquisition") "[Company]" "[City or Region]"`
@@ -1510,22 +1459,24 @@ Do not add a claim only to increase keyword coverage. If a keyword fails the Nat
 
 ## PASS 2 Final Output After CONFIRM
 
-After CONFIRM, output:
+After CONFIRM, perform every audit, coverage check, diagnostic score, DES check, and schema check silently.
 
-1. FINAL AUDIT SUMMARY
-2. COVERAGE REPORT WITH PLACEMENT
-3. DIAGNOSTIC SCORES
-4. DES USED / DES EXCLUDED
-5. LINKEDIN MESSAGE UNDER 300 CHARACTERS
-6. RECRUITER SEARCH STRINGS
-7. FINAL JSON CODE BLOCK ONLY
+Output only:
+
+1. CONFIDENCE SUMMARY, maximum 5 short lines
+2. LINKEDIN MESSAGE, exactly one message and no more than 300 characters including spaces
+3. RECRUITER/HM SEARCH STRINGS, exactly 4 strings
+4. FINAL JSON CODE BLOCK ONLY
 
 Only one JSON code block.
+The JSON block is mandatory, complete, parseable, and must close every object and array before the response ends.
+Reserve enough output space for the complete JSON. Shorten the confidence summary and LinkedIn text before risking JSON truncation.
 No draft JSON.
 No second corrected JSON.
+No audit tables, coverage tables, diagnostic tables, or follow-up message.
 Do not write anything after the final JSON code block.
 
-Diagnostic scores:
+Silent diagnostic scores to calculate but not print:
 - ATS JD Match
 - Recruiter 7 to 15 Second Scan
 - Hiring Manager Proof

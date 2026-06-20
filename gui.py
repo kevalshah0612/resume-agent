@@ -21,7 +21,9 @@ from tkinter import filedialog, messagebox, ttk
 
 from pipeline import (
     CostEvent,
+    OperationCancelled,
     ResumeInput,
+    enforce_linkedin_message_limit,
     extract_json,
     load_config,
     normalize_approval,
@@ -77,6 +79,7 @@ class JobTab(ttk.Frame):
         self.request_id = name
         self.stage = "Ready"
         self.pass1_raw = ""
+        self.cancel_event = threading.Event()
 
         self._build()
 
@@ -87,7 +90,7 @@ class JobTab(ttk.Frame):
 
         toolbar = ttk.Frame(self)
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        toolbar.columnconfigure(10, weight=1)
+        toolbar.columnconfigure(11, weight=1)
 
         self.pass1_btn = ttk.Button(toolbar, text="Run PASS 1", command=self.on_pass1)
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
@@ -103,12 +106,14 @@ class JobTab(ttk.Frame):
         self.pdf_btn.grid(row=0, column=5, padx=(0, 6))
         self.questions_btn = ttk.Button(toolbar, text="Answer Questions", command=self.on_answer_questions)
         self.questions_btn.grid(row=0, column=6, padx=(0, 6))
-        ttk.Button(toolbar, text="Open Request", command=self.on_open_request).grid(row=0, column=7, padx=(0, 6))
-        ttk.Button(toolbar, text="Clear Tab", command=self.on_clear_tab).grid(row=0, column=8, padx=(0, 6))
+        self.stop_btn = ttk.Button(toolbar, text="Stop AI", command=self.on_stop_ai, state="disabled")
+        self.stop_btn.grid(row=0, column=7, padx=(0, 6))
+        ttk.Button(toolbar, text="Open Request", command=self.on_open_request).grid(row=0, column=8, padx=(0, 6))
+        ttk.Button(toolbar, text="Clear Tab", command=self.on_clear_tab).grid(row=0, column=9, padx=(0, 6))
         self.cost_label = ttk.Label(toolbar, text="$0.0000")
-        self.cost_label.grid(row=0, column=9, sticky="e", padx=(8, 8))
+        self.cost_label.grid(row=0, column=10, sticky="e", padx=(8, 8))
         self.status = ttk.Label(toolbar, text="Ready")
-        self.status.grid(row=0, column=10, sticky="e")
+        self.status.grid(row=0, column=11, sticky="e")
 
         left = ttk.Frame(self)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
@@ -309,6 +314,7 @@ class JobTab(ttk.Frame):
 
     def show_and_save_linkedin_outreach(self, request_dir: Path, raw_text: str, filename: str = "10_linkedin_outreach.txt") -> None:
         outreach = self.clean_paste_text(self.extract_linkedin_outreach(raw_text))
+        outreach = enforce_linkedin_message_limit(outreach)
         if not outreach:
             return
         self.linkedin_outreach.delete("1.0", "end")
@@ -373,7 +379,7 @@ class JobTab(ttk.Frame):
         self.app.update_tab_status(self)
         return self.request_dir
 
-    def set_busy(self, busy: bool, message: str) -> None:
+    def set_busy(self, busy: bool, message: str, cancellable: bool = False) -> None:
         state = "disabled" if busy else "normal"
         for button in (
             self.pass1_btn,
@@ -385,7 +391,25 @@ class JobTab(ttk.Frame):
             self.questions_btn,
         ):
             button.config(state=state)
+        if busy and cancellable:
+            self.cancel_event.clear()
+            self.stop_btn.config(state="normal")
+        else:
+            self.stop_btn.config(state="disabled")
         self.set_stage(message)
+
+    def on_stop_ai(self) -> None:
+        if self.stop_btn.instate(["disabled"]):
+            return
+        self.cancel_event.set()
+        self.stop_btn.config(state="disabled")
+        self.set_stage("Stopping AI...")
+
+    def handle_cancelled(self, err: Exception | None) -> bool:
+        if not isinstance(err, OperationCancelled):
+            return False
+        self.set_busy(False, "Stopped. You can retry manually.")
+        return True
 
     def add_cost_events(self, events: list[CostEvent]) -> None:
         if not events:
@@ -410,6 +434,8 @@ class JobTab(ttk.Frame):
                             "cache_creation_input_tokens": e.cache_creation_input_tokens,
                             "cache_read_input_tokens": e.cache_read_input_tokens,
                             "estimated_cost_usd": round(e.estimated_cost_usd, 6),
+                            "attempts": e.attempts,
+                            "finish_reason": e.finish_reason,
                         }
                         for e in self.cost_events
                     ],
@@ -424,14 +450,21 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
 
-        self.set_busy(True, "PASS 1 running...")
+        self.set_busy(True, "PASS 1 running...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
-            result = asyncio.run(run_pass1(inp, cost_cb=events.append, request_label=self.request_label(inp)))
+            result = asyncio.run(run_pass1(
+                inp,
+                cost_cb=events.append,
+                request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
+            ))
             return result, events
 
         def done(result, err):
+            if self.handle_cancelled(err):
+                return
             self.set_busy(False, "PASS 1 ready" if not err else "PASS 1 failed")
             if err:
                 messagebox.showerror("PASS 1 failed", str(err), parent=self)
@@ -459,7 +492,7 @@ class JobTab(ttk.Frame):
             return
 
         save_text(request_dir / "03_approval.txt", approval_raw + "\n\nNormalized:\n" + approval)
-        self.set_busy(True, "Generating JSON...")
+        self.set_busy(True, "Generating JSON...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
@@ -469,6 +502,7 @@ class JobTab(ttk.Frame):
                 approval,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
             ))
             save_text(request_dir / "04_final_raw.txt", raw)
             try:
@@ -479,6 +513,8 @@ class JobTab(ttk.Frame):
                 return raw, None, events, str(exc)
 
         def done(result, err):
+            if self.handle_cancelled(err):
+                return
             self.set_busy(False, "JSON ready" if not err else "Generate call failed")
             if err:
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
@@ -512,11 +548,16 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
 
-        self.set_busy(True, "AUTO running PASS 1...")
+        self.set_busy(True, "AUTO running PASS 1...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
-            pass1_raw = asyncio.run(run_pass1(inp, cost_cb=events.append, request_label=self.request_label(inp)))
+            pass1_raw = asyncio.run(run_pass1(
+                inp,
+                cost_cb=events.append,
+                request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
+            ))
             approval_raw = self.approve_all_des_text(pass1_raw)
             approval = normalize_approval(approval_raw)
             pass2_raw = asyncio.run(run_pass2(
@@ -525,6 +566,7 @@ class JobTab(ttk.Frame):
                 approval,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
             ))
             save_text(request_dir / "04_final_raw.txt", pass2_raw)
             try:
@@ -535,6 +577,8 @@ class JobTab(ttk.Frame):
                 return pass1_raw, approval_raw, approval, pass2_raw, None, events, str(exc)
 
         def done(result, err):
+            if self.handle_cancelled(err):
+                return
             self.set_busy(False, "AUTO JSON ready" if not err else "AUTO call failed")
             if err:
                 messagebox.showerror("Auto JSON call failed", str(err), parent=self)
@@ -578,7 +622,7 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Recruiter review needs input", str(exc), parent=self)
             return
 
-        self.set_busy(True, "Recruiter review running...")
+        self.set_busy(True, "Recruiter review running...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
@@ -588,6 +632,7 @@ class JobTab(ttk.Frame):
                 des=approval,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
             ))
             save_text(request_dir / "06_recruiter_raw.txt", raw)
             try:
@@ -598,6 +643,8 @@ class JobTab(ttk.Frame):
                 return raw, None, events, str(exc)
 
         def done(result, err):
+            if self.handle_cancelled(err):
+                return
             self.set_busy(False, "Recruiter JSON ready" if not err else "Recruiter call failed")
             if err:
                 messagebox.showerror("Recruiter review call failed", str(err), parent=self)
@@ -638,7 +685,7 @@ class JobTab(ttk.Frame):
             return
 
         save_text(request_dir / "08_application_questions.txt", questions)
-        self.set_busy(True, "Answering application questions...")
+        self.set_busy(True, "Answering application questions...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
@@ -650,10 +697,13 @@ class JobTab(ttk.Frame):
                 resume_json=resume_json,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
             ))
             return answers, events, json_path
 
         def done(result, err):
+            if self.handle_cancelled(err):
+                return
             self.set_busy(False, "Application answers ready" if not err else "Questions failed")
             if err:
                 messagebox.showerror("Application answers failed", str(err), parent=self)

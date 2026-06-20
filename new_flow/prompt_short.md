@@ -16,11 +16,11 @@ Des:
 
 Workflow:
 1. First run PASS 1 only
-2. Print coverage report with exact JD terms and planned placement
+2. Print only the compact COVERAGE SUMMARY and parseable DES CANDIDATE BANK required by Prompt.md
 3. Create DES candidates for unsupported or partial JD terms instead of inventing facts
 4. Wait for DES approval or `No DES`
 5. Do not generate final JSON until user says `CONFIRM`
-6. After CONFIRM, output final audit + one valid JSON block only
+6. After CONFIRM, perform audits silently and output a compact summary, one LinkedIn message under 300 characters, 4 search strings, and one complete parseable JSON block with every object and array closed
 
 Critical rules:
 - Use exact JD wording only when Story.md or approved DES supports it
@@ -47,6 +47,7 @@ Additional strict controls:
 - Top two bullets of every experience must be strongest JD signals and different proof types
 - Cross-stack bullets must describe one connected workflow, not a tool list
 - Opening verbs must be audited and should not repeat
+- PASS 1 must contain 3 to 8 one-line candidates beginning exactly with `DES <number> |`
 
 Additional critical rules:
 - Target 90% natural JD keyword coverage without forced or unsupported placement
@@ -55,4 +56,6 @@ Additional critical rules:
 - Binghamton graduation must be `Jan 2025 - Dec 2026` for internship/co-op/student intern roles and `Jan 2025 - May 2026` for non-internship full-time roles
 - Story.md evidence must be interpreted with FAANG-level clarity: system, mechanism, scope, outcome, and limits
 - Final output after CONFIRM must include LinkedIn message and recruiter/HM search strings outside JSON
+- LinkedIn message has a hard 300-character maximum including spaces; count and rewrite before output
+- Do not output audit or coverage tables after CONFIRM
 - Do not force keywords that fail the Natural Fit Test; use DES, exclusion, or suggestions instead

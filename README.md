@@ -22,8 +22,13 @@ PROVIDER_MODE=1
 NVIDIA_API_KEY=your_nvidia_api_key
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_MODEL=nvidia/nemotron-3-super-120b-a12b
+NVIDIA_MAX_ATTEMPTS=5
+NVIDIA_REASONING_BUDGET=16384
+FALLBACK_TO_ANTHROPIC=false
 ANTHROPIC_API_KEY=your_key
 ```
+
+NVIDIA retries are artifact-based. PASS 1 retries only when parseable DES candidates are missing. PASS 2 and recruiter review retry only when valid JSON is missing. Application-question calls run once. LinkedIn messages over 300 characters are shortened locally and do not rerun the resume request. Use the per-tab **Stop AI** button to cancel the current NVIDIA stream or retry chain, then start that step again manually. Claude remains available through `PROVIDER_MODE=2`, but automatic NVIDIA-to-Claude fallback is disabled by default.
 
 To change NVIDIA models, edit only:
 
