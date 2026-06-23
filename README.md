@@ -65,6 +65,12 @@ Each tab is one application. Tabs run independently in background threads.
 
 The tab uses one large scrollable `Output` area with an artifact dropdown. Entries are grouped as `Model Process`, `Output`, `LinkedIn`, `Input`, or `Log`, so any saved result can be reopened without searching the request folder. After PASS 1, the left Job Description box changes to the organized missing-coverage and DES view; the original JD remains saved and continues to drive every later model call.
 
+The prompt dropdown is per tab:
+
+- `Stable new_flow` is the default production flow.
+- `V1 experimental` uses `Prompt_V1/pass_1.md`, `Prompt_V1/pass_2.md`, `Prompt_V1/final_check.md`, and `Prompt_V1/story.md`.
+- In V1, `PASS 1` runs the specialized planning/DES prompt, `Generate JSON` runs the PASS 2 resume JSON prompt, and the `Final Check` button runs the combined ATS, recruiter, and hiring-manager review prompt.
+
 LinkedIn outreach is role-specific rather than generic:
 
 - Recruiter message: names the exact title and company, uses one supported proof point, and politely asks for the correct recruiter or for the resume to be passed along when appropriate.

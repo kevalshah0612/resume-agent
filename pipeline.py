@@ -35,6 +35,7 @@ from manager import build_render_profile
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "new_flow"
+PROMPT_V1_DIR = ROOT / "Prompt_V1"
 FINAL_QA_PROMPT_DIR = ROOT / "claude_resume_workflow"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
@@ -46,6 +47,11 @@ DEFAULT_NVIDIA_MAX_ATTEMPTS = 5
 DEFAULT_NVIDIA_REASONING_BUDGET = 16384
 
 _log_cb = None
+
+PROMPT_PROFILES = {
+    "stable": "Stable new_flow",
+    "v1": "V1 experimental",
+}
 
 PASS1_COMPACT_INSTRUCTION = """
 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
@@ -411,6 +417,28 @@ def get_default_nvidia_model_option() -> str:
     return nvidia_model_option_label(model, get_nvidia_thinking())
 
 
+def normalize_prompt_profile(value: str | None) -> str:
+    raw = (value or "").strip().lower()
+    if raw in {"v1", "prompt_v1", "experimental", "v1 experimental"}:
+        return "v1"
+    return "stable"
+
+
+def prompt_profile_label(profile: str) -> str:
+    return PROMPT_PROFILES[normalize_prompt_profile(profile)]
+
+
+def prompt_profile_options() -> list[str]:
+    return list(PROMPT_PROFILES.values())
+
+
+def resolve_prompt_profile_label(label: str) -> str:
+    for key, value in PROMPT_PROFILES.items():
+        if label == value:
+            return key
+    return normalize_prompt_profile(label)
+
+
 def get_nvidia_client():
     try:
         from openai import OpenAI
@@ -536,10 +564,15 @@ def call_nvidia_sync(
     )
 
 
-def read_prompt(name: str) -> str:
-    path = PROMPT_DIR / name
+def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
+    return PROMPT_V1_DIR if normalize_prompt_profile(prompt_profile) == "v1" else PROMPT_DIR
+
+
+def read_prompt(name: str, prompt_profile: str | None = None) -> str:
+    prompt_dir = prompt_dir_for_profile(prompt_profile)
+    path = prompt_dir / name
     if not path.exists():
-        matches = [candidate for candidate in PROMPT_DIR.iterdir() if candidate.name.lower() == name.lower()]
+        matches = [candidate for candidate in prompt_dir.iterdir() if candidate.name.lower() == name.lower()]
         if not matches:
             raise FileNotFoundError(f"Missing prompt file: {path}")
         path = matches[0]
@@ -1003,15 +1036,31 @@ async def call_model(
     return text
 
 
-def flow1_system() -> list[dict[str, Any]]:
+def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
+    if normalize_prompt_profile(prompt_profile) == "v1":
+        return [
+            cached_text_block(read_prompt("pass_1.md", prompt_profile)),
+            cached_text_block(read_prompt("story.md", prompt_profile)),
+        ]
     return [
-        cached_text_block(read_prompt("prompt.md")),
-        cached_text_block(read_prompt("story.md")),
+        cached_text_block(read_prompt("prompt.md", prompt_profile)),
+        cached_text_block(read_prompt("story.md", prompt_profile)),
     ]
 
 
-def recruiter_system() -> list[dict[str, Any]]:
-    return [cached_text_block(read_prompt("recruiter.md"))]
+def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
+    if normalize_prompt_profile(prompt_profile) == "v1":
+        return [
+            cached_text_block(read_prompt("pass_2.md", prompt_profile)),
+            cached_text_block(read_prompt("story.md", prompt_profile)),
+        ]
+    return pass1_system(prompt_profile)
+
+
+def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
+    if normalize_prompt_profile(prompt_profile) == "v1":
+        return [cached_text_block(read_prompt("final_check.md", prompt_profile))]
+    return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
 
 def labeled_step(request_label: str, step: str) -> str:
@@ -1025,14 +1074,19 @@ async def run_pass1(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
+    prompt_profile: str = "stable",
 ) -> str:
-    user_message = "\n\n".join([
-        read_prompt("prompt_short.md"),
-        PASS1_COMPACT_INSTRUCTION,
-        input_to_text(inp),
-    ])
+    profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        user_message = input_to_text(inp)
+    else:
+        user_message = "\n\n".join([
+            read_prompt("prompt_short.md", profile),
+            PASS1_COMPACT_INSTRUCTION,
+            input_to_text(inp),
+        ])
     return await call_model(
-        system_blocks=flow1_system(),
+        system_blocks=pass1_system(profile),
         messages=[{"role": "user", "content": user_message}],
         label=labeled_step(request_label, "PASS 1"),
         max_tokens=16384,
@@ -1057,20 +1111,36 @@ async def run_pass2(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
+    prompt_profile: str = "stable",
 ) -> str:
-    first_user = "\n\n".join([
-        read_prompt("prompt_short.md"),
-        PASS1_COMPACT_INSTRUCTION,
-        input_to_text(inp),
-    ])
+    profile = normalize_prompt_profile(prompt_profile)
     normalized_approval = normalize_approval(approval_text)
-    return await call_model(
-        system_blocks=flow1_system(),
-        messages=[
+    if profile == "v1":
+        messages = [{
+            "role": "user",
+            "content": "\n\n".join([
+                "ORIGINAL INPUT:",
+                input_to_text(inp),
+                "PASS 1 OUTPUT:",
+                pass1_text.strip(),
+                "APPROVED DES:",
+                normalized_approval,
+            ]),
+        }]
+    else:
+        first_user = "\n\n".join([
+            read_prompt("prompt_short.md", profile),
+            PASS1_COMPACT_INSTRUCTION,
+            input_to_text(inp),
+        ])
+        messages = [
             {"role": "user", "content": first_user},
             {"role": "assistant", "content": pass1_text},
             {"role": "user", "content": PASS2_COMPACT_INSTRUCTION + "\n\n" + normalized_approval},
-        ],
+        ]
+    return await call_model(
+        system_blocks=pass2_system(profile),
+        messages=messages,
         label=labeled_step(request_label, "PASS 2"),
         max_tokens=16384,
         cost_cb=cost_cb,
@@ -1094,31 +1164,52 @@ async def run_recruiter_review(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
+    prompt_profile: str = "stable",
+    pass1_audit: str = "",
 ) -> str:
-    parts = [
-        read_prompt("recruiter_short.md"),
-        RECRUITER_COMPACT_INSTRUCTION.strip(),
-        "",
-        HUMAN_TEXT_STYLE_RULE.strip(),
-        "",
-        "TARGET COMPANY:",
-        company.strip(),
-        "TARGET TITLE:",
-        title.strip(),
-        "",
-        "JD:",
-        jd.strip(),
-        "",
-    ]
-    if des.strip():
-        parts += ["Des:", des.strip(), ""]
-    parts += ["Resume 1:", json.dumps(resume1_json, indent=2)]
-    if resume2_json:
-        parts += ["", "Resume 2:", json.dumps(resume2_json, indent=2)]
+    profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        render_profile = build_render_profile(normalize_resume_json(copy.deepcopy(resume1_json)))
+        parts = [
+            HUMAN_TEXT_STYLE_RULE.strip(),
+            "",
+            "Original JD:",
+            jd.strip(),
+            "",
+            "Source resume JSON:",
+            json.dumps(resume1_json, indent=2),
+            "",
+            "Stage 1 audit:",
+            pass1_audit.strip() or "Not available.",
+            "",
+            "Render profile from manager.py:",
+            json.dumps(render_profile, indent=2),
+        ]
+    else:
+        parts = [
+            read_prompt("recruiter_short.md", profile),
+            RECRUITER_COMPACT_INSTRUCTION.strip(),
+            "",
+            HUMAN_TEXT_STYLE_RULE.strip(),
+            "",
+            "TARGET COMPANY:",
+            company.strip(),
+            "TARGET TITLE:",
+            title.strip(),
+            "",
+            "JD:",
+            jd.strip(),
+            "",
+        ]
+        if des.strip():
+            parts += ["Des:", des.strip(), ""]
+        parts += ["Resume 1:", json.dumps(resume1_json, indent=2)]
+        if resume2_json:
+            parts += ["", "Resume 2:", json.dumps(resume2_json, indent=2)]
     return await call_model(
-        system_blocks=recruiter_system(),
+        system_blocks=recruiter_system(profile),
         messages=[{"role": "user", "content": "\n".join(parts)}],
-        label=labeled_step(request_label, "RECRUITER REVIEW"),
+        label=labeled_step(request_label, "FINAL CHECK" if profile == "v1" else "RECRUITER REVIEW"),
         max_tokens=16384,
         cost_cb=cost_cb,
         output_validator=validate_json_response,

@@ -75,6 +75,67 @@ class LinkedinMessageTests(unittest.TestCase):
         self.assertIn("HIRING MANAGER LINKEDIN MESSAGE", user_text)
 
 
+class PromptProfileTests(unittest.TestCase):
+    def test_prompt_profile_options_resolve_to_stable_and_v1(self):
+        labels = pipeline.prompt_profile_options()
+        self.assertEqual(
+            {pipeline.resolve_prompt_profile_label(label) for label in labels},
+            {"stable", "v1"},
+        )
+        self.assertEqual(pipeline.resolve_prompt_profile_label("Prompt_V1"), "v1")
+        self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
+
+    def test_v1_pass1_uses_v1_system_without_stable_compact_override(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value="ok")) as call_mock:
+            asyncio.run(
+                pipeline.run_pass1(
+                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+                    prompt_profile="v1",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("PASS 1", system_text)
+        self.assertIn("Story.md", system_text)
+        self.assertNotIn("PASS 1 OUTPUT OVERRIDE FOR THIS APP", user_text)
+        self.assertIn("Company: Acme", user_text)
+
+    def test_v1_pass2_uses_pass2_prompt_and_pass1_context(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_resume_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_pass2(
+                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+                    pass1_text="PASS 1 PLAN",
+                    approval_text="Approved: 1",
+                    prompt_profile="v1",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("PASS 2", system_text)
+        self.assertIn("PASS 1 PLAN", user_text)
+        self.assertIn("APPROVED DES", user_text)
+
+    def test_v1_recruiter_review_routes_to_final_check_prompt(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_resume_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_recruiter_review(
+                    jd="Build APIs",
+                    resume1_json={"config": {}, "professional_experience": [], "projects": [], "education": []},
+                    company="Acme",
+                    title="Backend Engineer",
+                    prompt_profile="v1",
+                    pass1_audit="Stage 1 audit text",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("FINAL CHECK", system_text)
+        self.assertIn("Stage 1 audit text", user_text)
+        self.assertIn("Render profile from manager.py", user_text)
+        self.assertIn("FINAL CHECK", call_mock.await_args.kwargs["label"])
+
+
 class NvidiaModelProfileTests(unittest.TestCase):
     def fake_client(self, response):
         create = MagicMock(return_value=response)

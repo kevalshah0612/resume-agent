@@ -33,6 +33,9 @@ from pipeline import (
     nvidia_model_options,
     normalize_approval,
     normalize_resume_json,
+    prompt_profile_label,
+    prompt_profile_options,
+    resolve_prompt_profile_label,
     resolve_nvidia_model_option,
     run_application_answers,
     run_final_review,
@@ -191,18 +194,28 @@ class JobTab(ttk.Frame):
         output_header.columnconfigure(1, weight=1)
         self.output_title = tk.StringVar(value="Output")
         ttk.Label(output_header, textvariable=self.output_title).grid(row=0, column=0, sticky="w")
-        ttk.Label(output_header, text="Model").grid(row=0, column=2, sticky="e", padx=(8, 4))
+        ttk.Label(output_header, text="Prompt").grid(row=0, column=2, sticky="e", padx=(8, 4))
+        self.prompt_selector = ttk.Combobox(
+            output_header,
+            state="readonly",
+            width=18,
+            values=prompt_profile_options(),
+        )
+        self.prompt_selector.grid(row=0, column=3, sticky="e", padx=(0, 8))
+        self.prompt_selector.set(prompt_profile_label("stable"))
+        self.prompt_selector.bind("<<ComboboxSelected>>", self.on_prompt_profile_selected)
+        ttk.Label(output_header, text="Model").grid(row=0, column=4, sticky="e", padx=(8, 4))
         self.model_selector = ttk.Combobox(
             output_header,
             state="readonly",
             width=33,
             values=nvidia_model_options(),
         )
-        self.model_selector.grid(row=0, column=3, sticky="e", padx=(0, 8))
+        self.model_selector.grid(row=0, column=5, sticky="e", padx=(0, 8))
         self.model_selector.set(get_default_nvidia_model_option())
         self.model_selector.bind("<<ComboboxSelected>>", self.on_model_selected)
         self.output_selector = ttk.Combobox(output_header, state="readonly", width=34)
-        self.output_selector.grid(row=0, column=4, sticky="e")
+        self.output_selector.grid(row=0, column=6, sticky="e")
         self.output_selector.bind("<<ComboboxSelected>>", self.on_output_selected)
         self.output = self._text_box(right, 1, height=28, sticky="nsew")
 
@@ -258,16 +271,31 @@ class JobTab(ttk.Frame):
     def selected_nvidia_profile(self) -> tuple[str, bool]:
         return resolve_nvidia_model_option(self.model_selector.get())
 
+    def selected_prompt_profile(self) -> str:
+        return resolve_prompt_profile_label(self.prompt_selector.get())
+
+    def on_prompt_profile_selected(self, _event=None) -> None:
+        self.recruiter_btn.config(
+            text="Final Check" if self.selected_prompt_profile() == "v1" else "Recruiter"
+        )
+        if not self.request_dir:
+            return
+        self.update_request_metadata({
+            "prompt profile": f"Prompt Profile: {self.selected_prompt_profile()}",
+        })
+
     def on_model_selected(self, _event=None) -> None:
         if not self.request_dir:
             return
-        metadata_path = self.existing_request_file("request") or self.request_file("request")
-        lines = metadata_path.read_text(encoding="utf-8").splitlines() if metadata_path.exists() else []
         model, thinking = self.selected_nvidia_profile()
-        updates = {
+        self.update_request_metadata({
             "nvidia model": f"NVIDIA Model: {model}",
             "nvidia thinking": f"NVIDIA Thinking: {'ON' if thinking else 'OFF'}",
-        }
+        })
+
+    def update_request_metadata(self, updates: dict[str, str]) -> None:
+        metadata_path = self.existing_request_file("request") or self.request_file("request")
+        lines = metadata_path.read_text(encoding="utf-8").splitlines() if metadata_path.exists() else []
         found: set[str] = set()
         for index, line in enumerate(lines):
             key = line.partition(":")[0].strip().lower()
@@ -588,6 +616,7 @@ class JobTab(ttk.Frame):
         self.request_dir = REQUESTS_DIR / self.request_id
         self.request_dir.mkdir(parents=True, exist_ok=True)
         nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+        prompt_profile = self.selected_prompt_profile()
         save_text(
             self.request_file("request"),
             "\n".join([
@@ -596,6 +625,7 @@ class JobTab(ttk.Frame):
                 f"Title: {inp.title}",
                 f"Words: {inp.words}",
                 f"DES: {inp.des}",
+                f"Prompt Profile: {prompt_profile}",
                 f"NVIDIA Model: {nvidia_model}",
                 f"NVIDIA Thinking: {'ON' if nvidia_thinking else 'OFF'}",
             ]),
@@ -619,6 +649,7 @@ class JobTab(ttk.Frame):
         ):
             button.config(state=state)
         self.model_selector.configure(state="disabled" if busy else "readonly")
+        self.prompt_selector.configure(state="disabled" if busy else "readonly")
         if busy and cancellable:
             self.cancel_event.clear()
             self.stop_btn.config(state="normal")
@@ -675,6 +706,7 @@ class JobTab(ttk.Frame):
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
@@ -690,6 +722,7 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
             ))
             return result, events
 
@@ -719,6 +752,7 @@ class JobTab(ttk.Frame):
             approval_raw = self.text_value(self.approval)
             approval = normalize_approval(approval_raw)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Missing step", str(exc), parent=self)
             return
@@ -737,6 +771,7 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
             ))
             save_text(self.request_file("resume_process", request_dir), raw)
             try:
@@ -784,6 +819,7 @@ class JobTab(ttk.Frame):
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
@@ -799,6 +835,7 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
             ))
             approval_raw = self.approve_all_des_text(pass1_raw)
             approval = normalize_approval(approval_raw)
@@ -811,6 +848,7 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
             ))
             save_text(self.request_file("resume_process", request_dir), pass2_raw)
             try:
@@ -867,11 +905,16 @@ class JobTab(ttk.Frame):
             resume_json = normalize_resume_json(json.loads(self.final_json_path.read_text(encoding="utf-8")))
             approval = self.text_value(self.approval)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Recruiter review needs input", str(exc), parent=self)
             return
 
-        self.set_busy(True, "Recruiter review running...", cancellable=True)
+        self.set_busy(
+            True,
+            "Final check running..." if prompt_profile == "v1" else "Recruiter review running...",
+            cancellable=True,
+        )
 
         def task():
             events: list[CostEvent] = []
@@ -886,6 +929,8 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
+                pass1_audit=self.pass1_raw,
             ))
             save_text(self.request_file("recruiter_process", request_dir), raw)
             try:
@@ -898,23 +943,29 @@ class JobTab(ttk.Frame):
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            self.set_busy(False, "Recruiter JSON ready" if not err else "Recruiter call failed")
+            ready_message = "Final check JSON ready" if prompt_profile == "v1" else "Recruiter JSON ready"
+            failed_message = "Final check failed" if prompt_profile == "v1" else "Recruiter call failed"
+            self.set_busy(False, ready_message if not err else failed_message)
             if err:
-                messagebox.showerror("Recruiter review call failed", str(err), parent=self)
+                title = "Final check failed" if prompt_profile == "v1" else "Recruiter review call failed"
+                messagebox.showerror(title, str(err), parent=self)
                 return
             raw, data, events, parse_error = result
             if not self.show_and_save_linkedin_outreach(request_dir, raw):
-                self.show_output("Recruiter Review", self.response_summary(raw) or "Recruiter JSON is ready.")
+                title = "Final Check" if prompt_profile == "v1" else "Recruiter Review"
+                fallback = "Final check JSON is ready." if prompt_profile == "v1" else "Recruiter JSON is ready."
+                self.show_output(title, self.response_summary(raw) or fallback)
             self.add_cost_events(events)
             if parse_error:
-                self.set_stage("Recruiter raw response saved; JSON not extracted")
+                self.set_stage("Final check raw response saved; JSON not extracted" if prompt_profile == "v1" else "Recruiter raw response saved; JSON not extracted")
                 return
             self.recruiter_json_path = self.request_file("recruiter_json", request_dir)
             save_json(self.recruiter_json_path, data)
             self.final_qa_json_path = None
             self.final_json_path = self.recruiter_json_path
             self.select_output_artifact("Output | Recruiter Resume JSON")
-            self.set_stage(f"Recruiter JSON: {self.recruiter_json_path.name}")
+            label = "Final check JSON" if prompt_profile == "v1" else "Recruiter JSON"
+            self.set_stage(f"{label}: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)
 
@@ -1251,6 +1302,9 @@ class JobTab(ttk.Frame):
         replace(self.title_text, metadata.get("title", "") or "Software Engineer")
         replace(self.words, metadata.get("words", ""))
         replace(self.des, metadata.get("des", ""))
+        saved_profile = metadata.get("prompt profile", "stable")
+        self.prompt_selector.set(prompt_profile_label(saved_profile))
+        self.on_prompt_profile_selected()
         saved_model = metadata.get("nvidia model", "")
         saved_thinking = metadata.get("nvidia thinking", "ON").upper() != "OFF"
         if saved_model:
@@ -1349,6 +1403,8 @@ class JobTab(ttk.Frame):
         self.output_title.set("Output")
         self.output_selector.configure(values=())
         self.output_selector.set("")
+        self.prompt_selector.set(prompt_profile_label("stable"))
+        self.on_prompt_profile_selected()
         self.model_selector.set(get_default_nvidia_model_option())
         self.cost_label.config(text="$0.0000")
         self.set_stage("Ready")
