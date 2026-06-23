@@ -87,18 +87,18 @@ PDF_DIR = "Resume-pdf"
 
 # ── Configs ──────────────────────────────────────────────────────────────────
 CONFIGS = {
-    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 4): {"label": "SWE Backend Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "projects", "experience"]},
-    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 4): {"label": "SWE Backend Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Expected Aug 2026", "order": ["education", "skills", "projects", "experience"]},
+    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
 }
 
 
@@ -337,6 +337,83 @@ def bool_value(value: Any, default: bool = False) -> bool:
     if raw in {"false", "no", "0", "n"}:
         return False
     return default
+
+
+def build_render_profile(data: dict) -> dict[str, Any]:
+    """Describe the exact content order the DOCX renderer will use."""
+    cfg = config(data)
+    rtype = normalize_type(cfg.get("type", "fullstack"))
+    level = normalize_level(cfg.get("level", 3))
+    layout_profile = normalize_layout_profile(cfg.get("layout_profile", ""), rtype, level)
+    conf = CONFIGS[(rtype, level)]
+    configured_sections = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+
+    present = {
+        "summary": bool(clean(data.get("summary", ""))),
+        "education": bool(data.get("education")),
+        "skills": bool(get_skills_rows(data)),
+        "experience": bool(get_jobs(data)),
+        "projects": bool(get_projects(data)),
+    }
+    rendered_sections = [section for section in configured_sections if present.get(section, False)]
+    jobs = ordered_experience(data, level, layout_profile)
+    projects = get_projects(data)
+    education = data.get("education") or []
+    render_ta = level in {2, 4} and bool_value(cfg.get("ta_active"), default=False)
+
+    return {
+        "resume_type": rtype,
+        "level": level,
+        "level_label": "Entry/SWE I" if level == 2 else "Mid" if level == 3 else "Intern",
+        "layout_profile": layout_profile,
+        "configured_section_order": list(configured_sections),
+        "rendered_section_order": rendered_sections,
+        "experience_order": [
+            {
+                "position": index,
+                "company": clean(job.get("company", "")),
+                "title": clean(job.get("title", "")),
+                "location": clean(job.get("location", "")),
+                "dates": clean(job.get("dates", "")),
+                "employment_note": clean(job.get("employment_note", "")),
+                "bullet_count": len(job.get("bullets") or []),
+            }
+            for index, job in enumerate(jobs, start=1)
+        ],
+        "education_order": [
+            {
+                "position": index,
+                "university": clean(item.get("university", "")),
+                "degree": clean(item.get("degree", "")),
+                "graduation": clean(item.get("graduation", "")) or (conf["grad"] if index == 1 else ""),
+            }
+            for index, item in enumerate(education, start=1)
+        ],
+        "project_order": [
+            {
+                "position": index,
+                "name": clean(project.get("name", "")),
+                "technology": get_project_tech(project),
+                "bullet_count": len(project.get("bullets") or []),
+            }
+            for index, project in enumerate(projects, start=1)
+        ],
+        "skill_rows": [
+            {"position": index, "label": label, "terms": terms}
+            for index, (label, terms) in enumerate(get_skills_rows(data), start=1)
+        ],
+        "ta_bullet_rendered_under_education": bool(
+            render_ta
+            and education
+            and clean(education[0].get("ta_bullet", ""))
+        ),
+        "renderer_constraints": {
+            "experience_order_is_calculated_from_layout": True,
+            "empty_sections_are_skipped": True,
+            "titles_render_exactly_from_json": True,
+            "bullet_counts_must_remain_unchanged_during_final_review": True,
+        },
+    }
 
 
 # ── PDF helpers ──────────────────────────────────────────────────────────────
@@ -637,7 +714,7 @@ def company_header(doc: Document, company: str, title: str, location: str, dates
     meta = []
     if clean(title):
         meta.append(clean(title))
-    if clean(location):
+    if location and location.strip():
         meta.append(clean(location))
 
     if meta:
@@ -765,6 +842,16 @@ def render_experience(doc: Document, data: dict, level: int, layout_profile: str
     section_heading(doc, "Professional Experience")
     for i, job in enumerate(jobs):
         company_header(doc, job.get("company", ""), job.get("title", ""), job.get("location", ""), job.get("dates", ""))
+        employment_note = str(job.get("employment_note", "") or "").strip()
+
+        if employment_note:
+            note_p = doc.add_paragraph()
+            note_p.paragraph_format.space_after = Pt(0)
+
+            note_run = note_p.add_run(employment_note)
+            note_run.italic = True
+            note_run.font.size = Pt(9.5)
+
         for b in job.get("bullets") or []:
             bullet(doc, b, bold_markers)
         if i < len(jobs) - 1:

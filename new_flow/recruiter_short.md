@@ -16,7 +16,15 @@ Task:
 4. Track changes silently and summarize only meaningful repair categories
 5. Do not add new tools, metrics, domains, users, testing types, projects, titles, dates, or leadership claims
 6. Evaluate coverage silently and mention only major unresolved risk in the short summary
-7. Output a recruiter summary of no more than 8 short lines, then one complete parseable JSON block with every object and array closed
+7. Output a recruiter summary of no more than 8 short lines, separate recruiter and hiring-manager LinkedIn messages, 4 search strings, then one complete parseable JSON block with every object and array closed
+
+Outreach rules:
+- each message has an independent hard maximum of 300 characters including spaces
+- both messages must name the exact TARGET TITLE and TARGET COMPANY supplied in the request
+- use one proof point supported by the selected final JSON, never a technology or achievement list
+- recruiter message may politely ask for the correct recruiter or for the resume to be passed along
+- hiring-manager message must connect the proof to one JD priority and ask one concise question about the team or role
+- avoid generic `would love to connect` language, flattery, desperation, and em dashes
 
 Final JSON must preserve exact schema from Recruiter.md and must not include banned keys.
 Do not add anything after the final JSON block.

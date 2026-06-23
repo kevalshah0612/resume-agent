@@ -109,10 +109,9 @@ Education:
 1. Binghamton University, State University of New York
    - Master of Science, Computer Science, AI Specialization, GPA: 4.00
    - Binghamton, NY
-   - Jan 2025 - May 2026 for non-internship full-time roles
-   - Jan 2025 - Dec 2026 for internship, co-op, student intern, or summer intern roles
-   - Graduation date usage lock: final JSON must use the full date range, not only May 2026 or Dec 2026
-   - Use AI specialization prominently for AI tooling, AI/ML, automation, and new-grad roles
+   - Expected Aug 2026
+   - Coursework complete except final project
+   - Use AI specialization prominently only for AI/ML, AI tooling, automation, data, and new-grad roles
 
 2. Gujarat Technological University
    - Bachelor of Engineering, Computer Engineering, GPA: 3.85
@@ -121,16 +120,23 @@ Education:
    - Resume compact form may use: Bachelor of Engineering, Computer Engineering | 2020
 
 Professional experience:
-1. Global Health Impact
-   - Software Engineering Intern
+1. Global Health Impact Project
+   - Software Engineer
    - New York, NY
    - Jun 2025 - Aug 2025
+   - University-connected graduate applied project
+   - Do not call this role an internship role
 
 2. Tata Consultancy Services
    - Software Engineer II
-   - Gandhinagar, India
-   - Oct 2022 - Dec 2024
-   - Client context: Wabtec Corporation, Fortune 500; use only inside bullets when relevant
+   - Oct 2022 - Present
+   - Resume visible location: blank
+   - Resume employment note:
+     On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization
+   - Active engineering delivery completed through Dec 2024
+   - All Software Engineer II bullets must use past tense
+   - Do not imply active engineering delivery during academic leave
+   - Do not mention paid or unpaid leave in the resume
 
 3. Tata Consultancy Services
    - Software Engineer
@@ -484,7 +490,7 @@ Metrics: 3+ appreciations
 JD terms: quality, delivery, recognition, ownership
 Limits: Use only if space and JD values ownership/quality
 
-## 9. Global Health Impact Evidence Cards
+## 9. Global Health Impact Project Evidence Cards
 
 ### ID: GHI-DASHBOARD
 Proof: P1 HIGH
@@ -817,7 +823,7 @@ Raw TCS operations context:
 Used GitLab/CI/CD built by team, managed servers across applications, created dashboards, Python cleanup scripts, Docker/Kubernetes rebuild workflows, and periodic automated operational processes.
 
 Raw GHI context:
-Global Health Impact is a research initiative measuring how pharmaceutical drugs reduce disease burden for TB, malaria, HIV/AIDS, and neglected tropical diseases. Internship work involved a team of 6 developers, processing CSV/WHO health data, extracting disease/drug data, building React/HTML/CSS dashboards, world maps, parameter tuning, drug selection, and ML models for country-wise predictions.
+Global Health Impact Project is a research initiative measuring how pharmaceutical drugs reduce disease burden for TB, malaria, HIV/AIDS, and neglected tropical diseases. GHI graduate applied project work involved a team of 6 developers, processing CSV/WHO health data, extracting disease/drug data, building React/HTML/CSS dashboards, world maps, parameter tuning, drug selection, and ML models for country-wise predictions.
 
 Raw TA context:
 TA for Database Systems and Object-Oriented Programming. Trained/reviewed students on database optimization, concurrency, relational/non-relational projects, OOP, C++, Java, debugging, code review, and 120+ students.

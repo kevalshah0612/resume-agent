@@ -15,6 +15,7 @@ when enabled.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import re
@@ -29,15 +30,18 @@ from typing import Any, Callable
 
 import anthropic
 
+from manager import build_render_profile
+
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "new_flow"
+FINAL_QA_PROMPT_DIR = ROOT / "claude_resume_workflow"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
 ENV_FILE = ROOT / ".env"
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
-DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-super-120b-a12b"
+DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 DEFAULT_NVIDIA_MAX_ATTEMPTS = 5
 DEFAULT_NVIDIA_REASONING_BUDGET = 16384
 
@@ -72,12 +76,16 @@ PASS2_COMPACT_INSTRUCTION = """
 Generate the final resume JSON now using the approved DES IDs below.
 Perform all audits silently. Output only these sections in this order:
 1. CONFIDENCE SUMMARY: maximum 5 short lines
-2. LINKEDIN MESSAGE: exactly one message, maximum 300 characters including spaces
-3. RECRUITER/HM SEARCH STRINGS: exactly 4 search strings
-4. FINAL JSON: exactly one complete valid JSON code block
+2. RECRUITER LINKEDIN MESSAGE: exactly one recruiter cold outreach, maximum 300 characters including spaces
+3. HIRING MANAGER LINKEDIN MESSAGE: exactly one hiring-manager cold outreach, maximum 300 characters including spaces
+4. RECRUITER/HM SEARCH STRINGS: exactly 4 search strings
+5. FINAL JSON: exactly one complete valid JSON code block
 Do not print audit tables, coverage tables, diagnostics, scratch work, or a follow-up message.
 Do not add anything after the JSON block.
-Style rule for LinkedIn/message text: use ASCII punctuation only. Do not use em dashes or en dashes. Use commas, periods, semicolons, or simple hyphens instead.
+Both messages must name the exact target title and company, use one evidence-supported proof point, and use ASCII punctuation only.
+Recruiter message: politely ask for the correct recruiter or for the resume to be passed along if the recipient is not responsible for the role.
+Hiring-manager message: connect the proof point to a real JD priority and ask one low-friction question about the team or role.
+Do not use em dashes or en dashes. Do not use "would love to connect," generic praise, desperation, or a list of technologies.
 """
 
 RECRUITER_COMPACT_INSTRUCTION = """
@@ -85,9 +93,53 @@ RECRUITER OUTPUT OVERRIDE FOR THIS APP:
 Perform every recruiter, ATS, evidence, bullet, skills, schema, and quality check silently.
 Output only:
 1. RECRUITER SUMMARY: maximum 8 short lines covering picked resume, major fixes, remaining risks, and confidence
-2. FINAL JSON: exactly one complete valid JSON code block
+2. RECRUITER LINKEDIN MESSAGE: one role-specific message, maximum 300 characters
+3. HIRING MANAGER LINKEDIN MESSAGE: one role-specific message, maximum 300 characters
+4. RECRUITER/HM SEARCH STRINGS: exactly 4 search strings
+5. FINAL JSON: exactly one complete valid JSON code block
+Both messages must name TARGET TITLE and TARGET COMPANY and use only a proof point supported by the selected final JSON.
+Recruiter message may politely ask for the correct recruiter or for the resume to be passed along.
+Hiring-manager message must connect one proof point to a JD priority and ask one concise team- or role-specific question.
+Use ASCII punctuation. Avoid generic `would love to connect` language, flattery, desperation, and technology lists.
 Do not output audit tables, OLD -> NEW tables, coverage matrices, quality-gate tables, or long explanations.
 Do not add anything after the JSON block.
+"""
+
+FINAL_QA_CONTRACT = """
+You are the final evidence-safe resume quality gate for this application.
+
+SOURCE OF TRUTH AND EDITING RULES:
+- The supplied source resume JSON is the only editable resume source.
+- The job description is a targeting reference, never evidence that the candidate has a skill.
+- The render profile is authoritative for section order, level, layout, experience order, project order, TA placement, and visible counts.
+- Never invent or infer a metric, technology, framework, domain, user count, business result, title, employer, date, project, degree, location, leadership claim, or responsibility.
+- Never emit placeholders such as [FILL IN], TBD, TODO, optional, or invented estimates.
+- Preserve the exact JSON schema, key set, value types, list lengths, config object, identity/contact fields, role identities, role array order, project identities/order, education identities/order, employment_note values, and bullet counts.
+- Preserve employment_note exactly. Do not create, remove, or rewrite it.
+- Do not move evidence between roles or projects.
+- You may improve summary text, reorder supported skill terms within existing fields, and rewrite existing bullets using only facts already visible in the source JSON.
+- Keep rewritten bullets concise and no longer than needed. Do not expand content in a way likely to change the one-page layout.
+- Use ASCII punctuation. Do not use em dashes or en dashes.
+- Return complete output. If JSON is requested, close every object and array and output exactly one complete JSON code block.
+"""
+
+FINAL_QA_REPAIR_OUTPUT = """
+Apply only the audit fixes that are supported by the source JSON and compatible with the locked render profile.
+Preserve employment_note exactly. Do not create, remove, or rewrite it.
+Output only:
+1. REPAIR SUMMARY: maximum 8 short lines
+2. FINAL JSON: exactly one complete valid JSON code block
+Do not output tables, placeholders, alternatives, or text after the JSON block.
+"""
+
+FINAL_QA_SCAN_OUTPUT = """
+Independently scan the repaired JSON against the JD, original audit, source JSON, and locked render profile.
+Fix only remaining evidence-supported problems. Preserve every locked structural and identity rule.
+Preserve employment_note exactly. Do not create, remove, or rewrite it.
+Output only:
+1. FINAL QA SUMMARY: maximum 8 short lines including ATS verdict, hiring-manager pile, remaining risk, and confidence
+2. FINAL JSON: exactly one complete valid JSON code block
+Do not output tables, alternatives, or text after the JSON block.
 """
 
 HUMAN_TEXT_STYLE_RULE = """
@@ -147,6 +199,41 @@ class NvidiaResponse:
     finish_reason: str
 
 
+@dataclass(frozen=True)
+class NvidiaModelSpec:
+    display_name: str
+    model_id: str
+    thinking_key: str
+    stream: bool
+
+
+NVIDIA_MODEL_SPECS = (
+    NvidiaModelSpec(
+        display_name="Nemotron 3 Ultra",
+        model_id="nvidia/nemotron-3-ultra-550b-a55b",
+        thinking_key="enable_thinking",
+        stream=True,
+    ),
+    NvidiaModelSpec(
+        display_name="DeepSeek V4 Pro",
+        model_id="deepseek-ai/deepseek-v4-pro",
+        thinking_key="thinking",
+        stream=False,
+    ),
+)
+
+
+@dataclass
+class FinalReviewResult:
+    audit_raw: str
+    repair_raw: str
+    repaired_json: dict[str, Any]
+    final_scan_raw: str
+    final_json: dict[str, Any]
+    render_profile: dict[str, Any]
+    restored_locks: list[str]
+
+
 class OperationCancelled(RuntimeError):
     pass
 
@@ -166,7 +253,8 @@ MODEL_PRICING_PER_MTOK = {
     "claude-sonnet-4-6": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-sonnet-4-5": {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
-    "nvidia/nemotron-3-super-120b-a12b": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
+    "nvidia/nemotron-3-ultra-550b-a55b": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
+    "deepseek-ai/deepseek-v4-pro": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
 }
 
 
@@ -197,6 +285,7 @@ def load_config() -> dict[str, Any]:
         "RESUME_AGENT_PROVIDER": "provider",
         "NVIDIA_API_KEY": "nvidia_api_key",
         "NVIDIA_MODEL": "model_nvidia",
+        "NVIDIA_THINKING": "nvidia_thinking",
         "NVIDIA_BASE_URL": "nvidia_base_url",
         "NVIDIA_MAX_ATTEMPTS": "nvidia_max_attempts",
         "NVIDIA_REASONING_BUDGET": "nvidia_reasoning_budget",
@@ -241,6 +330,10 @@ def get_nvidia_reasoning_budget() -> int:
     return configured
 
 
+def get_nvidia_thinking() -> bool:
+    return config_bool(load_config().get("nvidia_thinking"), True)
+
+
 def get_client() -> anthropic.AsyncAnthropic:
     cfg = load_config()
     key = os.environ.get("ANTHROPIC_API_KEY") or cfg.get("anthropic_api_key", "")
@@ -280,6 +373,42 @@ def get_model() -> str:
 def get_nvidia_model() -> str:
     cfg = load_config()
     return cfg.get("model_nvidia") or os.environ.get("NVIDIA_MODEL") or DEFAULT_NVIDIA_MODEL
+
+
+def get_nvidia_model_spec(model: str) -> NvidiaModelSpec:
+    spec = next((item for item in NVIDIA_MODEL_SPECS if item.model_id == model), None)
+    if not spec:
+        allowed = ", ".join(item.model_id for item in NVIDIA_MODEL_SPECS)
+        raise ValueError(f"Unsupported NVIDIA model: {model}. Allowed models: {allowed}")
+    return spec
+
+
+def nvidia_model_option_label(model: str, thinking: bool) -> str:
+    spec = get_nvidia_model_spec(model)
+    return f"{spec.display_name} | Thinking {'ON' if thinking else 'OFF'}"
+
+
+def nvidia_model_options() -> list[str]:
+    return [
+        nvidia_model_option_label(spec.model_id, thinking)
+        for spec in NVIDIA_MODEL_SPECS
+        for thinking in (True, False)
+    ]
+
+
+def resolve_nvidia_model_option(label: str) -> tuple[str, bool]:
+    for spec in NVIDIA_MODEL_SPECS:
+        for thinking in (True, False):
+            if label == nvidia_model_option_label(spec.model_id, thinking):
+                return spec.model_id, thinking
+    return get_nvidia_model(), get_nvidia_thinking()
+
+
+def get_default_nvidia_model_option() -> str:
+    model = get_nvidia_model()
+    if not any(spec.model_id == model for spec in NVIDIA_MODEL_SPECS):
+        model = DEFAULT_NVIDIA_MODEL
+    return nvidia_model_option_label(model, get_nvidia_thinking())
 
 
 def get_nvidia_client():
@@ -335,35 +464,52 @@ def call_nvidia_sync(
     system_blocks: list[dict[str, Any]],
     messages: list[dict[str, str]],
     model: str,
+    thinking: bool,
     max_tokens: int,
     cancel_event: threading.Event | None = None,
 ) -> NvidiaResponse:
     raise_if_cancelled(cancel_event)
     client = get_nvidia_client()
-    reasoning_budget = get_nvidia_reasoning_budget()
-    stream = client.chat.completions.create(
+    spec = get_nvidia_model_spec(model)
+    extra_body: dict[str, Any] = {
+        "chat_template_kwargs": {spec.thinking_key: thinking},
+    }
+    if thinking and spec.model_id == "nvidia/nemotron-3-ultra-550b-a55b":
+        extra_body["reasoning_budget"] = get_nvidia_reasoning_budget()
+    completion = client.chat.completions.create(
         model=model,
         messages=openai_messages(system_blocks, messages),
         temperature=1,
         top_p=0.95,
         max_tokens=max_tokens,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": True},
-            "reasoning_budget": reasoning_budget,
-        },
-        stream=True,
+        extra_body=extra_body,
+        stream=spec.stream,
     )
-    parts: list[str] = []
-    finish_reason = ""
     usage_data = {
         "input_tokens": 0,
         "output_tokens": 0,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
     }
-    for chunk in stream:
+
+    if not spec.stream:
+        raise_if_cancelled(cancel_event)
+        usage = getattr(completion, "usage", None)
+        if usage is not None:
+            usage_data["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+            usage_data["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+        choice = completion.choices[0]
+        return NvidiaResponse(
+            text=(getattr(choice.message, "content", None) or "").strip(),
+            usage=usage_data,
+            finish_reason=str(getattr(choice, "finish_reason", "") or ""),
+        )
+
+    parts: list[str] = []
+    finish_reason = ""
+    for chunk in completion:
         if cancel_event and cancel_event.is_set():
-            close_stream = getattr(stream, "close", None)
+            close_stream = getattr(completion, "close", None)
             if callable(close_stream):
                 try:
                     close_stream()
@@ -397,6 +543,13 @@ def read_prompt(name: str) -> str:
         if not matches:
             raise FileNotFoundError(f"Missing prompt file: {path}")
         path = matches[0]
+    return path.read_text(encoding="utf-8")
+
+
+def read_final_qa_prompt(name: str) -> str:
+    path = FINAL_QA_PROMPT_DIR / name
+    if not path.exists():
+        raise FileNotFoundError(f"Missing Final QA workflow prompt: {path}")
     return path.read_text(encoding="utf-8")
 
 
@@ -448,12 +601,24 @@ def normalize_approval(text: str) -> str:
     return f"Apply {approved}\nCONFIRM"
 
 
-def linkedin_message_span(text: str) -> tuple[int, int] | None:
+def linkedin_message_span(text: str, audience: str = "") -> tuple[int, int] | None:
+    audience_prefix = ""
+    if audience == "recruiter":
+        audience_prefix = r"recruiter[ \t]+"
+    elif audience in {"hiring_manager", "hm"}:
+        audience_prefix = r"(?:hiring[ \t]+manager|hm)[ \t]+"
     heading = re.search(
-        r"(?im)^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?linkedin(?: connection)? message"
+        r"(?im)^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?" + audience_prefix
+        + r"linkedin(?: connection)? message"
         r"(?: under 300 characters)?(?:\*\*)?[ \t]*:?[ \t]*\r?$",
         text,
     )
+    if not heading and not audience:
+        heading = re.search(
+            r"(?im)^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?linkedin(?: connection)? message"
+            r"(?: under 300 characters)?(?:\*\*)?[ \t]*:?[ \t]*\r?$",
+            text,
+        )
     if not heading:
         return None
     content_start = heading.end()
@@ -464,7 +629,8 @@ def linkedin_message_span(text: str) -> tuple[int, int] | None:
     remainder = text[content_start:]
     next_section = re.search(
         r"(?im)^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?"
-        r"(?:recruiter(?:/hm)? search strings?|hiring manager search strings?|search strings?|"
+        r"(?:(?:recruiter|hiring manager|hm)[ \t]+linkedin(?: connection)? message|"
+        r"recruiter(?:/hm)? search strings?|hiring manager search strings?|search strings?|"
         r"follow-?up message|final json|```json)",
         remainder,
     )
@@ -476,8 +642,8 @@ def linkedin_message_span(text: str) -> tuple[int, int] | None:
     return (content_start, content_end) if content_start < content_end else None
 
 
-def extract_linkedin_message(text: str) -> str:
-    span = linkedin_message_span(text)
+def extract_linkedin_message(text: str, audience: str = "") -> str:
+    span = linkedin_message_span(text, audience)
     if not span:
         return ""
     message = re.sub(r"\s+", " ", text[span[0]:span[1]]).strip()
@@ -502,12 +668,19 @@ def shorten_linkedin_message(message: str, limit: int = 300) -> str:
 
 
 def enforce_linkedin_message_limit(text: str, limit: int = 300) -> str:
-    span = linkedin_message_span(text)
-    if not span:
-        return text
-    message = extract_linkedin_message(text)
-    shortened = shorten_linkedin_message(message, limit)
-    return text[:span[0]] + shortened + text[span[1]:]
+    spans: list[tuple[int, int]] = []
+    for audience in ("recruiter", "hiring_manager"):
+        span = linkedin_message_span(text, audience)
+        if span and span not in spans:
+            spans.append(span)
+    if not spans:
+        legacy_span = linkedin_message_span(text)
+        if legacy_span:
+            spans.append(legacy_span)
+    for start, end in sorted(spans, reverse=True):
+        message = re.sub(r"\s+", " ", text[start:end]).strip().strip("* ")
+        text = text[:start] + shorten_linkedin_message(message, limit) + text[end:]
+    return text
 
 
 def validate_json_response(text: str) -> str | None:
@@ -516,6 +689,10 @@ def validate_json_response(text: str) -> str | None:
     except Exception as exc:
         return f"invalid or incomplete JSON: {exc}"
     return None
+
+
+def validate_nonempty_response(text: str) -> str | None:
+    return None if text.strip() else "missing required response"
 
 
 def validate_pass1_response(text: str) -> str | None:
@@ -530,14 +707,140 @@ def validate_resume_response(text: str) -> str | None:
     json_error = validate_json_response(text)
     if json_error:
         return json_error
-    message = extract_linkedin_message(text)
-    if not message:
-        return "missing LinkedIn message"
-    if len(message) > 300:
-        return f"LinkedIn message is {len(message)} characters; maximum is 300"
-    if "\u2014" in message or "\u2013" in message:
-        return "LinkedIn message contains an em dash or en dash"
+    messages = {
+        "Recruiter LinkedIn message": extract_linkedin_message(text, "recruiter"),
+        "Hiring manager LinkedIn message": extract_linkedin_message(text, "hiring_manager"),
+    }
+    for label, message in messages.items():
+        if not message:
+            return f"missing {label}"
+        if len(message) > 300:
+            return f"{label} is {len(message)} characters; maximum is 300"
+        if "\u2014" in message or "\u2013" in message:
+            return f"{label} contains an em dash or en dash"
     return None
+
+
+def validate_same_json_shape(reference: Any, candidate: Any, path: str = "$") -> None:
+    if type(reference) is not type(candidate):
+        raise ValueError(
+            f"Final QA changed the JSON type at {path}: "
+            f"{type(reference).__name__} -> {type(candidate).__name__}"
+        )
+    if isinstance(reference, dict):
+        if set(reference) != set(candidate):
+            missing = sorted(set(reference) - set(candidate))
+            added = sorted(set(candidate) - set(reference))
+            raise ValueError(f"Final QA changed keys at {path}; missing={missing}, added={added}")
+        for key in reference:
+            validate_same_json_shape(reference[key], candidate[key], f"{path}.{key}")
+    elif isinstance(reference, list):
+        if len(reference) != len(candidate):
+            raise ValueError(
+                f"Final QA changed list length at {path}: {len(reference)} -> {len(candidate)}"
+            )
+        for index, (before, after) in enumerate(zip(reference, candidate)):
+            validate_same_json_shape(before, after, f"{path}[{index}]")
+
+
+def validate_final_review_candidate(reference: dict[str, Any], candidate: dict[str, Any]) -> None:
+    validate_same_json_shape(reference, candidate)
+
+    if reference.get("config") != candidate.get("config"):
+        raise ValueError("Final QA changed the locked config object")
+
+    for key in ("name", "contact", "linkedin_url", "github_url"):
+        if reference.get(key) != candidate.get(key):
+            raise ValueError(f"Final QA changed locked identity field: {key}")
+
+    def compare_records(
+        collection_names: tuple[str, ...],
+        locked_fields: tuple[str, ...],
+        label: str,
+    ) -> None:
+        collection_name = next((name for name in collection_names if name in reference), collection_names[0])
+        before_items = reference.get(collection_name) or []
+        after_items = candidate.get(collection_name) or []
+        for index, (before, after) in enumerate(zip(before_items, after_items)):
+            for field in locked_fields:
+                if before.get(field) != after.get(field):
+                    raise ValueError(
+                        f"Final QA changed locked {label} field at index {index}: {field}"
+                    )
+
+    compare_records(
+        ("experience", "professional_experience"),
+        ("company", "title", "location", "dates", "employment_note"),
+        "experience",
+    )
+    compare_records(
+        ("projects",),
+        ("name", "github_url", "tech_label", "tech"),
+        "project",
+    )
+    compare_records(
+        ("education",),
+        ("university", "location", "degree", "graduation"),
+        "education",
+    )
+
+    before_skills = reference.get("skills")
+    after_skills = candidate.get("skills")
+    if isinstance(before_skills, dict) and isinstance(after_skills, dict):
+        for key, value in before_skills.items():
+            if key.endswith("_label") and after_skills.get(key) != value:
+                raise ValueError(f"Final QA changed locked skill-row label: {key}")
+
+
+def restore_final_review_locks(
+    reference: dict[str, Any],
+    candidate: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Restore identity and renderer-locked values without discarding safe text edits."""
+    restored = copy.deepcopy(candidate)
+    changes: list[str] = []
+
+    def restore_value(container: dict[str, Any], source: dict[str, Any], key: str, path: str) -> None:
+        if source.get(key) != container.get(key):
+            container[key] = copy.deepcopy(source.get(key))
+            changes.append(path)
+
+    restore_value(restored, reference, "config", "config")
+    for key in ("name", "contact", "linkedin_url", "github_url"):
+        restore_value(restored, reference, key, key)
+
+    def restore_records(
+        collection_names: tuple[str, ...],
+        locked_fields: tuple[str, ...],
+    ) -> None:
+        collection_name = next((name for name in collection_names if name in reference), collection_names[0])
+        before_items = reference.get(collection_name) or []
+        after_items = restored.get(collection_name) or []
+        for index, (before, after) in enumerate(zip(before_items, after_items)):
+            if not isinstance(before, dict) or not isinstance(after, dict):
+                continue
+            for field in locked_fields:
+                restore_value(after, before, field, f"{collection_name}[{index}].{field}")
+
+    restore_records(
+        ("experience", "professional_experience"),
+        ("company", "title", "location", "dates", "employment_note"),
+    )
+    restore_records(("projects",), ("name", "github_url", "tech_label", "tech"))
+    restore_records(
+        ("education",),
+        ("university", "location", "degree", "graduation"),
+    )
+
+    before_skills = reference.get("skills")
+    after_skills = restored.get("skills")
+    if isinstance(before_skills, dict) and isinstance(after_skills, dict):
+        for key, value in before_skills.items():
+            if key.endswith("_label") and after_skills.get(key) != value:
+                after_skills[key] = copy.deepcopy(value)
+                changes.append(f"skills.{key}")
+
+    return restored, changes
 
 
 async def call_model(
@@ -550,12 +853,20 @@ async def call_model(
     output_validator: Callable[[str], str | None] | None = None,
     retry_instruction: str = NVIDIA_RETRY_INSTRUCTION,
     cancel_event: threading.Event | None = None,
+    provider_override: str | None = None,
+    model_override: str | None = None,
+    nvidia_thinking_override: bool | None = None,
 ) -> str:
-    provider = get_provider()
+    provider = provider_override or get_provider()
     if provider == "nvidia":
-        model = get_nvidia_model()
+        model = model_override or get_nvidia_model()
     else:
         model = get_model()
+    nvidia_thinking = (
+        get_nvidia_thinking()
+        if nvidia_thinking_override is None
+        else nvidia_thinking_override
+    )
     t0 = time.monotonic()
 
     text = ""
@@ -567,6 +878,7 @@ async def call_model(
     finish_reason = ""
     last_error: Exception | None = None
     rejection_reason = ""
+    cancel_after_accounting = False
 
     if provider == "nvidia":
         max_attempts = get_nvidia_max_attempts() if output_validator else 1
@@ -588,6 +900,7 @@ async def call_model(
                     system_blocks=system_blocks,
                     messages=attempt_messages,
                     model=model,
+                    thinking=nvidia_thinking,
                     max_tokens=max_tokens,
                     cancel_event=cancel_event,
                 )
@@ -646,7 +959,7 @@ async def call_model(
             messages=messages,
         )
         text = resp.content[0].text.strip()
-        raise_if_cancelled(cancel_event)
+        cancel_after_accounting = bool(cancel_event and cancel_event.is_set())
         usage = resp.usage
         input_tokens = usage.input_tokens
         output_tokens = usage.output_tokens
@@ -661,8 +974,10 @@ async def call_model(
         cache_read,
     )
     elapsed = time.monotonic() - t0
+    thinking_log = f" thinking={'on' if nvidia_thinking else 'off'}" if provider == "nvidia" else ""
     log(
-        f"{label}: provider={provider} model={model} in={input_tokens} out={output_tokens} "
+        f"{label}: provider={provider} model={model}{thinking_log} "
+        f"in={input_tokens} out={output_tokens} "
         f"cache_read={cache_read} cache_create={cache_create} "
         f"attempts={attempts_used} finish_reason={finish_reason or 'unknown'} "
         f"cost=${estimated_cost:.4f} elapsed={elapsed:.1f}s"
@@ -670,7 +985,11 @@ async def call_model(
     if cost_cb:
         cost_cb(CostEvent(
             label=label,
-            model=f"{provider}:{model}",
+            model=(
+                f"{provider}:{model}:thinking={'on' if nvidia_thinking else 'off'}"
+                if provider == "nvidia"
+                else f"{provider}:{model}"
+            ),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_creation_input_tokens=cache_create,
@@ -679,6 +998,8 @@ async def call_model(
             attempts=attempts_used,
             finish_reason=finish_reason,
         ))
+    if cancel_after_accounting:
+        raise OperationCancelled("Operation stopped by user.")
     return text
 
 
@@ -702,6 +1023,8 @@ async def run_pass1(
     cost_cb=None,
     request_label: str = "",
     cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
 ) -> str:
     user_message = "\n\n".join([
         read_prompt("prompt_short.md"),
@@ -720,6 +1043,8 @@ async def run_pass1(
             + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
         ),
         cancel_event=cancel_event,
+        model_override=nvidia_model,
+        nvidia_thinking_override=nvidia_thinking,
     )
 
 
@@ -730,6 +1055,8 @@ async def run_pass2(
     cost_cb=None,
     request_label: str = "",
     cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
 ) -> str:
     first_user = "\n\n".join([
         read_prompt("prompt_short.md"),
@@ -749,6 +1076,8 @@ async def run_pass2(
         cost_cb=cost_cb,
         output_validator=validate_json_response,
         cancel_event=cancel_event,
+        model_override=nvidia_model,
+        nvidia_thinking_override=nvidia_thinking,
     )
 
 
@@ -756,17 +1085,26 @@ async def run_recruiter_review(
     *,
     jd: str,
     resume1_json: dict[str, Any],
+    company: str = "",
+    title: str = "",
     des: str = "",
     resume2_json: dict[str, Any] | None = None,
     cost_cb=None,
     request_label: str = "",
     cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
 ) -> str:
     parts = [
         read_prompt("recruiter_short.md"),
         RECRUITER_COMPACT_INSTRUCTION.strip(),
         "",
         HUMAN_TEXT_STYLE_RULE.strip(),
+        "",
+        "TARGET COMPANY:",
+        company.strip(),
+        "TARGET TITLE:",
+        title.strip(),
         "",
         "JD:",
         jd.strip(),
@@ -785,6 +1123,136 @@ async def run_recruiter_review(
         cost_cb=cost_cb,
         output_validator=validate_json_response,
         cancel_event=cancel_event,
+        model_override=nvidia_model,
+        nvidia_thinking_override=nvidia_thinking,
+    )
+
+
+async def run_final_review(
+    *,
+    jd: str,
+    source_resume_json: dict[str, Any],
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    progress_cb: Callable[[int, str], None] | None = None,
+    artifact_cb: Callable[[str, Any], None] | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+) -> FinalReviewResult:
+    source_resume_json = normalize_resume_json(source_resume_json)
+    render_profile = build_render_profile(source_resume_json)
+    if artifact_cb:
+        artifact_cb("render_profile", render_profile)
+    shared_context = "\n\n".join([
+        "JOB DESCRIPTION:",
+        jd.strip(),
+        "RENDER PROFILE GENERATED BY manager.py:",
+        json.dumps(render_profile, indent=2),
+        "SOURCE RESUME JSON:",
+        json.dumps(source_resume_json, indent=2),
+    ])
+    common_system = [
+        cached_text_block(FINAL_QA_CONTRACT.strip()),
+        cached_text_block(shared_context),
+    ]
+    model = nvidia_model or get_nvidia_model()
+    thinking = get_nvidia_thinking() if nvidia_thinking is None else nvidia_thinking
+
+    def progress(step: int, message: str) -> None:
+        if progress_cb:
+            progress_cb(step, message)
+
+    progress(1, "Final QA 1/3: auditing")
+    audit_raw = await call_model(
+        system_blocks=common_system + [cached_text_block(read_final_qa_prompt("01_Resume_Audit.md"))],
+        messages=[{
+            "role": "user",
+            "content": (
+                "Run the read-only resume audit now. Analyze the source JSON as it will render under "
+                "the supplied render profile. Do not rewrite the resume and do not output resume JSON."
+            ),
+        }],
+        label=labeled_step(request_label, "FINAL QA 1/3 AUDIT"),
+        max_tokens=16384,
+        cost_cb=cost_cb,
+        cancel_event=cancel_event,
+        output_validator=validate_nonempty_response,
+        provider_override="nvidia",
+        model_override=model,
+        nvidia_thinking_override=thinking,
+    )
+    if not audit_raw.strip():
+        raise ValueError("Final QA audit returned no output")
+    if artifact_cb:
+        artifact_cb("audit_raw", audit_raw)
+
+    progress(2, "Final QA 2/3: repairing JSON")
+    repair_raw = await call_model(
+        system_blocks=common_system + [cached_text_block(read_final_qa_prompt("02_Experience_Rewrite.md"))],
+        messages=[{
+            "role": "user",
+            "content": "\n\n".join([
+                "AUDIT FROM STAGE 1:",
+                audit_raw,
+                FINAL_QA_REPAIR_OUTPUT.strip(),
+            ]),
+        }],
+        label=labeled_step(request_label, "FINAL QA 2/3 REPAIR"),
+        max_tokens=16384,
+        cost_cb=cost_cb,
+        cancel_event=cancel_event,
+        output_validator=validate_json_response,
+        provider_override="nvidia",
+        model_override=model,
+        nvidia_thinking_override=thinking,
+    )
+    if artifact_cb:
+        artifact_cb("repair_raw", repair_raw)
+    repaired_json = extract_json(repair_raw)
+    repaired_json, repair_restored = restore_final_review_locks(source_resume_json, repaired_json)
+    validate_final_review_candidate(source_resume_json, repaired_json)
+    if artifact_cb:
+        artifact_cb("repaired_json", repaired_json)
+
+    progress(3, "Final QA 3/3: final scan")
+    final_scan_raw = await call_model(
+        system_blocks=common_system + [cached_text_block(read_final_qa_prompt("03_ATS_Hiring_Manager_Scan.md"))],
+        messages=[{
+            "role": "user",
+            "content": "\n\n".join([
+                "ORIGINAL AUDIT:",
+                audit_raw,
+                "REPAIRED JSON FROM STAGE 2:",
+                json.dumps(repaired_json, indent=2),
+                FINAL_QA_SCAN_OUTPUT.strip(),
+            ]),
+        }],
+        label=labeled_step(request_label, "FINAL QA 3/3 FINAL SCAN"),
+        max_tokens=16384,
+        cost_cb=cost_cb,
+        cancel_event=cancel_event,
+        output_validator=validate_json_response,
+        provider_override="nvidia",
+        model_override=model,
+        nvidia_thinking_override=thinking,
+    )
+    if artifact_cb:
+        artifact_cb("final_scan_raw", final_scan_raw)
+    final_json = extract_json(final_scan_raw)
+    final_json, scan_restored = restore_final_review_locks(source_resume_json, final_json)
+    validate_final_review_candidate(source_resume_json, final_json)
+    if artifact_cb:
+        artifact_cb("final_json", final_json)
+    progress(3, "Final QA JSON ready")
+    return FinalReviewResult(
+        audit_raw=audit_raw,
+        repair_raw=repair_raw,
+        repaired_json=repaired_json,
+        final_scan_raw=final_scan_raw,
+        final_json=final_json,
+        render_profile=render_profile,
+        restored_locks=sorted(set(repair_restored + scan_restored)),
     )
 
 
@@ -798,6 +1266,8 @@ async def run_application_answers(
     cost_cb=None,
     request_label: str = "",
     cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
 ) -> str:
     system_blocks = [cached_text_block(read_prompt("questions.md"))]
     user_message = "\n".join([
@@ -828,7 +1298,20 @@ async def run_application_answers(
         max_tokens=16384,
         cost_cb=cost_cb,
         cancel_event=cancel_event,
+        model_override=nvidia_model,
+        nvidia_thinking_override=nvidia_thinking,
     )
+
+
+def normalize_resume_json(data: dict[str, Any]) -> dict[str, Any]:
+    for collection_name in ("experience", "professional_experience"):
+        jobs = data.get(collection_name)
+        if not isinstance(jobs, list):
+            continue
+        for job in jobs:
+            if isinstance(job, dict):
+                job.setdefault("employment_note", "")
+    return data
 
 
 def extract_json(text: str) -> dict[str, Any]:
@@ -837,7 +1320,7 @@ def extract_json(text: str) -> dict[str, Any]:
     last_error: Exception | None = None
     for candidate in reversed(candidates):
         try:
-            return json.loads(candidate)
+            return normalize_resume_json(json.loads(candidate))
         except json.JSONDecodeError as exc:
             last_error = exc
     raise ValueError(f"Could not extract valid JSON from model output: {last_error}")

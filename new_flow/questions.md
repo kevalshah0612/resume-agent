@@ -91,6 +91,18 @@ NEED USER INPUT: [specific missing information]
 
 Never create a confident answer from incomplete information.
 
+## Candidate Education and Availability
+
+Education:
+- Completing an M.S. in Computer Science with an AI specialization at Binghamton University
+- Official expected completion: Aug 2026
+- Coursework complete except final project
+
+Availability:
+- Available to begin within one month, subject to confirmed university and OPT/work-authorization timing
+
+Do not mention the academic leave unless an application specifically asks about current employment or career history.
+
 ---
 
 ## Output Modes

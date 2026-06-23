@@ -1,7 +1,8 @@
 import asyncio
 import threading
 import unittest
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pipeline
 
@@ -14,10 +15,14 @@ EMPTY_USAGE = {
 }
 
 
-def valid_resume_response(message: str = "Hi [Name], I applied and would like to connect.") -> str:
+def valid_resume_response(
+    recruiter_message: str = "Hi [Name], I applied. Could you point me to the recruiter for this role?",
+    hiring_manager_message: str = "Hi [Name], I applied. Is platform reliability a key focus for this hire?",
+) -> str:
     return (
         "CONFIDENCE SUMMARY:\n- HIGH\n\n"
-        f"LinkedIn Message:\n{message}\n\n"
+        f"Recruiter LinkedIn Message:\n{recruiter_message}\n\n"
+        f"Hiring Manager LinkedIn Message:\n{hiring_manager_message}\n\n"
         "Recruiter/HM Search Strings:\n"
         "site:linkedin.com/in recruiter company\n\n"
         "```json\n{\"ok\": true}\n```"
@@ -26,16 +31,17 @@ def valid_resume_response(message: str = "Hi [Name], I applied and would like to
 
 class LinkedinMessageTests(unittest.TestCase):
     def test_extracts_only_message(self):
-        response = valid_resume_response("Hi [Name], concise message.")
+        response = valid_resume_response("Hi [Name], concise recruiter message.")
         self.assertEqual(
-            pipeline.extract_linkedin_message(response),
-            "Hi [Name], concise message.",
+            pipeline.extract_linkedin_message(response, "recruiter"),
+            "Hi [Name], concise recruiter message.",
         )
 
-    def test_hard_limit_preserves_search_strings(self):
-        response = valid_resume_response("word " * 100)
+    def test_hard_limit_shortens_both_messages_and_preserves_search_strings(self):
+        response = valid_resume_response("recruiter " * 100, "manager " * 100)
         limited = pipeline.enforce_linkedin_message_limit(response)
-        self.assertLessEqual(len(pipeline.extract_linkedin_message(limited)), 300)
+        self.assertLessEqual(len(pipeline.extract_linkedin_message(limited, "recruiter")), 300)
+        self.assertLessEqual(len(pipeline.extract_linkedin_message(limited, "hiring_manager")), 300)
         self.assertIn("Recruiter/HM Search Strings:", limited)
         self.assertIn("site:linkedin.com/in recruiter company", limited)
 
@@ -48,6 +54,118 @@ class LinkedinMessageTests(unittest.TestCase):
             valid_resume_response("I build APIs \u2014 and production systems.")
         )
         self.assertIn("em dash or en dash", error or "")
+
+    def test_recruiter_request_includes_exact_target_identity_and_two_messages(self):
+        with (
+            patch("pipeline.read_prompt", return_value="prompt"),
+            patch("pipeline.call_model", new=AsyncMock(return_value=valid_resume_response())) as call_mock,
+        ):
+            asyncio.run(
+                pipeline.run_recruiter_review(
+                    jd="Build secure signing systems.",
+                    resume1_json={"ok": True},
+                    company="MathWorks",
+                    title="Software Engineer - Code Signing",
+                )
+            )
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("TARGET COMPANY:\nMathWorks", user_text)
+        self.assertIn("TARGET TITLE:\nSoftware Engineer - Code Signing", user_text)
+        self.assertIn("RECRUITER LINKEDIN MESSAGE", user_text)
+        self.assertIn("HIRING MANAGER LINKEDIN MESSAGE", user_text)
+
+
+class NvidiaModelProfileTests(unittest.TestCase):
+    def fake_client(self, response):
+        create = MagicMock(return_value=response)
+        client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        )
+        return client, create
+
+    def test_dropdown_contains_only_two_models_with_both_thinking_modes(self):
+        options = pipeline.nvidia_model_options()
+        self.assertEqual(len(options), 4)
+        resolved = {pipeline.resolve_nvidia_model_option(option) for option in options}
+        self.assertEqual(
+            resolved,
+            {
+                ("nvidia/nemotron-3-ultra-550b-a55b", True),
+                ("nvidia/nemotron-3-ultra-550b-a55b", False),
+                ("deepseek-ai/deepseek-v4-pro", True),
+                ("deepseek-ai/deepseek-v4-pro", False),
+            },
+        )
+
+    def test_deepseek_uses_non_streaming_thinking_parameter(self):
+        completion = SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content="DeepSeek answer"),
+                finish_reason="stop",
+            )],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
+        )
+        client, create = self.fake_client(completion)
+        with patch("pipeline.get_nvidia_client", return_value=client):
+            response = pipeline.call_nvidia_sync(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "hello"}],
+                model="deepseek-ai/deepseek-v4-pro",
+                thinking=False,
+                max_tokens=16384,
+            )
+        kwargs = create.call_args.kwargs
+        self.assertFalse(kwargs["stream"])
+        self.assertEqual(kwargs["extra_body"], {"chat_template_kwargs": {"thinking": False}})
+        self.assertEqual(response.text, "DeepSeek answer")
+
+    def test_nemotron_streams_with_thinking_and_reasoning_budget(self):
+        chunks = [
+            SimpleNamespace(
+                choices=[SimpleNamespace(
+                    delta=SimpleNamespace(content="Nemotron answer"),
+                    finish_reason="stop",
+                )],
+                usage=None,
+            )
+        ]
+        client, create = self.fake_client(chunks)
+        with (
+            patch("pipeline.get_nvidia_client", return_value=client),
+            patch("pipeline.get_nvidia_reasoning_budget", return_value=16384),
+        ):
+            response = pipeline.call_nvidia_sync(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "hello"}],
+                model="nvidia/nemotron-3-ultra-550b-a55b",
+                thinking=True,
+                max_tokens=16384,
+            )
+        kwargs = create.call_args.kwargs
+        self.assertTrue(kwargs["stream"])
+        self.assertEqual(
+            kwargs["extra_body"],
+            {
+                "chat_template_kwargs": {"enable_thinking": True},
+                "reasoning_budget": 16384,
+            },
+        )
+        self.assertEqual(response.text, "Nemotron answer")
+
+    def test_nemotron_thinking_off_omits_reasoning_budget(self):
+        client, create = self.fake_client([])
+        with patch("pipeline.get_nvidia_client", return_value=client):
+            pipeline.call_nvidia_sync(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "hello"}],
+                model="nvidia/nemotron-3-ultra-550b-a55b",
+                thinking=False,
+                max_tokens=16384,
+            )
+        self.assertEqual(
+            create.call_args.kwargs["extra_body"],
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        )
 
 
 class NvidiaRetryTests(unittest.TestCase):

@@ -20,7 +20,7 @@ Workflow:
 3. Create DES candidates for unsupported or partial JD terms instead of inventing facts
 4. Wait for DES approval or `No DES`
 5. Do not generate final JSON until user says `CONFIRM`
-6. After CONFIRM, perform audits silently and output a compact summary, one LinkedIn message under 300 characters, 4 search strings, and one complete parseable JSON block with every object and array closed
+6. After CONFIRM, perform audits silently and output a compact summary, one recruiter LinkedIn message under 300 characters, one hiring-manager LinkedIn message under 300 characters, 4 search strings, and one complete parseable JSON block with every object and array closed
 
 Critical rules:
 - Use exact JD wording only when Story.md or approved DES supports it
@@ -53,9 +53,11 @@ Additional critical rules:
 - Target 90% natural JD keyword coverage without forced or unsupported placement
 - Supported PRIMARY JD keywords should appear 2 to 3 times naturally, with production/professional placement when evidence exists
 - No opening verb may repeat across the entire final resume
-- Binghamton graduation must be `Jan 2025 - Dec 2026` for internship/co-op/student intern roles and `Jan 2025 - May 2026` for non-internship full-time roles
+- Binghamton graduation must use the official candidate graduation date from Story.md: Expected Aug 2026
 - Story.md evidence must be interpreted with FAANG-level clarity: system, mechanism, scope, outcome, and limits
-- Final output after CONFIRM must include LinkedIn message and recruiter/HM search strings outside JSON
-- LinkedIn message has a hard 300-character maximum including spaces; count and rewrite before output
+- Final output after CONFIRM must include separate recruiter and hiring-manager LinkedIn messages plus recruiter/HM search strings outside JSON
+- Each LinkedIn message has its own hard 300-character maximum including spaces; count and rewrite each one before output
+- Both messages must name the exact title and company, use one supported proof point, and avoid generic `would love to connect` language
+- Recruiter outreach may politely ask for the correct recruiter or for the resume to be passed along; hiring-manager outreach must ask one concise team- or role-specific question
 - Do not output audit or coverage tables after CONFIRM
 - Do not force keywords that fail the Natural Fit Test; use DES, exclusion, or suggestions instead

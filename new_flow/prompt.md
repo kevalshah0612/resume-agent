@@ -238,8 +238,8 @@ TCS Software Engineer:
 2. CI/CD/cloud/release/quality proof
 3. migration/reliability/performance proof if relevant
 
-GHI Software Engineering Intern:
-1. strongest current U.S. internship proof aligned to JD
+GHI Software Engineer:
+1. strongest current U.S. graduate applied project proof aligned to JD
 2. data/API/dashboard/ML proof that fills JD gap
 
 TA:
@@ -388,9 +388,48 @@ Number style:
 - Do not mention dollar figures in final resume output
 
 Graduation date lock:
-- If input Title or JD clearly includes intern, internship, co-op, student intern, summer intern, or internship program, Binghamton graduation must be `Jan 2025 - Dec 2026`
-- For all non-internship full-time roles, Binghamton graduation must be `Jan 2025 - May 2026`
-- Do not output only `May 2026` or only `Dec 2026`; use the full date range
+- Always use the official candidate graduation date from Story.md: Expected Aug 2026.
+
+## Candidate Identity and Degree Status
+
+Story.md controls Keval's official titles, company names, dates, employment notes, graduation date, and candidate-status facts.
+
+For Tata Consultancy Services, Software Engineer II:
+
+* preserve title as `Software Engineer II`
+* preserve dates as `Oct 2022 - Present`
+* set visible `location` to an empty string
+* preserve the academic-leave employment note exactly
+* write all bullets in past tense
+* do not imply active engineering delivery during leave
+* do not mention paid leave or unpaid leave
+
+For Global Health Impact Project:
+
+* preserve company as `Global Health Impact Project`
+* preserve title as `Software Engineer`
+* do not use the old GHI intern title
+* do not add an employment note unless user explicitly requests one
+
+Graduation date is a candidate fact, not a JD-dependent value.
+Always use `Expected Aug 2026`.
+Do not infer graduation date from internship, role title, layout, or seniority.
+
+Before degree conferral, use:
+`Completing an M.S. in Computer Science with an AI specialization at Binghamton University`
+
+After degree conferral, use:
+`M.S. in Computer Science, AI Specialization`
+
+Never use:
+
+* candidate
+* aspiring
+* unsupported anytime-graduation wording
+
+For backend and full-stack roles, lead with production engineering experience.
+For AI/ML, AI tooling, automation, data, and developer-tooling roles, AI specialization may appear in the first or second summary sentence.
+Use `3+ years of production software engineering experience`; do not use TCS employment tenure including academic leave as production experience.
 
 Tense and active voice:
 - Every bullet must start with a strong action verb
@@ -1148,7 +1187,16 @@ professional_experience keys exactly:
 2. title
 3. location
 4. dates
-5. bullets
+5. employment_note
+6. bullets
+
+`employment_note` must always be a string.
+Use `employment_note: ""` for normal roles.
+For Tata Consultancy Services, Software Engineer II:
+`"employment_note": "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization"`
+For Global Health Impact Project:
+`"employment_note": ""`
+Do not add an employment note to any other role unless Story.md explicitly provides one.
 
 projects keys exactly:
 1. name
@@ -1235,7 +1283,7 @@ Final JSON must follow this structure exactly:
       "university": "Binghamton University, State University of New York",
       "degree": "Master of Science, Computer Science, AI Specialization, GPA: 4.00",
       "location": "Binghamton, NY",
-      "graduation": "[Jan 2025 - May 2026 for full-time OR Jan 2025 - Dec 2026 for internship]",
+      "graduation": "Expected Aug 2026",
       "ta_bullet": ""
     },
     {
@@ -1256,8 +1304,9 @@ Final JSON must follow this structure exactly:
     {
       "company": "Tata Consultancy Services",
       "title": "Software Engineer II",
-      "location": "Gandhinagar, India",
-      "dates": "Oct 2022 - Dec 2024",
+      "location": "",
+      "dates": "Oct 2022 - Present",
+      "employment_note": "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization",
       "bullets": [
         "[Bullet 1: closest JD-core system proof, 18 to 28 words, no period]",
         "[Bullet 2: production, reliability, security, scale, debugging, testing, delivery, or ownership risk reducer, 18 to 28 words, no period]",
@@ -1270,6 +1319,7 @@ Final JSON must follow this structure exactly:
       "title": "Software Engineer",
       "location": "Gandhinagar, India",
       "dates": "Mar 2021 - Sep 2022",
+      "employment_note": "",
       "bullets": [
         "[Bullet 1: backend, API, data, cloud, or system proof aligned to JD, 18 to 28 words, no period]",
         "[Bullet 2: CI/CD, testing, deployment, data, reliability, or performance proof aligned to JD, 18 to 28 words, no period]",
@@ -1277,12 +1327,13 @@ Final JSON must follow this structure exactly:
       ]
     },
     {
-      "company": "Global Health Impact",
-      "title": "Software Engineering Intern",
+      "company": "Global Health Impact Project",
+      "title": "Software Engineer",
       "location": "New York, NY",
       "dates": "Jun 2025 - Aug 2025",
+      "employment_note": "",
       "bullets": [
-        "[Bullet 1: recent U.S. internship proof aligned to JD, 18 to 28 words, no period]",
+        "[Bullet 1: recent U.S. graduate applied project proof aligned to JD, 18 to 28 words, no period]",
         "[Bullet 2 optional: use only for AI, data, frontend, API, MongoDB, PostgreSQL, or dashboard coverage, 18 to 28 words, no period]"
       ]
     }
@@ -1334,7 +1385,7 @@ Final JSON generation rules for this template:
 20. contact separators using `|` are allowed and must not be treated as unresolved option text
 21. never add `gpa`, `institution`, `dates` inside education, `client`, `url`, `link`, `repository`, `technologies`, `row`, or nested `skills`
 22. final JSON must parse successfully before output
-23. Binghamton graduation must be `Jan 2025 - Dec 2026` for internship roles and `Jan 2025 - May 2026` for non-internship full-time roles
+23. Always use the official candidate graduation date from Story.md: Expected Aug 2026.
 24. supported PRIMARY JD keywords must appear 2 to 3 times naturally, with at least one professional/production bullet placement when professional evidence exists
 25. final resume should target 90% natural JD keyword coverage without forced or unsupported placement
 26. no opening verb may repeat across the entire resume
@@ -1394,22 +1445,37 @@ Do not generate final JSON until the user says CONFIRM.
 After CONFIRM, provide LinkedIn outreach support outside the final JSON.
 
 Generate:
-1. exactly one LinkedIn connection message with a hard maximum of 300 characters, including spaces
-2. exactly 4 recruiter/HM search strings
+1. exactly one recruiter LinkedIn message with a hard maximum of 300 characters, including spaces
+2. exactly one hiring-manager LinkedIn message with a hard maximum of 300 characters, including spaces
+3. exactly 4 recruiter/HM search strings
 
 Do not generate a follow-up message in this app flow.
-Count the LinkedIn message characters before output. If it exceeds 300 characters, rewrite it until it is 300 characters or fewer.
+Count each LinkedIn message separately before output. If either exceeds 300 characters, rewrite that message until it is 300 characters or fewer.
 
-LinkedIn message rules:
-- short, human, specific to company and role
-- mention one supported JD-aligned proof point
-- do not ask for a referral in the first message unless user explicitly asks
-- do not sound desperate or generic
+Rules for both messages:
+- name the exact target title and company
+- be short, human, direct, and specific to the role
+- mention only one supported JD-aligned proof point, not a list of technologies or achievements
+- make one low-friction request that the recipient can answer quickly
+- do not use generic praise, flattery, desperation, or `would love to connect`
+- do not claim to know the recipient, team, or hiring status
+- never invent a team initiative, shared interest, or personal connection
 - use ASCII punctuation only
 - do not use em dashes or en dashes
 
-Message pattern:
-`Hi [Name], I applied for the [Role] role at [Company]. I'm a software engineer with [closest supported JD proof]. I'd appreciate the chance to connect or learn whether this team is still actively hiring.`
+Recruiter message goal and pattern:
+- help the candidate reach the correct owner of the opening without demanding a referral
+- offer to share the resume
+- if the recipient may not own the role, politely ask whether they can identify the correct recruiter or pass the resume along
+- pattern: `Hi [Name], I applied for [Exact Title] at [Company]. My experience with [one supported proof] aligns well. If you do not cover this role, could you point me to the right recruiter or pass along my resume? Happy to share it.`
+
+Hiring-manager message goal and pattern:
+- demonstrate credible fit for one central JD problem
+- ask a thoughtful, easy-to-answer question about the team's priority or what success looks like
+- do not ask the hiring manager to route the candidate to a recruiter
+- pattern: `Hi [Name], I applied for [Exact Title] at [Company]. I have [one supported proof] relevant to [one JD priority]. Is [priority] a key focus for this hire? I would value your perspective on what success looks like.`
+
+The patterns are structural guides, not text to copy mechanically. Keep `[Name]` as the only optional placeholder. Replace title, company, proof, and priority with application-specific text.
 
 Search string patterns:
 - `site:linkedin.com/in ("Recruiter" OR "Talent Acquisition") "[Company]" "[City or Region]"`
@@ -1464,9 +1530,10 @@ After CONFIRM, perform every audit, coverage check, diagnostic score, DES check,
 Output only:
 
 1. CONFIDENCE SUMMARY, maximum 5 short lines
-2. LINKEDIN MESSAGE, exactly one message and no more than 300 characters including spaces
-3. RECRUITER/HM SEARCH STRINGS, exactly 4 strings
-4. FINAL JSON CODE BLOCK ONLY
+2. RECRUITER LINKEDIN MESSAGE, exactly one message and no more than 300 characters including spaces
+3. HIRING MANAGER LINKEDIN MESSAGE, exactly one message and no more than 300 characters including spaces
+4. RECRUITER/HM SEARCH STRINGS, exactly 4 strings
+5. FINAL JSON CODE BLOCK ONLY
 
 Only one JSON code block.
 The JSON block is mandatory, complete, parseable, and must close every object and array before the response ends.

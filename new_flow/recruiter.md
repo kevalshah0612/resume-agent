@@ -207,9 +207,7 @@ Number style:
 - do not mention dollar figures
 
 Graduation date repair:
-- if visible JD/title is internship/co-op/student intern/summer intern, Binghamton graduation should be `Jan 2025 - Dec 2026`
-- otherwise full-time/non-internship should be `Jan 2025 - May 2026`
-- use full date range, not only month/year
+- Always use the official candidate graduation date from Story.md: Expected Aug 2026.
 
 Tense:
 - past roles use past tense verbs
@@ -504,7 +502,22 @@ professional_experience keys exactly:
 2. title
 3. location
 4. dates
-5. bullets
+5. employment_note
+6. bullets
+
+Employment identity preservation:
+
+* Do not remove, shorten, move, or rewrite an approved `employment_note`
+* Preserve Tata Consultancy Services | Software Engineer II
+* Preserve dates as `Oct 2022 - Present`
+* Preserve location as an empty string
+* Preserve this employment note exactly:
+  `On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization`
+* Keep all TCS Software Engineer II bullets in past tense
+* Preserve Global Health Impact Project | Software Engineer
+* Do not change GHI back to the old intern title
+* Preserve Binghamton graduation as `Expected Aug 2026`
+* If any locked identity fields conflict, output `IDENTITY LOCK CONFLICT` instead of guessing
 
 projects keys exactly:
 1. name
@@ -529,7 +542,15 @@ Perform all recruiter checks, comparisons, repairs, coverage analysis, red-flag 
 Output only these sections:
 
 1. RECRUITER SUMMARY, maximum 8 short lines covering the picked resume, meaningful fixes, unresolved risks, and confidence
-2. FINAL JSON, exactly one complete valid JSON code block
+2. RECRUITER LINKEDIN MESSAGE, exactly one role-specific message with a hard maximum of 300 characters including spaces
+3. HIRING MANAGER LINKEDIN MESSAGE, exactly one role-specific message with a hard maximum of 300 characters including spaces
+4. RECRUITER/HM SEARCH STRINGS, exactly 4 strings
+5. FINAL JSON, exactly one complete valid JSON code block
+
+For both messages, name the exact TARGET TITLE and TARGET COMPANY supplied with the request, use one proof point supported by the selected final JSON, use ASCII punctuation, and count characters before output.
+The recruiter message may politely ask for the correct recruiter or for the resume to be passed along if the recipient does not own the role. Offer to share the resume without demanding a referral.
+The hiring-manager message must connect one proof point to one central JD priority and ask one concise, easy-to-answer question about the team's focus or what success looks like. Do not ask the hiring manager to route the candidate.
+Do not use `would love to connect`, generic praise, flattery, desperation, em dashes, or lists of technologies and achievements.
 
 The JSON block is mandatory, parseable, and must close every object and array before the response ends.
 Reserve enough output space for the complete JSON. Shorten the recruiter summary before risking JSON truncation.
@@ -574,8 +595,7 @@ Formatting/schema checks:
 - header uses required two-line contact field
 - `education.ta_bullet` is empty
 - `config.ta_active` is false
-- internship/co-op/student intern graduation = Jan 2025 - Dec 2026
-- non-internship full-time graduation = Jan 2025 - May 2026
+- Binghamton graduation remains Expected Aug 2026
 - final JSON keeps locked schema and parses cleanly
 
 ## Final Self-Check
@@ -590,6 +610,10 @@ Before final JSON, silently verify:
 - no repeated opening verbs across the entire resume
 - first two bullets of every experience pass recruiter screen and are different proof types
 - contact uses required two-line header format when visible data supports it
+- employment_note is preserved for the correct role
+- TCS Software Engineer II bullets are past tense
+- GHI company and title are preserved
+- Binghamton graduation remains Expected Aug 2026
 - education.ta_bullet is empty
 - config.ta_active is false
 - core JD skills appear outside skills when supported

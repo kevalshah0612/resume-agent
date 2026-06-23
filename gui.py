@@ -21,13 +21,21 @@ from tkinter import filedialog, messagebox, ttk
 
 from pipeline import (
     CostEvent,
+    FinalReviewResult,
     OperationCancelled,
     ResumeInput,
     enforce_linkedin_message_limit,
     extract_json,
+    extract_linkedin_message,
     load_config,
+    get_default_nvidia_model_option,
+    nvidia_model_option_label,
+    nvidia_model_options,
     normalize_approval,
+    normalize_resume_json,
+    resolve_nvidia_model_option,
     run_application_answers,
+    run_final_review,
     run_pass1,
     run_pass2,
     run_recruiter_review,
@@ -40,6 +48,27 @@ from pipeline import (
 ROOT = Path(__file__).parent
 REQUESTS_DIR = ROOT / "requests"
 WORD_DIR = ROOT / "Resume-word"
+
+REQUEST_FILE_ALIASES = {
+    "request": ("00_request_details.txt", "00_request.txt"),
+    "jd": ("01_job_description.txt", "01_jd.txt"),
+    "des": ("02_pass1_des_process.txt", "02_pass1_des_bank.txt"),
+    "approval": ("03_des_approval.txt", "03_approval.txt"),
+    "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
+    "resume_json": ("05_resume_output.json", "05_final_resume.json"),
+    "recruiter_process": ("06_recruiter_review_process.txt", "06_recruiter_raw.txt"),
+    "recruiter_json": ("07_recruiter_resume_output.json", "07_recruiter_final_resume.json"),
+    "questions": ("08_application_questions.txt",),
+    "answers": ("09_application_answers.txt",),
+    "linkedin_combined": ("10_linkedin_outreach.txt", "10_recruiter_linkedin_outreach.txt"),
+    "linkedin_recruiter": ("10_recruiter_linkedin_message.txt",),
+    "linkedin_manager": ("10_hiring_manager_linkedin_message.txt",),
+    "linkedin_search": ("10_recruiter_hm_search_strings.txt",),
+    "final_qa_process": ("11_final_qa_process.txt",),
+    "final_qa_json": ("12_final_qa_output.json", "18_final_qa_resume.json"),
+    "docx_log": ("13_docx_build_log.txt", "06_docx_build.txt"),
+    "pdf_log": ("14_pdf_archive_log.txt", "07_pdf_archive.txt"),
+}
 
 
 def open_path(path: Path) -> None:
@@ -73,12 +102,15 @@ class JobTab(ttk.Frame):
         self.request_dir: Path | None = None
         self.final_json_path: Path | None = None
         self.recruiter_json_path: Path | None = None
+        self.final_qa_json_path: Path | None = None
         self.docx_path: Path | None = None
         self.cost_events: list[CostEvent] = []
         self.cost_usd = 0.0
         self.request_id = name
         self.stage = "Ready"
         self.pass1_raw = ""
+        self.job_description = ""
+        self.jd_showing_des = False
         self.cancel_event = threading.Event()
 
         self._build()
@@ -90,73 +122,89 @@ class JobTab(ttk.Frame):
 
         toolbar = ttk.Frame(self)
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        toolbar.columnconfigure(11, weight=1)
+        toolbar.columnconfigure(12, weight=1)
 
-        self.pass1_btn = ttk.Button(toolbar, text="Run PASS 1", command=self.on_pass1)
+        self.pass1_btn = ttk.Button(toolbar, text="PASS 1", command=self.on_pass1)
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
         self.auto_btn = ttk.Button(toolbar, text="Auto JSON", command=self.on_auto_json)
         self.auto_btn.grid(row=0, column=1, padx=(0, 6))
         self.json_btn = ttk.Button(toolbar, text="Generate JSON", command=self.on_generate_json)
         self.json_btn.grid(row=0, column=2, padx=(0, 6))
-        self.recruiter_btn = ttk.Button(toolbar, text="Recruiter Review", command=self.on_recruiter_review)
+        self.recruiter_btn = ttk.Button(toolbar, text="Recruiter", command=self.on_recruiter_review)
         self.recruiter_btn.grid(row=0, column=3, padx=(0, 6))
-        self.docx_btn = ttk.Button(toolbar, text="Build DOCX", command=self.on_build_docx)
-        self.docx_btn.grid(row=0, column=4, padx=(0, 6))
-        self.pdf_btn = ttk.Button(toolbar, text="PDF + Archive", command=self.on_pdf_archive)
-        self.pdf_btn.grid(row=0, column=5, padx=(0, 6))
-        self.questions_btn = ttk.Button(toolbar, text="Answer Questions", command=self.on_answer_questions)
-        self.questions_btn.grid(row=0, column=6, padx=(0, 6))
-        self.stop_btn = ttk.Button(toolbar, text="Stop AI", command=self.on_stop_ai, state="disabled")
-        self.stop_btn.grid(row=0, column=7, padx=(0, 6))
-        ttk.Button(toolbar, text="Open Request", command=self.on_open_request).grid(row=0, column=8, padx=(0, 6))
-        ttk.Button(toolbar, text="Clear Tab", command=self.on_clear_tab).grid(row=0, column=9, padx=(0, 6))
+        self.final_qa_btn = ttk.Button(toolbar, text="Final QA", command=self.on_final_review)
+        self.final_qa_btn.grid(row=0, column=4, padx=(0, 6))
+        self.questions_btn = ttk.Button(toolbar, text="Questions", command=self.on_answer_questions)
+        self.questions_btn.grid(row=0, column=5, padx=(0, 6))
+        self.docx_btn = ttk.Button(toolbar, text="DOCX", command=self.on_build_docx)
+        self.docx_btn.grid(row=0, column=6, padx=(0, 6))
+        self.pdf_btn = ttk.Button(toolbar, text="PDF", command=self.on_pdf_archive)
+        self.pdf_btn.grid(row=0, column=7, padx=(0, 6))
+        self.stop_btn = ttk.Button(toolbar, text="Stop", command=self.on_stop_ai, state="disabled")
+        self.stop_btn.grid(row=0, column=8, padx=(0, 6))
+        ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=9, padx=(0, 6))
+        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=10, padx=(0, 6))
+        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=11, padx=(0, 6))
         self.cost_label = ttk.Label(toolbar, text="$0.0000")
-        self.cost_label.grid(row=0, column=10, sticky="e", padx=(8, 8))
-        self.status = ttk.Label(toolbar, text="Ready")
-        self.status.grid(row=0, column=11, sticky="e")
+        self.cost_label.grid(row=0, column=13, sticky="e", padx=(8, 8))
+        self.status = ttk.Label(toolbar, text="Ready", width=28, anchor="e")
+        self.status.grid(row=0, column=14, sticky="e")
 
         left = ttk.Frame(self)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         left.columnconfigure(0, weight=1)
+        left.rowconfigure(2, weight=1)
 
         quick_fields = ttk.Frame(left)
         quick_fields.grid(row=0, column=0, sticky="ew")
         quick_fields.columnconfigure(0, weight=1, uniform="quick_fields")
         quick_fields.columnconfigure(1, weight=1, uniform="quick_fields")
+        quick_fields.columnconfigure(2, weight=1, uniform="quick_fields")
 
         self.company = self._field_cell(quick_fields, "Company", 0, 0, height=1)
         self.title_text = self._field_cell(quick_fields, "Title", 0, 1, height=1)
         self.title_text.insert("1.0", "Software Engineer")
-        self.words = self._field_cell(quick_fields, "Words / Keywords", 1, 0, height=2)
+        self.words = self._field_cell(quick_fields, "Words / Keywords", 0, 2, height=1)
         self.mode_value = ""
-        self.des = self._field_cell(quick_fields, "DES / Existing Evidence", 1, 1, height=2)
+        self.des = self._field_cell(quick_fields, "DES / Existing Evidence", 1, 0, height=2)
+        self.approval = self._field_cell(
+            quick_fields,
+            "DES Approval: 1 to 6 | 1,2,3 | Confirm",
+            1,
+            1,
+            height=2,
+        )
+        self.approval.insert("1.0", "Approved: ")
+        self.app_questions = self._field_cell(quick_fields, "Application Questions", 1, 2, height=2)
 
-        ttk.Label(left, text="Job Description").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        self.jd = self._text_box(left, 2, height=7)
-
-        ttk.Label(left, text="LinkedIn / Recruiter Search").grid(row=3, column=0, sticky="w", pady=(8, 0))
-        self.linkedin_outreach = self._text_box(left, 4, height=6)
+        self.jd_title = tk.StringVar(value="Job Description")
+        ttk.Label(left, textvariable=self.jd_title).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.jd = self._text_box(left, 2, height=24, sticky="nsew")
 
         right = ttk.Frame(self)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
         right.columnconfigure(0, weight=1)
-        right.rowconfigure(1, weight=5)
-        right.rowconfigure(7, weight=1)
+        right.rowconfigure(1, weight=1)
 
-        ttk.Label(right, text="DES Suggestions from PASS 1").grid(row=0, column=0, sticky="w")
-        self.pass1 = self._text_box(right, 1, height=20, sticky="nsew")
-
-        ttk.Label(right, text="Approval: Approved: DES 1 to 6  |  1,2,3  |  Confirm").grid(
-            row=2, column=0, sticky="w", pady=(8, 0)
+        output_header = ttk.Frame(right)
+        output_header.grid(row=0, column=0, sticky="ew")
+        output_header.columnconfigure(1, weight=1)
+        self.output_title = tk.StringVar(value="Output")
+        ttk.Label(output_header, textvariable=self.output_title).grid(row=0, column=0, sticky="w")
+        ttk.Label(output_header, text="Model").grid(row=0, column=2, sticky="e", padx=(8, 4))
+        self.model_selector = ttk.Combobox(
+            output_header,
+            state="readonly",
+            width=33,
+            values=nvidia_model_options(),
         )
-        self.approval = self._text_box(right, 3, height=3, sticky="nsew")
-        self.approval.insert("1.0", "Approved: ")
-
-        ttk.Label(right, text="Application Questions").grid(row=4, column=0, sticky="w", pady=(8, 0))
-        self.app_questions = self._text_box(right, 5, height=4, sticky="nsew")
-
-        ttk.Label(right, text="Application Answers").grid(row=6, column=0, sticky="w", pady=(8, 0))
-        self.app_answers = self._text_box(right, 7, height=8, sticky="nsew")
+        self.model_selector.grid(row=0, column=3, sticky="e", padx=(0, 8))
+        self.model_selector.set(get_default_nvidia_model_option())
+        self.model_selector.bind("<<ComboboxSelected>>", self.on_model_selected)
+        self.output_selector = ttk.Combobox(output_header, state="readonly", width=34)
+        self.output_selector.grid(row=0, column=4, sticky="e")
+        self.output_selector.bind("<<ComboboxSelected>>", self.on_output_selected)
+        self.output = self._text_box(right, 1, height=28, sticky="nsew")
 
     def _labeled_text(self, parent: ttk.Frame, label: str, row: int, height: int) -> tk.Text:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w")
@@ -166,7 +214,11 @@ class JobTab(ttk.Frame):
         cell = ttk.Frame(parent)
         cell.grid(row=row, column=column, sticky="ew", padx=(0 if column == 0 else 6, 6 if column == 0 else 0))
         cell.columnconfigure(0, weight=1)
-        return self._labeled_text(cell, label, 0, height)
+        ttk.Label(cell, text=label).grid(row=0, column=0, sticky="w")
+        box = tk.Text(cell, wrap="word", undo=True, height=height, width=1)
+        box.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+        self._bind_text_scroll(box)
+        return box
 
     def _text_box(self, parent: ttk.Frame, row: int, height: int, sticky: str = "ew") -> tk.Text:
         frame = ttk.Frame(parent)
@@ -202,6 +254,139 @@ class JobTab(ttk.Frame):
 
     def text_value(self, box: tk.Text) -> str:
         return box.get("1.0", "end").strip()
+
+    def selected_nvidia_profile(self) -> tuple[str, bool]:
+        return resolve_nvidia_model_option(self.model_selector.get())
+
+    def on_model_selected(self, _event=None) -> None:
+        if not self.request_dir:
+            return
+        metadata_path = self.existing_request_file("request") or self.request_file("request")
+        lines = metadata_path.read_text(encoding="utf-8").splitlines() if metadata_path.exists() else []
+        model, thinking = self.selected_nvidia_profile()
+        updates = {
+            "nvidia model": f"NVIDIA Model: {model}",
+            "nvidia thinking": f"NVIDIA Thinking: {'ON' if thinking else 'OFF'}",
+        }
+        found: set[str] = set()
+        for index, line in enumerate(lines):
+            key = line.partition(":")[0].strip().lower()
+            if key in updates:
+                lines[index] = updates[key]
+                found.add(key)
+        lines.extend(value for key, value in updates.items() if key not in found)
+        save_text(metadata_path, "\n".join(lines))
+
+    def existing_request_file(self, key: str, request_dir: Path | None = None) -> Path | None:
+        folder = request_dir or self.request_dir
+        if not folder:
+            return None
+        for name in REQUEST_FILE_ALIASES[key]:
+            path = folder / name
+            if path.exists():
+                return path
+        return None
+
+    def request_file(self, key: str, request_dir: Path | None = None) -> Path:
+        folder = request_dir or self.request_dir
+        if not folder:
+            raise ValueError("Create or load a request first.")
+        return folder / REQUEST_FILE_ALIASES[key][0]
+
+    def show_des_in_jd(self, pass1_text: str) -> None:
+        if not self.jd_showing_des:
+            current_jd = self.text_value(self.jd)
+            if current_jd:
+                self.job_description = current_jd
+        self.jd.delete("1.0", "end")
+        self.jd.insert("1.0", self.format_pass1_display(pass1_text))
+        self.jd.see("1.0")
+        self.jd_showing_des = True
+        self.jd_title.set("PASS 1 - Missing Coverage / DES Suggestions")
+
+    def show_job_description(self, jd: str) -> None:
+        self.job_description = jd
+        self.jd_showing_des = False
+        self.jd_title.set("Job Description")
+        self.jd.delete("1.0", "end")
+        self.jd.insert("1.0", jd)
+        self.jd.see("1.0")
+
+    def artifact_choices(self) -> list[tuple[str, list[Path]]]:
+        if not self.request_dir:
+            return []
+        definitions = [
+            ("Model Process | PASS 1 DES", "des"),
+            ("Model Process | Resume Generation", "resume_process"),
+            ("Output | Resume JSON", "resume_json"),
+            ("Model Process | Recruiter Review", "recruiter_process"),
+            ("Output | Recruiter Resume JSON", "recruiter_json"),
+            ("Input | Application Questions", "questions"),
+            ("Output | Application Answers", "answers"),
+            ("LinkedIn | Combined Outreach", "linkedin_combined"),
+            ("LinkedIn | Recruiter Message", "linkedin_recruiter"),
+            ("LinkedIn | Hiring Manager Message", "linkedin_manager"),
+            ("LinkedIn | Search Strings", "linkedin_search"),
+            ("Model Process | Final QA", "final_qa_process"),
+            ("Output | Final QA JSON", "final_qa_json"),
+            ("Log | DOCX Build", "docx_log"),
+            ("Log | PDF Archive", "pdf_log"),
+        ]
+        choices: list[tuple[str, list[Path]]] = []
+        for label, key in definitions:
+            path = self.existing_request_file(key)
+            if path:
+                choices.append((label, [path]))
+
+        if not self.existing_request_file("final_qa_process"):
+            legacy_names = (
+                "12_final_qa_render_profile.json",
+                "13_final_qa_audit_raw.txt",
+                "14_final_qa_repair_raw.txt",
+                "16_final_qa_scan_raw.txt",
+                "17_final_qa_summary.txt",
+            )
+            legacy_paths = [self.request_dir / name for name in legacy_names if (self.request_dir / name).exists()]
+            if legacy_paths:
+                insert_at = next(
+                    (index for index, (label, _paths) in enumerate(choices) if label == "Output | Final QA JSON"),
+                    len(choices),
+                )
+                choices.insert(insert_at, ("Model Process | Final QA", legacy_paths))
+        return choices
+
+    def refresh_output_choices(self) -> None:
+        current = self.output_selector.get()
+        values = [label for label, _paths in self.artifact_choices()]
+        self.output_selector.configure(values=values)
+        if current in values:
+            self.output_selector.set(current)
+        elif values:
+            self.output_selector.set(values[-1])
+        else:
+            self.output_selector.set("")
+
+    def on_output_selected(self, _event=None) -> None:
+        selected = self.output_selector.get()
+        entry = next((item for item in self.artifact_choices() if item[0] == selected), None)
+        if not entry:
+            return
+        _label, paths = entry
+        sections: list[str] = []
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            if len(paths) > 1:
+                text = self.response_summary(text)
+                sections.append(f"{path.name}\n{'=' * len(path.name)}\n{text}")
+            else:
+                sections.append(text)
+        self.show_output(selected, "\n\n".join(sections), refresh_choices=False)
+
+    def select_output_artifact(self, label: str) -> None:
+        self.refresh_output_choices()
+        if label in set(self.output_selector.cget("values")):
+            self.output_selector.set(label)
+            self.on_output_selected()
 
     def format_pass1_display(self, text: str) -> str:
         lines = text.splitlines()
@@ -312,18 +497,56 @@ class JobTab(ttk.Frame):
             text = text.replace(old, new)
         return text
 
-    def show_and_save_linkedin_outreach(self, request_dir: Path, raw_text: str, filename: str = "10_linkedin_outreach.txt") -> None:
+    def show_output(self, title: str, text: str, refresh_choices: bool = True) -> None:
+        self.output_title.set(title)
+        self.output.delete("1.0", "end")
+        self.output.insert("1.0", text.strip())
+        self.output.see("1.0")
+        if refresh_choices:
+            self.refresh_output_choices()
+
+    def response_summary(self, raw_text: str) -> str:
+        without_json = re.sub(
+            r"```json\s*\{.*?\}\s*```",
+            "",
+            raw_text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        return self.clean_paste_text(without_json).strip()
+
+    def show_and_save_linkedin_outreach(
+        self,
+        request_dir: Path,
+        raw_text: str,
+        filename: str = "10_linkedin_outreach.txt",
+    ) -> bool:
         outreach = self.clean_paste_text(self.extract_linkedin_outreach(raw_text))
         outreach = enforce_linkedin_message_limit(outreach)
         if not outreach:
-            return
-        self.linkedin_outreach.delete("1.0", "end")
-        self.linkedin_outreach.insert("1.0", outreach)
+            return False
+        self.show_output("LinkedIn Outreach / Recruiter Search", outreach)
         save_text(request_dir / filename, outreach)
+        recruiter_message = extract_linkedin_message(outreach, "recruiter")
+        hiring_manager_message = extract_linkedin_message(outreach, "hiring_manager")
+        search_strings = "\n".join(
+            line.strip() for line in outreach.splitlines() if "site:linkedin.com/in" in line.lower()
+        )
+        if recruiter_message:
+            save_text(request_dir / "10_recruiter_linkedin_message.txt", recruiter_message)
+        if hiring_manager_message:
+            save_text(request_dir / "10_hiring_manager_linkedin_message.txt", hiring_manager_message)
+        if search_strings:
+            save_text(request_dir / "10_recruiter_hm_search_strings.txt", search_strings)
+        self.refresh_output_choices()
+        return True
 
     def make_input(self) -> ResumeInput:
         company = self.text_value(self.company)
-        jd = self.text_value(self.jd)
+        if self.jd_showing_des:
+            jd = self.job_description
+        else:
+            jd = self.text_value(self.jd)
+            self.job_description = jd
         if not company:
             raise ValueError("Company is required.")
         if len(jd) < 50:
@@ -364,17 +587,20 @@ class JobTab(ttk.Frame):
         self.request_id = f"{slug(inp.company)}_{slug(inp.title or 'Software_Engineer')}_{stamp}"
         self.request_dir = REQUESTS_DIR / self.request_id
         self.request_dir.mkdir(parents=True, exist_ok=True)
+        nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         save_text(
-            self.request_dir / "00_request.txt",
+            self.request_file("request"),
             "\n".join([
                 f"Request ID: {self.request_id}",
                 f"Company: {inp.company}",
                 f"Title: {inp.title}",
                 f"Words: {inp.words}",
                 f"DES: {inp.des}",
+                f"NVIDIA Model: {nvidia_model}",
+                f"NVIDIA Thinking: {'ON' if nvidia_thinking else 'OFF'}",
             ]),
         )
-        save_text(self.request_dir / "01_jd.txt", inp.jd)
+        save_text(self.request_file("jd"), inp.jd)
         self.app.rename_tab(self, self.tab_caption())
         self.app.update_tab_status(self)
         return self.request_dir
@@ -386,11 +612,13 @@ class JobTab(ttk.Frame):
             self.auto_btn,
             self.json_btn,
             self.recruiter_btn,
+            self.final_qa_btn,
             self.docx_btn,
             self.pdf_btn,
             self.questions_btn,
         ):
             button.config(state=state)
+        self.model_selector.configure(state="disabled" if busy else "readonly")
         if busy and cancellable:
             self.cancel_event.clear()
             self.stop_btn.config(state="normal")
@@ -446,6 +674,7 @@ class JobTab(ttk.Frame):
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
@@ -459,6 +688,8 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
             return result, events
 
@@ -471,9 +702,9 @@ class JobTab(ttk.Frame):
                 return
             result, events = result
             self.pass1_raw = result
-            self.pass1.delete("1.0", "end")
-            self.pass1.insert("1.0", self.format_pass1_display(result))
-            save_text(request_dir / "02_pass1_des_bank.txt", result)
+            self.show_des_in_jd(result)
+            save_text(self.request_file("des", request_dir), result)
+            self.show_output("PASS 1", "PASS 1 complete. DES suggestions are pinned in the left panel.")
             self.add_cost_events(events)
 
         run_bg(self.app, task, done)
@@ -482,16 +713,17 @@ class JobTab(ttk.Frame):
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
-            pass1_text = self.pass1_raw or self.text_value(self.pass1)
+            pass1_text = self.pass1_raw or self.text_value(self.output)
             if not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
             approval = normalize_approval(approval_raw)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Missing step", str(exc), parent=self)
             return
 
-        save_text(request_dir / "03_approval.txt", approval_raw + "\n\nNormalized:\n" + approval)
+        save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
         self.set_busy(True, "Generating JSON...", cancellable=True)
 
         def task():
@@ -503,13 +735,15 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
-            save_text(request_dir / "04_final_raw.txt", raw)
+            save_text(self.request_file("resume_process", request_dir), raw)
             try:
                 data = extract_json(raw)
                 return raw, data, events, ""
             except Exception as exc:
-                save_text(request_dir / "04_final_json_extract_error.txt", str(exc))
+                save_text(request_dir / "04_resume_generation_error.txt", str(exc))
                 return raw, None, events, str(exc)
 
         def done(result, err):
@@ -520,13 +754,18 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            self.show_and_save_linkedin_outreach(request_dir, raw)
+            if not self.show_and_save_linkedin_outreach(request_dir, raw):
+                self.show_output("PASS 2 Result", self.response_summary(raw) or "Final resume JSON is ready.")
             self.add_cost_events(events)
             if parse_error:
                 self.set_stage("Raw response saved; JSON not extracted")
                 return
-            self.final_json_path = request_dir / "05_final_resume.json"
+            self.final_json_path = self.request_file("resume_json", request_dir)
             save_json(self.final_json_path, data)
+            self.recruiter_json_path = None
+            self.final_qa_json_path = None
+            self.docx_path = None
+            self.select_output_artifact("Output | Resume JSON")
             self.set_stage(f"JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -544,6 +783,7 @@ class JobTab(ttk.Frame):
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
@@ -557,6 +797,8 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
             approval_raw = self.approve_all_des_text(pass1_raw)
             approval = normalize_approval(approval_raw)
@@ -567,13 +809,15 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
-            save_text(request_dir / "04_final_raw.txt", pass2_raw)
+            save_text(self.request_file("resume_process", request_dir), pass2_raw)
             try:
                 data = extract_json(pass2_raw)
                 return pass1_raw, approval_raw, approval, pass2_raw, data, events, ""
             except Exception as exc:
-                save_text(request_dir / "04_final_json_extract_error.txt", str(exc))
+                save_text(request_dir / "04_resume_generation_error.txt", str(exc))
                 return pass1_raw, approval_raw, approval, pass2_raw, None, events, str(exc)
 
         def done(result, err):
@@ -585,19 +829,23 @@ class JobTab(ttk.Frame):
                 return
             pass1_raw, approval_raw, approval, pass2_raw, data, events, parse_error = result
             self.pass1_raw = pass1_raw
-            self.pass1.delete("1.0", "end")
-            self.pass1.insert("1.0", self.format_pass1_display(pass1_raw))
             self.approval.delete("1.0", "end")
             self.approval.insert("1.0", approval_raw)
-            save_text(request_dir / "02_pass1_des_bank.txt", pass1_raw)
-            save_text(request_dir / "03_approval.txt", approval_raw + "\n\nNormalized:\n" + approval)
-            self.show_and_save_linkedin_outreach(request_dir, pass2_raw)
+            save_text(self.request_file("des", request_dir), pass1_raw)
+            save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+            self.show_des_in_jd(pass1_raw)
+            if not self.show_and_save_linkedin_outreach(request_dir, pass2_raw):
+                self.show_output("AUTO JSON Result", self.response_summary(pass2_raw) or "Final resume JSON is ready.")
             self.add_cost_events(events)
             if parse_error:
                 self.set_stage("AUTO raw response saved; JSON not extracted")
                 return
-            self.final_json_path = request_dir / "05_final_resume.json"
+            self.final_json_path = self.request_file("resume_json", request_dir)
             save_json(self.final_json_path, data)
+            self.recruiter_json_path = None
+            self.final_qa_json_path = None
+            self.docx_path = None
+            self.select_output_artifact("Output | Resume JSON")
             self.set_stage(f"AUTO JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -616,8 +864,9 @@ class JobTab(ttk.Frame):
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
-            resume_json = json.loads(self.final_json_path.read_text(encoding="utf-8"))
+            resume_json = normalize_resume_json(json.loads(self.final_json_path.read_text(encoding="utf-8")))
             approval = self.text_value(self.approval)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Recruiter review needs input", str(exc), parent=self)
             return
@@ -629,17 +878,21 @@ class JobTab(ttk.Frame):
             raw = asyncio.run(run_recruiter_review(
                 jd=inp.jd,
                 resume1_json=resume_json,
+                company=inp.company,
+                title=inp.title,
                 des=approval,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
-            save_text(request_dir / "06_recruiter_raw.txt", raw)
+            save_text(self.request_file("recruiter_process", request_dir), raw)
             try:
                 data = extract_json(raw)
                 return raw, data, events, ""
             except Exception as exc:
-                save_text(request_dir / "06_recruiter_json_extract_error.txt", str(exc))
+                save_text(request_dir / "06_recruiter_review_error.txt", str(exc))
                 return raw, None, events, str(exc)
 
         def done(result, err):
@@ -650,24 +903,173 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("Recruiter review call failed", str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            self.show_and_save_linkedin_outreach(request_dir, raw, "10_recruiter_linkedin_outreach.txt")
+            if not self.show_and_save_linkedin_outreach(request_dir, raw):
+                self.show_output("Recruiter Review", self.response_summary(raw) or "Recruiter JSON is ready.")
             self.add_cost_events(events)
             if parse_error:
                 self.set_stage("Recruiter raw response saved; JSON not extracted")
                 return
-            self.recruiter_json_path = request_dir / "07_recruiter_final_resume.json"
+            self.recruiter_json_path = self.request_file("recruiter_json", request_dir)
             save_json(self.recruiter_json_path, data)
+            self.final_qa_json_path = None
             self.final_json_path = self.recruiter_json_path
+            self.select_output_artifact("Output | Recruiter Resume JSON")
             self.set_stage(f"Recruiter JSON: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)
 
     def best_resume_json_path(self) -> Path | None:
+        if self.final_qa_json_path and self.final_qa_json_path.exists():
+            return self.final_qa_json_path
         if self.recruiter_json_path and self.recruiter_json_path.exists():
             return self.recruiter_json_path
         if self.final_json_path and self.final_json_path.exists():
             return self.final_json_path
         return None
+
+    def format_final_review_display(
+        self,
+        result: FinalReviewResult,
+        source_path: Path,
+        final_path: Path,
+    ) -> str:
+        def summary_only(raw: str) -> str:
+            return re.sub(r"```json.*?```", "", raw, flags=re.DOTALL | re.IGNORECASE).strip()
+
+        profile = result.render_profile
+        experience_order = "\n".join(
+            f"  {item['position']}. {item['company']} - {item['title']}"
+            for item in profile.get("experience_order", [])
+        ) or "  None"
+        lock_note = (
+            "Locked fields restored automatically: " + ", ".join(result.restored_locks)
+            if result.restored_locks
+            else "Locked fields restored automatically: none"
+        )
+        return "\n\n".join([
+            "FINAL QA PROCESS",
+            f"Input resume: {source_path.name}",
+            "Render plan used by manager.py:\n"
+            f"  Type: {profile.get('resume_type')}\n"
+            f"  Level: {profile.get('level')} ({profile.get('level_label')})\n"
+            f"  Layout: {profile.get('layout_profile')}\n"
+            f"  Sections: {', '.join(profile.get('rendered_section_order', []))}\n"
+            f"  Experience order:\n{experience_order}",
+            "STEP 1 - AUDIT (read-only review):\n" + result.audit_raw.strip(),
+            "STEP 2 - REPAIR (candidate edits):\n" + summary_only(result.repair_raw),
+            "STEP 3 - FINAL SCAN (independent verification):\n" + summary_only(result.final_scan_raw),
+            lock_note,
+            f"Final usable output: {final_path.name}",
+        ])
+
+    def on_final_review(self) -> None:
+        try:
+            inp = self.make_input()
+            request_dir = self.ensure_request_dir(inp)
+            source_path = self.best_resume_json_path()
+            if not source_path:
+                raise ValueError("Generate resume JSON first. Recruiter JSON is preferred when available.")
+            source_json = normalize_resume_json(json.loads(source_path.read_text(encoding="utf-8")))
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+        except Exception as exc:
+            messagebox.showerror("Final QA needs input", str(exc), parent=self)
+            return
+
+        self.set_busy(True, "Final QA 1/3: auditing", cancellable=True)
+
+        def task():
+            artifacts: dict[str, object] = {}
+
+            def save_process(status: str, error: Exception | None = None) -> None:
+                parts = [
+                    "FINAL QA PROCESS",
+                    f"Input resume: {source_path.name}",
+                    "Step 1: audit the rendered resume without editing it.",
+                    "Step 2: repair only evidence-supported text in a candidate JSON.",
+                    "Step 3: independently scan the repaired candidate and produce the final JSON.",
+                    f"Status: {status}",
+                ]
+                profile = artifacts.get("render_profile")
+                if isinstance(profile, dict):
+                    parts.append(
+                        "RENDER PLAN\n"
+                        f"Type: {profile.get('resume_type')}\n"
+                        f"Level: {profile.get('level')} ({profile.get('level_label')})\n"
+                        f"Layout: {profile.get('layout_profile')}\n"
+                        f"Sections: {', '.join(profile.get('rendered_section_order', []))}"
+                    )
+                for heading, key in (
+                    ("STEP 1 - AUDIT", "audit_raw"),
+                    ("STEP 2 - REPAIR", "repair_raw"),
+                    ("STEP 3 - FINAL SCAN", "final_scan_raw"),
+                ):
+                    value = artifacts.get(key)
+                    if value:
+                        summary = re.sub(
+                            r"```json.*?```",
+                            "",
+                            str(value),
+                            flags=re.DOTALL | re.IGNORECASE,
+                        ).strip()
+                        parts.append(f"{heading}\n{summary}")
+                if error:
+                    parts.append(f"ERROR\n{type(error).__name__}: {error}")
+                save_text(self.request_file("final_qa_process", request_dir), "\n\n".join(parts))
+
+            def progress(_step: int, message: str) -> None:
+                self.app.after(0, lambda value=message: self.set_stage(value))
+
+            def record_cost(event: CostEvent) -> None:
+                self.app.after(0, lambda value=event: self.add_cost_events([value]))
+
+            def save_artifact(kind: str, value) -> None:
+                artifacts[kind] = value
+                if kind == "final_json" and isinstance(value, dict):
+                    save_json(self.request_file("final_qa_json", request_dir), value)
+                save_process(f"Completed {kind.replace('_', ' ')}")
+
+            try:
+                result = asyncio.run(run_final_review(
+                    jd=inp.jd,
+                    source_resume_json=source_json,
+                    cost_cb=record_cost,
+                    request_label=self.request_label(inp),
+                    cancel_event=self.cancel_event,
+                    progress_cb=progress,
+                    artifact_cb=save_artifact,
+                    nvidia_model=nvidia_model,
+                    nvidia_thinking=nvidia_thinking,
+                ))
+                return result
+            except Exception as exc:
+                save_process("Failed", exc)
+                raise
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            self.set_busy(False, "Final QA JSON ready" if not err else "Final QA failed")
+            if err:
+                self.show_output(
+                    "Final QA - Failed",
+                    f"Final QA stopped before completion.\n\n{type(err).__name__}: {err}\n\n"
+                    f"See {self.request_file('final_qa_process', request_dir).name} for completed steps.",
+                )
+                messagebox.showerror("Final QA failed", str(err), parent=self)
+                return
+
+            review_result = result
+            final_path = self.request_file("final_qa_json", request_dir)
+            display = self.format_final_review_display(review_result, source_path, final_path)
+            save_text(self.request_file("final_qa_process", request_dir), display)
+            self.show_output("Final QA", display)
+            self.final_qa_json_path = final_path
+            self.final_json_path = final_path
+            self.docx_path = None
+            self.select_output_artifact("Output | Final QA JSON")
+            self.set_stage(f"Final QA JSON: {final_path.name}")
+
+        run_bg(self.app, task, done)
 
     def on_answer_questions(self) -> None:
         try:
@@ -678,13 +1080,16 @@ class JobTab(ttk.Frame):
                 raise ValueError("Paste application questions first.")
             json_path = self.best_resume_json_path()
             if not json_path:
-                raise ValueError("Generate JSON first. Recruiter JSON is used when available; otherwise final PASS 2 JSON is used.")
-            resume_json = json.loads(json_path.read_text(encoding="utf-8"))
+                raise ValueError(
+                    "Generate JSON first. Final QA JSON is preferred, then recruiter JSON, then PASS 2 JSON."
+                )
+            resume_json = normalize_resume_json(json.loads(json_path.read_text(encoding="utf-8")))
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Application answers need input", str(exc), parent=self)
             return
 
-        save_text(request_dir / "08_application_questions.txt", questions)
+        save_text(self.request_file("questions", request_dir), questions)
         self.set_busy(True, "Answering application questions...", cancellable=True)
 
         def task():
@@ -698,6 +1103,8 @@ class JobTab(ttk.Frame):
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
             ))
             return answers, events, json_path
 
@@ -710,13 +1117,12 @@ class JobTab(ttk.Frame):
                 return
             answers, events, used_json_path = result
             clean_answers = self.clean_paste_text(answers)
-            self.app_answers.delete("1.0", "end")
-            self.app_answers.insert("1.0", clean_answers)
-            save_text(request_dir / "09_application_answers_raw.txt", answers)
+            self.show_output("Application Answers", clean_answers)
             save_text(
-                request_dir / "09_application_answers.txt",
+                self.request_file("answers", request_dir),
                 f"Source JSON: {used_json_path.name}\n\n{clean_answers}",
             )
+            self.select_output_artifact("Output | Application Answers")
             self.add_cost_events(events)
             self.set_stage("Application answers ready")
 
@@ -763,7 +1169,8 @@ class JobTab(ttk.Frame):
             stdout, path = result
             self.docx_path = path
             if self.request_dir:
-                save_text(self.request_dir / "06_docx_build.txt", stdout)
+                save_text(self.request_file("docx_log"), stdout)
+            self.show_output("DOCX Build", stdout)
             open_path(path)
 
         run_bg(self.app, task, done)
@@ -801,17 +1208,116 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("PDF archive failed", str(err), parent=self)
                 return
             if self.request_dir:
-                save_text(self.request_dir / "07_pdf_archive.txt", result)
-            messagebox.showinfo("PDF archived", result, parent=self)
+                save_text(self.request_file("pdf_log"), result)
+            self.show_output("PDF + Archive", result)
 
         run_bg(self.app, task, done)
 
     def on_open_request(self) -> None:
-        if self.request_dir and self.request_dir.exists():
-            open_path(self.request_dir)
+        REQUESTS_DIR.mkdir(exist_ok=True)
+        selected = filedialog.askdirectory(
+            title="Open saved resume request",
+            initialdir=str(self.request_dir.parent if self.request_dir else REQUESTS_DIR),
+            mustexist=True,
+        )
+        if not selected:
+            return
+        try:
+            self.load_request(Path(selected))
+        except Exception as exc:
+            messagebox.showerror("Open request failed", str(exc), parent=self)
+
+    def on_open_folder(self) -> None:
+        REQUESTS_DIR.mkdir(exist_ok=True)
+        open_path(self.request_dir if self.request_dir and self.request_dir.exists() else REQUESTS_DIR)
+
+    def load_request(self, request_dir: Path) -> None:
+        metadata_path = self.existing_request_file("request", request_dir)
+        jd_path = self.existing_request_file("jd", request_dir)
+        if not metadata_path or not jd_path:
+            raise ValueError("Choose a request folder containing request details and a job description.")
+
+        metadata: dict[str, str] = {}
+        for line in metadata_path.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition(":")
+            if separator:
+                metadata[key.strip().lower()] = value.strip()
+
+        def replace(box: tk.Text, value: str) -> None:
+            box.delete("1.0", "end")
+            box.insert("1.0", value)
+
+        replace(self.company, metadata.get("company", ""))
+        replace(self.title_text, metadata.get("title", "") or "Software Engineer")
+        replace(self.words, metadata.get("words", ""))
+        replace(self.des, metadata.get("des", ""))
+        saved_model = metadata.get("nvidia model", "")
+        saved_thinking = metadata.get("nvidia thinking", "ON").upper() != "OFF"
+        if saved_model:
+            try:
+                self.model_selector.set(nvidia_model_option_label(saved_model, saved_thinking))
+            except ValueError:
+                self.model_selector.set(get_default_nvidia_model_option())
+        self.show_job_description(jd_path.read_text(encoding="utf-8"))
+        self.mode_value = ""
+
+        approval_path = self.existing_request_file("approval", request_dir)
+        approval = "Approved: "
+        if approval_path:
+            approval = approval_path.read_text(encoding="utf-8").split("\n\nNormalized:", 1)[0].strip()
+        replace(self.approval, approval)
+
+        questions_path = self.existing_request_file("questions", request_dir)
+        replace(
+            self.app_questions,
+            questions_path.read_text(encoding="utf-8") if questions_path else "",
+        )
+
+        pass1_path = self.existing_request_file("des", request_dir)
+        self.pass1_raw = pass1_path.read_text(encoding="utf-8") if pass1_path else ""
+        self.request_dir = request_dir
+        self.request_id = metadata.get("request id", request_dir.name) or request_dir.name
+        pass2_path = self.existing_request_file("resume_json", request_dir)
+        recruiter_path = self.existing_request_file("recruiter_json", request_dir)
+        final_qa_path = self.existing_request_file("final_qa_json", request_dir)
+        self.recruiter_json_path = recruiter_path
+        self.final_qa_json_path = final_qa_path
+        self.final_json_path = next(
+            (path for path in (self.final_qa_json_path, self.recruiter_json_path, pass2_path) if path),
+            None,
+        )
+        self.docx_path = None
+
+        costs_path = request_dir / "costs.json"
+        self.cost_events = []
+        self.cost_usd = 0.0
+        if costs_path.exists():
+            costs = json.loads(costs_path.read_text(encoding="utf-8"))
+            self.cost_usd = float(costs.get("tab_total_usd", 0) or 0)
+        self.cost_label.config(text=f"${self.cost_usd:.4f}")
+
+        if self.pass1_raw:
+            self.show_des_in_jd(self.pass1_raw)
+
+        self.refresh_output_choices()
+        preferred_outputs = (
+            "Output | Final QA JSON",
+            "Output | Recruiter Resume JSON",
+            "Output | Resume JSON",
+            "Output | Application Answers",
+            "LinkedIn | Combined Outreach",
+            "Model Process | PASS 1 DES",
+        )
+        available = set(self.output_selector.cget("values"))
+        selected_output = next((label for label in preferred_outputs if label in available), "")
+        if selected_output:
+            self.output_selector.set(selected_output)
+            self.on_output_selected()
         else:
-            REQUESTS_DIR.mkdir(exist_ok=True)
-            open_path(REQUESTS_DIR)
+            self.show_output("Output", "Saved request loaded. Select any available next step.")
+
+        source_name = self.final_json_path.name if self.final_json_path else "inputs only"
+        self.set_stage(f"Loaded: {source_name}")
 
     def on_clear_tab(self) -> None:
         for box in (
@@ -819,11 +1325,9 @@ class JobTab(ttk.Frame):
             self.words,
             self.des,
             self.jd,
-            self.linkedin_outreach,
-            self.pass1,
             self.approval,
             self.app_questions,
-            self.app_answers,
+            self.output,
         ):
             box.delete("1.0", "end")
         self.title_text.delete("1.0", "end")
@@ -833,11 +1337,19 @@ class JobTab(ttk.Frame):
         self.request_dir = None
         self.final_json_path = None
         self.recruiter_json_path = None
+        self.final_qa_json_path = None
         self.docx_path = None
         self.cost_events = []
         self.cost_usd = 0.0
         self.request_id = self.name
         self.pass1_raw = ""
+        self.job_description = ""
+        self.jd_showing_des = False
+        self.jd_title.set("Job Description")
+        self.output_title.set("Output")
+        self.output_selector.configure(values=())
+        self.output_selector.set("")
+        self.model_selector.set(get_default_nvidia_model_option())
         self.cost_label.config(text="$0.0000")
         self.set_stage("Ready")
 
@@ -846,8 +1358,8 @@ class ResumeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Resume Agent")
-        self.geometry("1220x820")
-        self.minsize(1060, 720)
+        self.geometry("1400x850")
+        self.minsize(1260, 720)
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(2, weight=1)
@@ -975,12 +1487,13 @@ class ResumeApp(tk.Tk):
             (current.title_text, new.title_text),
             (current.words, new.words),
             (current.des, new.des),
-            (current.jd, new.jd),
-            (current.linkedin_outreach, new.linkedin_outreach),
             (current.app_questions, new.app_questions),
         ]:
             target.delete("1.0", "end")
             target.insert("1.0", source.get("1.0", "end").strip())
+        source_jd = current.job_description if current.jd_showing_des else current.text_value(current.jd)
+        new.show_job_description(source_jd)
+        new.model_selector.set(current.model_selector.get())
 
     def close_current(self) -> None:
         tab_id = self.notebook.select()
