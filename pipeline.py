@@ -724,6 +724,24 @@ def validate_json_response(text: str) -> str | None:
     return None
 
 
+def validate_v1_resume_response(text: str) -> str | None:
+    json_error = validate_json_response(text)
+    if json_error:
+        return json_error
+    data = extract_json(text)
+    technical_skills = data.get("technical_skills")
+    if not isinstance(technical_skills, dict):
+        return "technical_skills must be a flat object with dynamic skill-category titles"
+    for key, value in technical_skills.items():
+        if re.fullmatch(r"row\d+(?:_(?:label|terms))?", str(key).strip(), flags=re.IGNORECASE):
+            return "technical_skills must use dynamic category titles, not row1/row2 keys"
+        if isinstance(value, (list, dict)):
+            return "technical_skills values must be comma-separated strings, not arrays or objects"
+        if not str(key).strip() or not str(value).strip():
+            return "technical_skills keys and values must be non-empty"
+    return None
+
+
 def validate_nonempty_response(text: str) -> str | None:
     return None if text.strip() else "missing required response"
 
@@ -1144,7 +1162,7 @@ async def run_pass2(
         label=labeled_step(request_label, "PASS 2"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_json_response,
+        output_validator=validate_v1_resume_response if profile == "v1" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -1212,7 +1230,7 @@ async def run_recruiter_review(
         label=labeled_step(request_label, "FINAL CHECK" if profile == "v1" else "RECRUITER REVIEW"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_json_response,
+        output_validator=validate_v1_resume_response if profile == "v1" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,

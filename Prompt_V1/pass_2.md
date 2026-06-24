@@ -158,6 +158,31 @@ At least 90% of listed skills must trace to Story.md evidence IDs or approved DE
 Central JD skills must appear in summary or bullets, not only in Technical Skills.
 Do not list broad career inventory.
 
+Technical Skills JSON shape:
+- `technical_skills` must be a flat object with dynamic skill-category titles as keys.
+- Each `technical_skills` value must be one comma-separated string.
+- Do not use `row1`, `row2`, `row3`, `row4`, `row1_label`, `row1_terms`, or any row-based key.
+- Do not use arrays inside `technical_skills`.
+- Skill category titles must be meaningful and JD-specific, not generic row names.
+
+Good `technical_skills` shape:
+```json
+"technical_skills": {
+  "Frontend and Web Platforms": "React, TypeScript, JavaScript, Material UI, REST APIs, HTML, CSS",
+  "Backend, APIs, and Data": "Java, Spring Boot, Node.js, MySQL, PostgreSQL, Redis, NoSQL",
+  "Cloud, Delivery, and Operations": "AWS, Docker, Kubernetes, GitLab CI/CD, Jenkins, Linux, Terraform",
+  "Quality, Observability, and Security": "Datadog, CloudWatch, OAuth 2.0, RBAC, SAST, code review"
+}
+```
+
+Bad `technical_skills` shape:
+```json
+"technical_skills": {
+  "row1": ["React", "TypeScript"],
+  "row2": ["Java", "Spring Boot"]
+}
+```
+
 ---
 
 ## Identity and Date Rules
@@ -283,6 +308,8 @@ TIER 1: Hard stops. If any of these fail, fix first and do not output until reso
 - [ ] No banned key anywhere in JSON: institution, gpa, dates inside education, ta, row, client, url, link, repository, technologies
 - [ ] No banned verb in any bullet: leveraged, utilized, worked on, helped, assisted, responsible for, participated in
 - [ ] GraphQL not in skills unless Story.md card or approved DES confirms it
+- [ ] technical_skills uses dynamic category titles, not row1/row2/row3/row4 keys
+- [ ] technical_skills values are comma-separated strings, not arrays
 - [ ] No dollar values mentioned anywhere
 - [ ] contact field uses \n between line 1 and line 2
 - [ ] contact line 1 follows exact format with relocation signal
@@ -342,7 +369,18 @@ config.ta_active must be false
 education must be an array of exactly 2 objects.
 education keys: university, degree, location, graduation, ta_bullet
 
-technical_skills must be an object, not an array.
+technical_skills must be a flat object, not an array.
+technical_skills keys must be dynamic category titles such as:
+- Programming Languages
+- Frontend and Web Platforms
+- Backend, APIs, and Data
+- Cloud, Infrastructure, and Delivery
+- Quality, Observability, and Security
+
+Choose category titles based on the JD and selected evidence.
+technical_skills values must be comma-separated strings.
+Never use row-based keys such as row1, row2, row3, row4, row1_label, or row1_terms.
+Never use arrays as technical_skills values.
 
 professional_experience keys in this exact order:
 1. company

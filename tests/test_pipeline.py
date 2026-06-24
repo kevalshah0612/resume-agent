@@ -29,6 +29,20 @@ def valid_resume_response(
     )
 
 
+def valid_v1_resume_response() -> str:
+    return (
+        "FINAL JSON:\n"
+        "```json\n"
+        "{"
+        "\"technical_skills\": {"
+        "\"Frontend and Web Platforms\": \"React, TypeScript, JavaScript\", "
+        "\"Backend and APIs\": \"Java, Spring Boot, REST APIs\""
+        "}"
+        "}\n"
+        "```"
+    )
+
+
 class LinkedinMessageTests(unittest.TestCase):
     def test_extracts_only_message(self):
         response = valid_resume_response("Hi [Name], concise recruiter message.")
@@ -134,6 +148,18 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Stage 1 audit text", user_text)
         self.assertIn("Render profile from manager.py", user_text)
         self.assertIn("FINAL CHECK", call_mock.await_args.kwargs["label"])
+
+    def test_v1_validator_rejects_row_based_skill_arrays(self):
+        bad_response = (
+            "```json\n"
+            "{\"technical_skills\": {\"row1\": [\"React\", \"TypeScript\"], \"row2\": [\"Java\"]}}\n"
+            "```"
+        )
+        error = pipeline.validate_v1_resume_response(bad_response)
+        self.assertIn("dynamic category titles", error or "")
+
+    def test_v1_validator_accepts_dynamic_skill_titles(self):
+        self.assertIsNone(pipeline.validate_v1_resume_response(valid_v1_resume_response()))
 
 
 class NvidiaModelProfileTests(unittest.TestCase):

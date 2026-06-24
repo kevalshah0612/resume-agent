@@ -145,7 +145,10 @@ Hard stops (fix first):
 - [ ] education is array of exactly 2 objects
 - [ ] Both education objects have keys: university, degree, location, graduation, ta_bullet
 - [ ] Both education.ta_bullet values are empty string
-- [ ] technical_skills is an object, not an array
+- [ ] technical_skills is a flat object, not an array
+- [ ] technical_skills keys are dynamic skill-category titles, not row1, row2, row3, row4, row1_label, or row1_terms
+- [ ] technical_skills values are comma-separated strings, not arrays
+- [ ] technical_skills category titles are meaningful for this JD, such as Frontend and Web Platforms, Backend and APIs, Cloud and Delivery, Quality and Observability, or AI and Data
 - [ ] professional_experience objects have keys in order: company, title, location, dates, employment_note, bullets
 - [ ] projects objects have keys in order: name, tech, github_url, bullets
 - [ ] No banned keys anywhere: institution, gpa, dates inside education, ta, row, client, url, link, repository, technologies
