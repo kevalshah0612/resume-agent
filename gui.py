@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from app_properties import REQUESTS_DIR, RESUME_STEM, WORD_DIR
 from pipeline import (
     CostEvent,
     FinalReviewResult,
@@ -49,8 +50,6 @@ from pipeline import (
 
 
 ROOT = Path(__file__).parent
-REQUESTS_DIR = ROOT / "requests"
-WORD_DIR = ROOT / "Resume-word"
 
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
@@ -192,30 +191,31 @@ class JobTab(ttk.Frame):
         output_header = ttk.Frame(right)
         output_header.grid(row=0, column=0, sticky="ew")
         output_header.columnconfigure(1, weight=1)
+        output_header.columnconfigure(6, weight=1)
         self.output_title = tk.StringVar(value="Output")
         ttk.Label(output_header, textvariable=self.output_title).grid(row=0, column=0, sticky="w")
-        ttk.Label(output_header, text="Prompt").grid(row=0, column=2, sticky="e", padx=(8, 4))
+        ttk.Label(output_header, text="Prompt").grid(row=0, column=2, sticky="e", padx=(4, 3))
         self.prompt_selector = ttk.Combobox(
             output_header,
             state="readonly",
-            width=18,
+            width=8,
             values=prompt_profile_options(),
         )
-        self.prompt_selector.grid(row=0, column=3, sticky="e", padx=(0, 8))
+        self.prompt_selector.grid(row=0, column=3, sticky="e", padx=(0, 4))
         self.prompt_selector.set(prompt_profile_label("stable"))
         self.prompt_selector.bind("<<ComboboxSelected>>", self.on_prompt_profile_selected)
-        ttk.Label(output_header, text="Model").grid(row=0, column=4, sticky="e", padx=(8, 4))
+        ttk.Label(output_header, text="Model").grid(row=0, column=4, sticky="e", padx=(4, 3))
         self.model_selector = ttk.Combobox(
             output_header,
             state="readonly",
-            width=33,
+            width=24,
             values=nvidia_model_options(),
         )
-        self.model_selector.grid(row=0, column=5, sticky="e", padx=(0, 8))
+        self.model_selector.grid(row=0, column=5, sticky="e", padx=(0, 4))
         self.model_selector.set(get_default_nvidia_model_option())
         self.model_selector.bind("<<ComboboxSelected>>", self.on_model_selected)
-        self.output_selector = ttk.Combobox(output_header, state="readonly", width=34)
-        self.output_selector.grid(row=0, column=6, sticky="e")
+        self.output_selector = ttk.Combobox(output_header, state="readonly", width=24)
+        self.output_selector.grid(row=0, column=6, sticky="ew")
         self.output_selector.bind("<<ComboboxSelected>>", self.on_output_selected)
         self.output = self._text_box(right, 1, height=28, sticky="nsew")
 
@@ -1204,7 +1204,7 @@ class JobTab(ttk.Frame):
             )
             if result.returncode != 0:
                 raise RuntimeError(result.stderr or result.stdout)
-            docx_path = WORD_DIR / f"Keval_Shah_{slug(company)}_Resume.docx"
+            docx_path = WORD_DIR / f"{RESUME_STEM}_{slug(company)}_Resume.docx"
             for line in result.stdout.splitlines():
                 if line.startswith("DOCX saved"):
                     _, value = line.split(":", 1)
@@ -1559,7 +1559,7 @@ class ResumeApp(tk.Tk):
             self.notebook.forget(tab_id)
 
     def clear_docx_pdf(self) -> None:
-        if not messagebox.askyesno("Clear files", "Delete DOCX/PDF files in project root, Resume-word, and Resume-pdf?", parent=self):
+        if not messagebox.askyesno("Clear files", "Delete generated DOCX/PDF files from project output folders?", parent=self):
             return
 
         def task():

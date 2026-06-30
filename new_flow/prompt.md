@@ -1116,7 +1116,7 @@ Because the JSON schema has no separate `role_line` or `location_line` key, enco
 
 Use this dynamic contact format:
 
-`"[Target Role] | New York, NY | [Relocation / work-location signal]\n(607) 235-1181 | keval.shah61298@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612"`
+`"[Target Role] | New York, NY | [Relocation / work-location signal]\n(518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612"`
 
 Location / relocation rules:
 - If JD has strict onsite city outside New York: `[Target Role] | New York, NY | Open to relocate to [Target City, State]`
@@ -1274,7 +1274,7 @@ Final JSON must follow this structure exactly:
     "role": "[Exact Job Title]"
   },
   "name": "Keval Shah",
-  "contact": "[Target Role] | New York, NY | [Relocation / work-location signal]\n(607) 235-1181 | keval.shah61298@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612",
+  "contact": "[Target Role] | New York, NY | [Relocation / work-location signal]\n(518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612",
   "linkedin_url": "https://www.linkedin.com/in/keval-shah0612",
   "github_url": "https://github.com/kevalshah0612",
   "summary": "[35 to 50 words, 2 sentences maximum, exact JD identity, strongest supported proof, no unsupported domain claim]",

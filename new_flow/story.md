@@ -87,7 +87,7 @@ If a claim has no Evidence ID or approved DES ID, exclude it.
 Name: Keval Shah
 
 Default contact:
-New York, NY | (607) 235-1181 | keval.shah61298@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612
+New York, NY | (518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612
 
 LinkedIn: https://www.linkedin.com/in/keval-shah0612
 GitHub: https://github.com/kevalshah0612
@@ -124,7 +124,7 @@ Professional experience:
    - Software Engineer
    - New York, NY
    - Jun 2025 - Aug 2025
-   - University-connected graduate applied project
+   - No employment note
    - Do not call this role an internship role
 
 2. Tata Consultancy Services

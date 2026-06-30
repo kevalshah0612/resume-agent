@@ -52,6 +52,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict
 
+from app_properties import ARCHIVES_DIR_NAME, RESUME_STEM, WORD_DIR_NAME, PDF_DIR_NAME
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -79,10 +80,9 @@ TAB_PAD = Inches(0.05)
 DEFAULT_SECTION_GAP = 4   # pts between sections
 DEFAULT_SUB_GAP = 4       # pts between entries within a section
 
-RESUME_STEM = "Keval_Shah"
-ARCHIVES_DIR = "archives"
-WORD_DIR = "Resume-word"
-PDF_DIR = "Resume-pdf"
+ARCHIVES_DIR = ARCHIVES_DIR_NAME
+WORD_DIR = WORD_DIR_NAME
+PDF_DIR = PDF_DIR_NAME
 
 
 # ── Configs ──────────────────────────────────────────────────────────────────
@@ -545,7 +545,7 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
 
 def clear_folder() -> None:
     deleted = 0
-    for folder in [".", WORD_DIR, PDF_DIR]:
+    for folder in [WORD_DIR, PDF_DIR]:
         if not os.path.isdir(folder):
             continue
         for name in os.listdir(folder):
@@ -559,6 +559,19 @@ def clear_folder() -> None:
                     print(f"Deleted: {path}")
                 except Exception as e:
                     print(f"Could not delete {path}: {e}")
+    for name in os.listdir("."):
+        path = os.path.join(".", name)
+        if os.path.isdir(path):
+            continue
+        lower = name.lower()
+        is_generated_resume = lower.startswith(f"{RESUME_STEM.lower()}_") and lower.endswith(("_resume.docx", "_resume.pdf"))
+        if is_generated_resume or name.startswith("~$"):
+            try:
+                os.remove(path)
+                deleted += 1
+                print(f"Deleted: {path}")
+            except Exception as e:
+                print(f"Could not delete {path}: {e}")
     print(f"Done. Removed {deleted} file(s).")
 
 

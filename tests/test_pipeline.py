@@ -96,6 +96,8 @@ class PromptProfileTests(unittest.TestCase):
             {pipeline.resolve_prompt_profile_label(label) for label in labels},
             {"stable", "v1"},
         )
+        self.assertIn("Stable", labels)
+        self.assertIn("V1", labels)
         self.assertEqual(pipeline.resolve_prompt_profile_label("Prompt_V1"), "v1")
         self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
 

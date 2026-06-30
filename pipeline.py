@@ -30,6 +30,7 @@ from typing import Any, Callable
 
 import anthropic
 
+from app_properties import PROMPT_PROFILE_LABELS
 from manager import build_render_profile
 
 
@@ -48,10 +49,7 @@ DEFAULT_NVIDIA_REASONING_BUDGET = 16384
 
 _log_cb = None
 
-PROMPT_PROFILES = {
-    "stable": "Stable new_flow",
-    "v1": "V1 experimental",
-}
+PROMPT_PROFILES = dict(PROMPT_PROFILE_LABELS)
 
 PASS1_COMPACT_INSTRUCTION = """
 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
