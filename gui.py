@@ -56,7 +56,13 @@ ROOT = Path(__file__).parent
 def manager_script_for_profile(prompt_profile: str) -> Path:
     if prompt_profile == "v1":
         return ROOT / "v1_experimental_flow" / "manager_Updated.py"
+    if prompt_profile == "v2":
+        return ROOT / "v2_experimental_flow" / "manager_Updated.py"
     return ROOT / "manager.py"
+
+
+def is_experimental_profile(prompt_profile: str) -> bool:
+    return prompt_profile in {"v1", "v2"}
 
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
@@ -302,8 +308,8 @@ class JobTab(ttk.Frame):
         })
 
     def apply_prompt_profile_view(self) -> None:
-        is_v1 = self.selected_prompt_profile() == "v1"
-        if is_v1:
+        is_experimental = is_experimental_profile(self.selected_prompt_profile())
+        if is_experimental:
             self.words.field_label.config(text="Location")
             self.pass1_btn.grid_remove()
             self.auto_btn.grid_remove()
@@ -599,6 +605,19 @@ class JobTab(ttk.Frame):
         self.refresh_output_choices()
         return True
 
+    def save_rejected_ai_response(self, request_dir: Path, prefix: str, attempt: int, text: str, reason: str) -> None:
+        safe_prefix = re.sub(r"[^A-Za-z0-9_]+", "_", prefix).strip("_") or "ai"
+        save_text(
+            request_dir / f"{safe_prefix}_rejected_attempt_{attempt}.txt",
+            "\n".join([
+                f"Attempt: {attempt}",
+                f"Reason: {reason}",
+                "",
+                "Raw model response:",
+                text,
+            ]),
+        )
+
     def make_input(self) -> ResumeInput:
         company = self.text_value(self.company)
         if self.jd_showing_des:
@@ -654,7 +673,7 @@ class JobTab(ttk.Frame):
                 f"Request ID: {self.request_id}",
                 f"Company: {inp.company}",
                 f"Title: {inp.title}",
-                f"{'Location' if prompt_profile == 'v1' else 'Words'}: {inp.words}",
+                f"{'Location' if is_experimental_profile(prompt_profile) else 'Words'}: {inp.words}",
                 f"DES: {inp.des}",
                 f"Prompt Profile: {prompt_profile}",
                 f"NVIDIA Model: {nvidia_model}",
@@ -754,6 +773,13 @@ class JobTab(ttk.Frame):
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
+                rejected_response_cb=lambda attempt, text, reason: self.save_rejected_ai_response(
+                    request_dir,
+                    "04_resume_generation",
+                    attempt,
+                    text,
+                    reason,
+                ),
             ))
             return result, events
 
@@ -779,10 +805,10 @@ class JobTab(ttk.Frame):
             request_dir = self.ensure_request_dir(inp)
             prompt_profile = self.selected_prompt_profile()
             pass1_text = self.pass1_raw or self.text_value(self.output)
-            if prompt_profile != "v1" and not pass1_text:
+            if not is_experimental_profile(prompt_profile) and not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
-            approval = "" if prompt_profile == "v1" else normalize_approval(approval_raw)
+            approval = "" if is_experimental_profile(prompt_profile) else normalize_approval(approval_raw)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Missing step", str(exc), parent=self)
@@ -807,8 +833,8 @@ class JobTab(ttk.Frame):
             save_text(self.request_file("resume_process", request_dir), raw)
             try:
                 data = extract_json(raw)
-                if prompt_profile == "v1":
-                    data = v1_compact_to_resume_json(data, inp)
+                if is_experimental_profile(prompt_profile):
+                    data = v1_compact_to_resume_json(data, inp, prompt_profile)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "04_resume_generation_error.txt", str(exc))
@@ -822,8 +848,8 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            if prompt_profile == "v1":
-                self.show_output("V1 Prompt", self.response_summary(raw) or "V1 prompt JSON is ready.")
+            if is_experimental_profile(prompt_profile):
+                self.show_output(f"{prompt_profile.upper()} Prompt", self.response_summary(raw) or f"{prompt_profile.upper()} prompt JSON is ready.")
             elif not self.show_and_save_linkedin_outreach(request_dir, raw):
                 self.show_output("PASS 2 Result", self.response_summary(raw) or "Final resume JSON is ready.")
             self.add_cost_events(events)
@@ -836,7 +862,7 @@ class JobTab(ttk.Frame):
             self.final_qa_json_path = None
             self.docx_path = None
             self.select_output_artifact("Output | Resume JSON")
-            self.set_stage(f"{'V1 Prompt' if prompt_profile == 'v1' else 'JSON'}: {self.final_json_path.name}")
+            self.set_stage(f"{prompt_profile.upper() + ' Prompt' if is_experimental_profile(prompt_profile) else 'JSON'}: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
 
@@ -947,7 +973,7 @@ class JobTab(ttk.Frame):
 
         self.set_busy(
             True,
-            "Final check running..." if prompt_profile == "v1" else "Recruiter review running...",
+            "Final check running..." if is_experimental_profile(prompt_profile) else "Recruiter review running...",
             cancellable=True,
         )
 
@@ -966,12 +992,19 @@ class JobTab(ttk.Frame):
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
                 pass1_audit=self.pass1_raw,
+                rejected_response_cb=lambda attempt, text, reason: self.save_rejected_ai_response(
+                    request_dir,
+                    "06_recruiter_review",
+                    attempt,
+                    text,
+                    reason,
+                ),
             ))
             save_text(self.request_file("recruiter_process", request_dir), raw)
             try:
                 data = extract_json(raw)
-                if prompt_profile == "v1":
-                    data = v1_compact_to_resume_json(data, inp)
+                if is_experimental_profile(prompt_profile):
+                    data = v1_compact_to_resume_json(data, inp, prompt_profile)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "06_recruiter_review_error.txt", str(exc))
@@ -980,30 +1013,30 @@ class JobTab(ttk.Frame):
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            ready_message = "Final check JSON ready" if prompt_profile == "v1" else "Recruiter JSON ready"
-            failed_message = "Final check failed" if prompt_profile == "v1" else "Recruiter call failed"
+            ready_message = "Final check JSON ready" if is_experimental_profile(prompt_profile) else "Recruiter JSON ready"
+            failed_message = "Final check failed" if is_experimental_profile(prompt_profile) else "Recruiter call failed"
             self.set_busy(False, ready_message if not err else failed_message)
             if err:
-                title = "Final check failed" if prompt_profile == "v1" else "Recruiter review call failed"
+                title = "Final check failed" if is_experimental_profile(prompt_profile) else "Recruiter review call failed"
                 messagebox.showerror(title, str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            if prompt_profile == "v1":
+            if is_experimental_profile(prompt_profile):
                 self.show_output("Hotdog", self.response_summary(raw) or "Hotdog JSON is ready.")
             elif not self.show_and_save_linkedin_outreach(request_dir, raw):
-                title = "Final Check" if prompt_profile == "v1" else "Recruiter Review"
-                fallback = "Final check JSON is ready." if prompt_profile == "v1" else "Recruiter JSON is ready."
+                title = "Final Check" if is_experimental_profile(prompt_profile) else "Recruiter Review"
+                fallback = "Final check JSON is ready." if is_experimental_profile(prompt_profile) else "Recruiter JSON is ready."
                 self.show_output(title, self.response_summary(raw) or fallback)
             self.add_cost_events(events)
             if parse_error:
-                self.set_stage("Final check raw response saved; JSON not extracted" if prompt_profile == "v1" else "Recruiter raw response saved; JSON not extracted")
+                self.set_stage("Final check raw response saved; JSON not extracted" if is_experimental_profile(prompt_profile) else "Recruiter raw response saved; JSON not extracted")
                 return
             self.recruiter_json_path = self.request_file("recruiter_json", request_dir)
             save_json(self.recruiter_json_path, data)
             self.final_qa_json_path = None
             self.final_json_path = self.recruiter_json_path
             self.select_output_artifact("Output | Recruiter Resume JSON")
-            label = "Hotdog JSON" if prompt_profile == "v1" else "Recruiter JSON"
+            label = "Hotdog JSON" if is_experimental_profile(prompt_profile) else "Recruiter JSON"
             self.set_stage(f"{label}: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)

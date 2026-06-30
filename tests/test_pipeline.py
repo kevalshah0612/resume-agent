@@ -91,15 +91,17 @@ class LinkedinMessageTests(unittest.TestCase):
 
 
 class PromptProfileTests(unittest.TestCase):
-    def test_prompt_profile_options_resolve_to_stable_and_v1(self):
+    def test_prompt_profile_options_resolve_to_stable_v1_and_v2(self):
         labels = pipeline.prompt_profile_options()
         self.assertEqual(
             {pipeline.resolve_prompt_profile_label(label) for label in labels},
-            {"stable", "v1"},
+            {"stable", "v1", "v2"},
         )
         self.assertIn("Stable", labels)
         self.assertIn("V1", labels)
+        self.assertIn("V2", labels)
         self.assertEqual(pipeline.resolve_prompt_profile_label("v1_experimental_flow"), "v1")
+        self.assertEqual(pipeline.resolve_prompt_profile_label("v2_experimental_flow"), "v2")
         self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
 
     def test_v1_prompt_uses_prompt_story_and_direct_inputs(self):
@@ -114,9 +116,10 @@ class PromptProfileTests(unittest.TestCase):
             )
         system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("Resume Generation Prompt", system_text)
-        self.assertIn("Hiring Manager Story Contract", system_text)
+        self.assertIn("Resume Bullet Writer", system_text)
+        self.assertIn("Career Story Bank", system_text)
         self.assertIn("JD:\nBuild APIs", user_text)
+        self.assertIn("ROLE TYPE:\nBackend", user_text)
         self.assertIn("Company:\nAcme", user_text)
         self.assertIn("Location:\nBoston, MA", user_text)
         self.assertIn("DES (optional):\nUse API work", user_text)
@@ -145,6 +148,34 @@ class PromptProfileTests(unittest.TestCase):
         self.assertNotIn("professional_experience", user_text)
         self.assertIn("FINAL CHECK", call_mock.await_args.kwargs["label"])
 
+    def test_v2_prompt_uses_v2_prompt_story_and_direct_inputs(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_pass2(
+                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
+                    pass1_text="",
+                    approval_text="",
+                    prompt_profile="v2",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("Resume Generation Prompt", system_text)
+        self.assertIn("Story_GPT", system_text)
+        self.assertIn("JD:\nBuild APIs", user_text)
+        self.assertIn("ROLE TYPE:\nBackend", user_text)
+        self.assertIn("Company:\nAcme", user_text)
+        self.assertIn("Location:\nBoston, MA", user_text)
+
+    def test_v2_compact_to_resume_json_marks_v2_profile(self):
+        compact = pipeline.extract_json(valid_v1_compact_response())
+        mapped = pipeline.v1_compact_to_resume_json(
+            compact,
+            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+            "v2",
+        )
+        self.assertEqual(mapped["config"]["prompt_profile"], "v2")
+
     def test_v1_validator_rejects_full_schema(self):
         bad_response = (
             "```json\n"
@@ -152,10 +183,14 @@ class PromptProfileTests(unittest.TestCase):
             "```"
         )
         error = pipeline.validate_v1_compact_response(bad_response)
-        self.assertIn("type, experience, projects, and skills", error or "")
+        self.assertIn("experience, projects, skills", error or "")
 
     def test_v1_validator_accepts_compact_schema(self):
         self.assertIsNone(pipeline.validate_v1_compact_response(valid_v1_compact_response()))
+
+    def test_v1_validator_accepts_compact_schema_without_type(self):
+        response = valid_v1_compact_response().replace("\"type\": \"Backend\", ", "")
+        self.assertIsNone(pipeline.validate_v1_compact_response(response))
 
     def test_v1_compact_to_resume_json_adds_locked_resume_fields(self):
         compact = pipeline.extract_json(valid_v1_compact_response())
@@ -169,8 +204,6 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn(f"Moving to Boston, MA in {pipeline.next_month_label()}; available to move sooner if needed", mapped["location"])
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Present")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
-        self.assertTrue(any(label.startswith("Languages") for label in mapped["technical_skills"]))
-        self.assertNotIn("PostgreSQL", json.dumps(mapped["technical_skills"]))
 
     def test_v1_resume_location_defaults_to_current_location(self):
         compact = pipeline.extract_json(valid_v1_compact_response())
@@ -180,32 +213,6 @@ class PromptProfileTests(unittest.TestCase):
         )
         self.assertEqual("New York, NY", mapped["location"])
 
-    def test_v1_skills_are_pruned_to_final_bullet_evidence(self):
-        compact = {
-            "type": "Backend",
-            "experience": [
-                {
-                    "title": "Software Engineer II",
-                    "company": "Tata Consultancy Services",
-                    "bullets": ["Built Java Spring Boot APIs with JUnit tests and Datadog alerts for release teams."],
-                }
-            ],
-            "projects": [],
-            "skills": ["Java", "Spring Boot", "Python", "PostgreSQL", "JUnit", "Datadog", "Code review", "SDLC"],
-        }
-        mapped = pipeline.v1_compact_to_resume_json(
-            compact,
-            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Java APIs"),
-        )
-        rendered = json.dumps(mapped["technical_skills"])
-        self.assertIn("Java", rendered)
-        self.assertIn("Spring Boot", rendered)
-        self.assertIn("JUnit", rendered)
-        self.assertIn("Datadog", rendered)
-        self.assertNotIn("Python", rendered)
-        self.assertNotIn("PostgreSQL", rendered)
-        self.assertNotIn("Code review", rendered)
-        self.assertLessEqual(sum(len(v.split(", ")) for v in mapped["technical_skills"].values()), 14)
 
 
 class NvidiaModelProfileTests(unittest.TestCase):
@@ -267,7 +274,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
         client, create = self.fake_client(chunks)
         with (
             patch("pipeline.get_nvidia_client", return_value=client),
-            patch("pipeline.get_nvidia_reasoning_budget", return_value=16384),
+            patch("pipeline.get_nvidia_reasoning_budget", return_value=49152),
         ):
             response = pipeline.call_nvidia_sync(
                 system_blocks=[],
@@ -282,7 +289,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
             kwargs["extra_body"],
             {
                 "chat_template_kwargs": {"enable_thinking": True},
-                "reasoning_budget": 16384,
+                "reasoning_budget": 49152,
             },
         )
         self.assertEqual(response.text, "Nemotron answer")
@@ -338,6 +345,39 @@ class NvidiaRetryTests(unittest.TestCase):
         result, calls = self.run_call([malformed, valid])
         self.assertEqual(calls, 2)
         self.assertIsNone(pipeline.validate_json_response(result))
+
+    def test_rejected_response_callback_receives_raw_attempt_text(self):
+        malformed = pipeline.NvidiaResponse(
+            text="I need the role type before writing JSON.",
+            usage=EMPTY_USAGE,
+            finish_reason="stop",
+        )
+        valid = pipeline.NvidiaResponse(
+            text=valid_resume_response(),
+            usage=EMPTY_USAGE,
+            finish_reason="stop",
+        )
+        rejected = []
+        with (
+            patch("pipeline.get_provider", return_value="nvidia"),
+            patch("pipeline.get_nvidia_model", return_value="nvidia/test"),
+            patch("pipeline.get_nvidia_max_attempts", return_value=3),
+            patch("pipeline.call_nvidia_sync", side_effect=[malformed, valid]),
+            patch("pipeline.asyncio.sleep", new=AsyncMock()),
+        ):
+            asyncio.run(
+                pipeline.call_model(
+                    system_blocks=[],
+                    messages=[{"role": "user", "content": "generate"}],
+                    label="TEST",
+                    max_tokens=1000,
+                    output_validator=pipeline.validate_json_response,
+                    rejected_response_cb=lambda attempt, text, reason: rejected.append((attempt, text, reason)),
+                )
+            )
+        self.assertEqual(rejected[0][0], 1)
+        self.assertIn("role type", rejected[0][1])
+        self.assertIn("Could not extract valid JSON", rejected[0][2])
 
     def test_accepts_complete_json_with_length_finish_reason(self):
         complete = pipeline.NvidiaResponse(

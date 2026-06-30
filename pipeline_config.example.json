@@ -5,7 +5,7 @@
   "nvidia_thinking": true,
   "nvidia_base_url": "https://integrate.api.nvidia.com/v1",
   "nvidia_max_attempts": 5,
-  "nvidia_reasoning_budget": 16384,
+  "nvidia_reasoning_budget": 49152,
   "fallback_to_anthropic": false,
   "model_sonnet": "claude-sonnet-4-6",
   "default_words": "",

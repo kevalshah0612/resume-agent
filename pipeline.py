@@ -49,6 +49,7 @@ from manager import build_render_profile
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
 PROMPT_V1_DIR = ROOT / "v1_experimental_flow"
+PROMPT_V2_DIR = ROOT / "v2_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
@@ -57,7 +58,7 @@ ENV_FILE = ROOT / ".env"
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 DEFAULT_NVIDIA_MAX_ATTEMPTS = 5
-DEFAULT_NVIDIA_REASONING_BUDGET = 16384
+DEFAULT_NVIDIA_REASONING_BUDGET = 49152
 
 _log_cb = None
 
@@ -341,7 +342,7 @@ def get_nvidia_reasoning_budget() -> int:
         cfg.get("nvidia_reasoning_budget"),
         DEFAULT_NVIDIA_REASONING_BUDGET,
         0,
-        16384,
+        49152,
     )
     return configured
 
@@ -431,7 +432,13 @@ def normalize_prompt_profile(value: str | None) -> str:
     raw = (value or "").strip().lower()
     if raw in {"v1", "prompt_v1", "v1_experimental_flow", "experimental", "v1 experimental"}:
         return "v1"
+    if raw in {"v2", "prompt_v2", "v2_experimental_flow", "v2 experimental"}:
+        return "v2"
     return "stable"
+
+
+def is_experimental_prompt_profile(value: str | None) -> bool:
+    return normalize_prompt_profile(value) in {"v1", "v2"}
 
 
 def prompt_profile_label(profile: str) -> str:
@@ -575,7 +582,12 @@ def call_nvidia_sync(
 
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
-    return (PROMPT_V1_DIR / "prompts") if normalize_prompt_profile(prompt_profile) == "v1" else PROMPT_DIR
+    profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        return PROMPT_V1_DIR / "prompts"
+    if profile == "v2":
+        return PROMPT_V2_DIR / "prompts"
+    return PROMPT_DIR
 
 
 def read_prompt(name: str, prompt_profile: str | None = None) -> str:
@@ -739,10 +751,11 @@ def validate_v1_compact_response(text: str) -> str | None:
     if json_error:
         return json_error
     data = extract_json(text)
-    required = {"type", "experience", "projects", "skills"}
+    required = {"experience", "projects", "skills"}
+    optional = {"type"}
     lower_keys = {str(key).lower() for key in data}
-    if lower_keys != required:
-        return "V1 JSON must contain only type, experience, projects, and skills"
+    if not required.issubset(lower_keys) or not lower_keys.issubset(required | optional):
+        return "V1 JSON must contain only experience, projects, skills, and optional type"
     if not isinstance(data.get("experience") or data.get("Experience"), list):
         return "V1 JSON experience must be a list"
     if not isinstance(data.get("projects") or data.get("Projects"), list):
@@ -791,94 +804,13 @@ def split_skill_terms(value: Any) -> list[str]:
     return terms
 
 
-V1_SKILL_CATEGORY_LIMIT = 3
-V1_SKILL_TOTAL_LIMIT = 14
-V1_EXCLUDED_SKILLS = {
-    "code review",
-    "sdlc",
-    "design patterns",
-    "multi-tenant architecture",
-    "async processing",
-}
-V1_SKILL_ALIASES = {
-    "ec2": "AWS",
-    "s3": "AWS",
-    "lambda": "AWS",
-    "cloudwatch": "AWS",
-    "azure key vault": "Azure",
-}
-
-
-def skill_match_key(term: str) -> str:
-    return re.sub(r"[^a-z0-9+#.]+", "", term.lower())
-
-
-def skill_visible_in_text(term: str, text: str) -> bool:
-    if not text.strip():
-        return True
-    lower = text.lower()
-    normalized_text = skill_match_key(text)
-    candidates = [term]
-    paren = re.search(r"\((.*?)\)", term)
-    if paren:
-        candidates.extend(part.strip() for part in re.split(r",|/", paren.group(1)) if part.strip())
-        candidates.append(re.sub(r"\s*\(.*?\)", "", term).strip())
-    for candidate in candidates:
-        cleaned = candidate.strip()
-        if not cleaned:
-            continue
-        if re.search(rf"(?<![a-z0-9]){re.escape(cleaned.lower())}(?![a-z0-9])", lower):
-            return True
-        if skill_match_key(cleaned) and skill_match_key(cleaned) in normalized_text:
-            return True
-    return False
-
-
-def compact_skill_term(term: str) -> str:
-    cleaned = re.sub(r"\s+", " ", term).strip(" ,;()")
-    return V1_SKILL_ALIASES.get(cleaned.lower(), cleaned)
-
-
-def categorize_v1_skill(term: str) -> str:
-    lower = term.lower()
-    if any(token in lower for token in ("java", "python", "spring", "fastapi", "fastify", "django", "node", "typescript", "javascript", "react", "angular", ".net", "c#", "html", "css")):
-        return "Languages"
-    if any(token in lower for token in ("aws", "gcp", "azure", "ec2", "s3", "lambda", "cloudwatch", "cloud", "docker", "kubernetes")):
-        return "Cloud and Infrastructure"
-    if any(token in lower for token in ("postgres", "mysql", "mongodb", "redis", "kafka", "bullmq", "sql", "database", "api", "microservice")):
-        return "Backend and Data"
-    return "Testing and Delivery"
-
-
-def v1_skill_category_label(category: str, values: list[str]) -> str:
-    if category == "Languages":
-        framework_tokens = ("spring", "fastapi", "fastify", "django", "react", "angular", ".net")
-        if any(any(token in value.lower() for token in framework_tokens) for value in values):
-            return "Languages and Frameworks"
-    return category
-
-
-def normalize_v1_skills(skills: Any, evidence_text: str = "") -> dict[str, str]:
-    grouped: dict[str, list[str]] = {}
-    seen = {key: set() for key in grouped}
-    total = 0
-    for raw_term in split_skill_terms(skills):
-        term = compact_skill_term(raw_term)
-        if not term or term.lower() in V1_EXCLUDED_SKILLS:
-            continue
-        if not skill_visible_in_text(term, evidence_text):
-            continue
-        category = categorize_v1_skill(term)
-        grouped.setdefault(category, [])
-        seen.setdefault(category, set())
-        key = term.lower()
-        if key not in seen[category]:
-            if len(grouped[category]) >= V1_SKILL_CATEGORY_LIMIT or total >= V1_SKILL_TOTAL_LIMIT:
-                continue
-            grouped[category].append(term)
-            seen[category].add(key)
-            total += 1
-    return {v1_skill_category_label(category, values): ", ".join(values) for category, values in grouped.items() if values}
+def v1_model_skills_to_technical_skills(skills: Any) -> dict[str, str]:
+    if isinstance(skills, list):
+        terms = [re.sub(r"\s+", " ", str(item or "")).strip() for item in skills]
+        terms = [term for term in terms if term]
+    else:
+        terms = split_skill_terms(skills)
+    return {"Skills": ", ".join(terms)} if terms else {}
 
 
 def v1_experience_lock(company: str, title: str) -> dict[str, str]:
@@ -915,7 +847,7 @@ def v1_header_location(inp: ResumeInput) -> str:
     return CURRENT_LOCATION
 
 
-def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput) -> dict[str, Any]:
+def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v1") -> dict[str, Any]:
     jobs: list[dict[str, Any]] = []
     for item in compact.get("experience") or compact.get("Experience") or []:
         if not isinstance(item, dict):
@@ -946,13 +878,6 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput) -> dict
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
         })
 
-    evidence_text = " ".join(
-        bullet
-        for collection in (jobs, projects)
-        for item in collection
-        for bullet in item.get("bullets", [])
-    )
-
     return normalize_resume_json({
         "config": {
             "type": v1_config_type(compact.get("type") or compact.get("Type")),
@@ -963,7 +888,7 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput) -> dict
             "ta_active": False,
             "company": inp.company,
             "role": inp.title or "Software Engineer",
-            "prompt_profile": "v1",
+            "prompt_profile": normalize_prompt_profile(prompt_profile),
         },
         "name": CANDIDATE_NAME,
         "contact": candidate_contact_line(),
@@ -987,7 +912,7 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput) -> dict
         ],
         "professional_experience": jobs,
         "projects": projects,
-        "technical_skills": normalize_v1_skills(compact.get("skills") or compact.get("Skills"), evidence_text),
+        "technical_skills": v1_model_skills_to_technical_skills(compact.get("skills") or compact.get("Skills")),
     })
 
 
@@ -1184,6 +1109,7 @@ async def call_model(
     provider_override: str | None = None,
     model_override: str | None = None,
     nvidia_thinking_override: bool | None = None,
+    rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     provider = provider_override or get_provider()
     if provider == "nvidia":
@@ -1256,6 +1182,8 @@ async def call_model(
                 rejection_reason = ""
                 break
             rejection_reason = "; ".join(problems)
+            if rejected_response_cb:
+                rejected_response_cb(attempt, text, rejection_reason)
             log(
                 f"{label}: NVIDIA attempt {attempt}/{max_attempts} rejected: "
                 f"{rejection_reason}"
@@ -1332,7 +1260,7 @@ async def call_model(
 
 
 def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
-    if normalize_prompt_profile(prompt_profile) == "v1":
+    if is_experimental_prompt_profile(prompt_profile):
         return [
             cached_text_block(read_prompt("prompt.md", prompt_profile)),
             cached_text_block(read_prompt("Story.md", prompt_profile)),
@@ -1348,7 +1276,7 @@ def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
 
 
 def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
-    if normalize_prompt_profile(prompt_profile) == "v1":
+    if is_experimental_prompt_profile(prompt_profile):
         return [cached_text_block(read_prompt("hotdog.md", prompt_profile))]
     return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
@@ -1367,7 +1295,7 @@ async def run_pass1(
     prompt_profile: str = "stable",
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v1":
+    if is_experimental_prompt_profile(profile):
         user_message = "\n\n".join([
             read_prompt("prompt_short.md", profile),
             f"JD:\n{inp.jd.strip()}",
@@ -1408,15 +1336,17 @@ async def run_pass2(
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
     prompt_profile: str = "stable",
+    rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    normalized_approval = approval_text.strip() if profile == "v1" else normalize_approval(approval_text)
-    if profile == "v1":
+    normalized_approval = approval_text.strip() if is_experimental_prompt_profile(profile) else normalize_approval(approval_text)
+    if is_experimental_prompt_profile(profile):
         messages = [{
             "role": "user",
             "content": "\n\n".join([
                 read_prompt("prompt_short.md", profile),
                 f"JD:\n{inp.jd.strip()}",
+                f"ROLE TYPE:\n{v1_type_label(inp.mode)}",
                 f"Company:\n{inp.company.strip()}",
                 f"Location:\n{inp.words.strip()}",
                 "DES (optional):\n" + "\n".join(part for part in (inp.des.strip(), normalized_approval.strip()) if part),
@@ -1439,10 +1369,11 @@ async def run_pass2(
         label=labeled_step(request_label, "PASS 2"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_compact_response if profile == "v1" else validate_json_response,
+        output_validator=validate_v1_compact_response if is_experimental_prompt_profile(profile) else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
+        rejected_response_cb=rejected_response_cb,
     )
 
 
@@ -1461,9 +1392,10 @@ async def run_recruiter_review(
     nvidia_thinking: bool | None = None,
     prompt_profile: str = "stable",
     pass1_audit: str = "",
+    rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v1":
+    if is_experimental_prompt_profile(profile):
         parts = [
             "JD:",
             jd.strip(),
@@ -1495,13 +1427,14 @@ async def run_recruiter_review(
     return await call_model(
         system_blocks=recruiter_system(profile),
         messages=[{"role": "user", "content": "\n".join(parts)}],
-        label=labeled_step(request_label, "FINAL CHECK" if profile == "v1" else "RECRUITER REVIEW"),
+        label=labeled_step(request_label, "FINAL CHECK" if is_experimental_prompt_profile(profile) else "RECRUITER REVIEW"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_compact_response if profile == "v1" else validate_json_response,
+        output_validator=validate_v1_compact_response if is_experimental_prompt_profile(profile) else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
+        rejected_response_cb=rejected_response_cb,
     )
 
 

@@ -1,348 +1,595 @@
-# Story_GPT
+# Story.md
 
-## Hiring Manager Story Contract
+# Career Story Bank
 
-This file is the evidence bank for V1. Use it like a senior hiring manager would: pick only the stories that match the target JD, then turn them into qualifications instead of keyword lists.
+## Professional Experience
 
-Every usable story must support this formula:
+### Story 01 — Java File Ingestion and Status Platform
 
-- Keyword: the exact JD term or close role-family term.
-- What: the system, workflow, service, dashboard, pipeline, model, or release work.
-- How: the primary technologies and engineering method used.
-- Where: the application, platform, API, dashboard, data workflow, deployment path, or user workflow.
-- Why: the plain-English reason a nontechnical recruiter, stakeholder, researcher, or manager would care.
+**Role fit:** Backend Engineer — Java, Platform Engineer, Distributed Systems Engineer, Full-Stack Engineer
 
-Big Tech and senior-manager hiring signals from the role matrix:
+**Keywords:** Java, Spring Boot, REST APIs, microservices, Kafka, asynchronous processing, Amazon S3, Hibernate, Spring Data JPA, MongoDB, MySQL, PostgreSQL, Oracle, object-oriented design, design patterns, concurrency, observability
 
-- Backend and platform: production APIs, distributed systems, microservices, event-driven processing, data consistency, reliability, testing, observability, cloud, CI/CD, and release ownership.
-- Full stack: React or Angular plus backend APIs, user workflows, auth, data validation, production dashboards, testing, and user-facing outcomes.
-- AI/ML: Python, data pipelines, model training, evaluation, inference integration, validated outputs, API integration, dashboards, and nontechnical explanation of model value.
-- Forward deployed and AI tooling: customer or stakeholder requirements, integrations, demos, workflow automation, debugging, production deployment, and feedback loops.
-- Consulting and enterprise delivery: SDLC, Agile, UAT, stakeholder communication, documentation, release readiness, production support, and repeatable delivery.
+**Context:** At Tata Consultancy Services, I led a small engineering team redesigning a legacy file-upload application that could not reliably support concurrent users or growing submission volume. Users needed one place to submit files, monitor progress, receive updates, and work with connected enterprise systems without waiting for every downstream operation to complete.
 
-Default V1 experience structure:
+**Story:** I designed Java and Spring Boot REST APIs for file submission, status tracking, and workflow management. I reorganized the service layer with object-oriented design and reusable patterns so upload intake, data access, storage, notifications, and status updates could evolve independently instead of becoming tightly coupled.
 
-- For Backend, Full Stack, platform, AI tooling, data, DevOps, and general SWE resumes, use exactly three experience entries: Software Engineer II at Tata Consultancy Services, Software Engineer at Tata Consultancy Services, and Software Engineer at Global Health Impact.
-- For AI/ML resumes, use exactly two experience entries: one merged Tata Consultancy Services entry and one full Global Health Impact entry.
-- Never omit Global Health Impact. It is the primary proof for Python data pipelines, research APIs, React dashboards, ML prediction workflows, GCP, data validation, and stakeholder-facing technical delivery.
-- TCS bullet topics can be shuffled between Software Engineer II and Software Engineer to hit the 75 percent first-experience coverage target, but do not turn both TCS entries into Software Engineer II.
-- Projects and skills can support the story, but experience ATS coverage must come from experience entries.
+I connected the application to MongoDB, MySQL, PostgreSQL, and Oracle through Hibernate and Spring Data JPA because connected systems already stored workflow data in different database technologies. I introduced Kafka-backed asynchronous processing so the user submission path could accept a file without waiting for storage, status, and notification work to finish.
 
-Transcript-derived writing rules:
+I chose Kafka over a database-backed polling approach because downstream consumers — storage services, notification services, and status-update services — needed to process events at different rates without sharing a cursor or adding read pressure to the primary database. I used Kafka partition keys on file ID to preserve per-file processing order, which was a hard business requirement: related documents had to arrive at storage in the exact sequence they were submitted.
 
-- Recruiters are qualification hunting, not keyword hunting. A skill listed without how, where, and why does not count.
-- The first bullet must pass a 20-second skim: role fit, production context, core stack, and business reason should be visible immediately.
-- Each experience bullet should naturally carry 3 to 6 important JD keywords while still sounding readable.
-- Avoid dense tool piles, parenthetical tool dumps, unexplained acronyms, unsupported metrics, and expert-only wording.
-- Prefer plain business reasons: faster user workflow, reliable data, fewer tickets, safer release, better debugging, lower manual work, clearer research analysis, secure access, or stable production behavior.
-- Use concrete action instead of vague filler. Prefer designed, built, implemented, validated, debugged, deployed, documented, reviewed, coordinated, or worked with.
+The workflow used microservices to store files through Amazon S3 and publish status events to users and external applications. It preserved ordered processing for related work and delivered file-status updates through application views, email, and SMS notifications.
 
-## Story 01: TCS Java File Upload Platform
+**Outcome:** The replacement gave stakeholders a dependable file-ingestion workflow that could support more users and larger file volumes while keeping users informed instead of leaving them blocked by downstream processing.
 
-At Tata Consultancy Services, I led a four-engineer redesign of a legacy file-upload application that could not reliably support concurrent users or high volumes of file submissions. I owned the backend design and delivery under an Agile SDLC process, translating stakeholder requirements for faster uploads and higher scale into Java and Spring Boot REST APIs that let users submit, track, and manage files through a single application.
+---
 
-I re-architected the service layer with object-oriented design, reusable design patterns, and optimized data structures and algorithms so the application could evolve without tightly coupling upload handling, data access, notifications, and user-facing status updates. I used Hibernate and Spring Data JPA to connect application workflows with MongoDB, MySQL, PostgreSQL, and Oracle, allowing the platform to work with the data stores already used by connected enterprise systems.
+### Story 02 — File Workflow Reliability, Security, and Production Ownership
 
-I introduced Kafka-backed asynchronous processing so file ingestion did not block users while downstream work completed. The design routed file storage through microservices connected to Amazon S3, preserved processing order, and sent file-status events to users and external applications through real-time updates, email, and SMS notifications. The new workflow gave stakeholders a scalable upload service that could handle increased traffic and larger file volumes without relying on the legacy application's limited synchronous path.
+**Role fit:** Backend Engineer — Java, Security Engineer, Production Engineer, Platform Engineer
 
-## Story 02: TCS File Upload Reliability, Security, Testing, and Release Ownership
+**Keywords:** distributed systems, retry logic, rollback, OAuth 2.0, Okta, RBAC, JUnit, Mockito, integration testing, API testing, UAT, Datadog, GIT, GitHub, production deployment
 
-For the Java file-upload application, I designed retry and rollback behavior for failed distributed workflows so a partially completed upload would not leave documents, status records, or downstream systems in an inconsistent state. The workflow preserved ordering constraints while retrying recoverable failures, which mattered because users needed stored documents and status information to remain reliable even when dependent operations failed.
+**Context:** File submission involved several dependent operations: document storage, status updates, authorization checks, notifications, and external-system communication. A partially completed request could leave users uncertain about whether a document had been stored or processed.
 
-I created role-based access control for dynamic role management and implemented Okta OAuth 2.0 authentication so users could access only authorized file operations, views, and application functions. I used JUnit and Mockito for automated REST API and workflow testing, completed integration and non-production validation, managed Git and GitHub release activity, prepared technical documentation for UAT approval, and delivered the production release with a rollback plan.
+**Story:** I designed retry and rollback behavior for failed file workflows so recoverable errors could be retried without leaving documents, status records, or downstream systems in inconsistent states. I preserved ordering requirements where related document operations had to be processed in the expected sequence.
 
-I conducted code reviews for user stories, coordinated delivery with the team and stakeholders, and built Datadog observability for error tracking, monitoring, and alerting in the production environment. This gave the team a way to expand the application while keeping security, release quality, and operational follow-up under control.
+I implemented Okta OAuth 2.0 authentication and role-based access control for file operations, dashboard views, and dynamic role management. I built automated REST API and workflow coverage with JUnit and Mockito, completed integration and non-production testing, prepared technical documentation for UAT, and coordinated production release activity through GIT and GitHub.
 
-## Story 03: TCS Concurrent SharePoint Upload Performance
+I configured Datadog monitoring, alerting, and error tracking so the team could identify failed workflows and investigate operational issues after release. I also conducted code reviews and coordinated delivery with engineers and stakeholders.
 
-I designed and shipped a concurrent Java workflow for large 3D files uploaded to Microsoft SharePoint after enterprise users experienced approximately 60-second upload times. I split large files into parts, used multithreading and concurrency to upload portions in parallel through SharePoint APIs, evaluated multiple implementation approaches, and documented the selected design before release.
+**Outcome:** The application became easier to operate safely in production because users received controlled access, recoverable failures had defined behavior, and support teams had visibility into errors instead of relying on manual investigation.
 
-I validated the workflow through production testing and UAT, then deployed it as a live feature for a large enterprise-user environment. The concurrent upload path reduced processing time from about 60 seconds to 10 seconds, giving users a noticeably faster way to complete large-file workflows while demonstrating performance engineering, API integration, and end-to-end release ownership.
+---
 
-## Story 04: TCS Java Payment APIs, Kafka, and Data Consistency
+### Story 03 — Java Payment APIs and Distributed Data Consistency
 
-I designed Java and Spring Boot REST APIs for payment-related workflows that required several connected applications to exchange transaction state across relational and non-relational data stores. In this workflow, SQL, MySQL, Oracle, Microsoft SQL Server, NoSQL stores, and Redis supported different parts of the business process, so the backend design had to preserve correctness while systems processed work asynchronously.
+**Role fit:** Backend Engineer — Java, Payments Engineer, Financial Systems Engineer, Distributed Systems Engineer
 
-I used Kafka to decouple payment processing and event delivery, implemented locking to protect concurrent updates, and created notification workflows so downstream systems could react to transaction-state changes. I owned design documentation, implementation, API testing, integration testing, UAT, and production release for these backend features, making sure data consistency was validated before users depended on the workflow.
+**Keywords:** Java, Spring Boot, REST APIs, Kafka, SQL, Oracle, Microsoft SQL Server, NoSQL, Redis, locking, concurrency, transaction processing, event-driven systems, API testing, integration testing
 
-The work improved API latency by 30%, reduced operational support load by 40%, improved cross-application data consistency across three Java and Spring Boot applications, and helped nine engineering teams coordinate API and data behavior. The result was a safer payment workflow for concurrent business activity, rather than a system that relied on manual reconciliation after conflicting updates.
+**Context:** Multiple enterprise applications exchanged payment and transaction-state information across relational and non-relational data stores. Concurrent updates could create conflicting transaction states and force manual reconciliation if updates were not coordinated.
 
-## Story 05: TCS Legacy Java Recovery and Modernization
+**Story:** I designed Java and Spring Boot REST APIs for payment-related workflows spanning SQL, MySQL, Oracle, Microsoft SQL Server, NoSQL stores, and Redis. I used Kafka to decouple payment processing from downstream event delivery so connected systems could react to transaction-state changes without blocking the original workflow.
 
-I recovered a legacy Java application that was blocked by outdated dependencies and could not operate as production-ready software. I upgraded the application to Java 11, resolved dependency conflicts, redesigned communication with connected applications, and added Redis-backed caching to improve repeated access patterns.
+I implemented locking for concurrent updates where conflicting writes could compromise data consistency. I also created notification workflows for downstream systems and owned design documentation, implementation, API testing, integration testing, UAT, and production deployment.
 
-I used REST APIs and distributed application communication to reconnect the service with the surrounding platform while debugging the dependency and runtime issues that had prevented stable operation. The application returned to a supportable, production-ready state within two months, giving the organization a usable foundation for future backend integration instead of maintaining a blocked legacy system.
+**Outcome:** The payment workflow gave teams a more dependable way to process concurrent business activity, maintain consistent transaction states, and reduce operational work caused by conflicting cross-system updates.
 
-## Story 06: TCS CI/CD, Testing, UAT, and Production Release Delivery
+---
 
-I built and improved GitLab CI/CD and Jenkins pipelines for Java, Spring Boot, React, and related enterprise applications that needed repeatable production releases. I connected code changes to automated validation using JUnit, Mockito, Spring Boot Test, integration tests, API tests, Pytest, Jest, Mocha, and Vitest so application teams could detect issues before production rather than relying only on manual release checks.
+### Story 04 — Legacy Java Recovery and Modernization
 
-I worked across the full delivery path: Git-based source control, Dockerized application workflows, QA validation, UAT coordination, release-readiness checks, production deployment, rollback planning, and post-release verification. The release process supported more than seven enterprise applications and more than forty production deployments, reducing deployment risk and making release quality more consistent across the application portfolio.
+**Role fit:** Backend Engineer — Java, Modernization Engineer, Production Support Engineer
 
-## Story 07: TCS Standardized Multi-Server Deployment and Rollback
+**Keywords:** Java 11, REST APIs, Redis, dependency management, distributed application communication, debugging, caching, production readiness
 
-I standardized a GitLab CI/CD workflow for applications that required coordinated deployment across multiple servers. I integrated Ruby deployment scripts into the pipeline so build, validation, deployment, and rollback activities could run from one repeatable workflow instead of depending on manual server-by-server coordination.
+**Context:** A legacy Java application was blocked by outdated dependencies and runtime issues, preventing it from serving as a reliable production service.
 
-I introduced staged validation checks and a one-command rollback path for release issues, then documented the approach so other application teams could adopt it. The standardized process reduced deployment effort, improved release consistency, reduced release-related downtime, and became a unit-wide practice for applications with frequent production changes.
+**Story:** I upgraded the application to Java 11, resolved dependency conflicts, redesigned communication with connected applications, and introduced Redis-backed caching for repeated access patterns. I debugged the runtime and integration issues that prevented the service from operating reliably, then reconnected it to the surrounding platform through REST APIs and distributed application communication.
 
-## Story 08: TCS AWS, Linux, Docker, Kubernetes, and Cloud Operations
+**Outcome:** The recovery returned the application to a supportable production state and created a usable foundation for future integration work instead of leaving teams dependent on a blocked legacy system.
 
-I supported the migration of more than seven enterprise applications from CentOS to Amazon Linux 2 and contributed to upgrade planning for Amazon Linux 2023. I investigated missing Linux packages and environment issues with Amazon engineers, created repeatable upgrade procedures, and helped teams move applications to supported operating environments without interrupting users.
+---
 
-I worked across AWS services including EC2, S3, Lambda, IAM, and CloudWatch, while using Linux, Docker, Kubernetes, Python, Bash, and GitLab CI/CD to support application deployment, server cleanup, automation, and environment readiness. The migration completed with zero downtime, the upgrade workflow became a reusable unit practice, and cloud cleanup plus automated maintenance reduced client-environment costs by approximately $30,000 per month.
+### Story 05 — CI/CD, Testing, UAT, and Release Delivery
 
-## Story 09: TCS Python Ticket Platform and Cross-Application Orchestration
+**Role fit:** DevOps Engineer, Backend Engineer, Release Engineer, Full-Stack Engineer
 
-I led a nine-developer team that designed and delivered a Python, Django, and FastAPI platform for external users to create and manage high-volume tasks across multiple dependent applications. The platform replaced manual cross-application coordination with a centralized SaaS workflow, allowing users to submit a task in seconds while the system handled the required downstream work.
+**Keywords:** GitLab CI/CD, Jenkins, Docker, JUnit, Mockito, Spring Boot Test, Pytest, Jest, Mocha, Vitest, API testing, integration testing, QA, UAT, rollback planning
 
-I designed REST APIs, data pipelines, and validation workflows that integrated SQL, MySQL, PostgreSQL, and MongoDB data sources. The platform ingested, normalized, validated, and reconciled information from connected applications before processing user requests, so data-quality issues were identified early rather than propagating into dependent workflows.
+**Context:** Several Java, Spring Boot, React, and Python applications needed repeatable releases across environments. Manual release coordination increased risk and made it harder for teams to identify defects before production.
 
-I implemented a centralized orchestration layer where dependent API calls could run in parallel through asynchronous processing and queues. Retry and rollback mechanisms handled failed requests, preserved data consistency across connected services, and improved fault tolerance when one system was temporarily unavailable. The platform reduced ticket volume by 45% after launch by making a complex multi-application process more reliable and easier for external users to complete.
+**Story:** I built and improved GitLab CI/CD and Jenkins pipelines that connected code changes to automated validation. The release path included Java testing with JUnit, Mockito, and Spring Boot Test; API and integration testing; Python testing with Pytest; and frontend testing with Jest, Mocha, and Vitest.
 
-## Story 10: TCS Python Data Validation, Test Automation, and Deployment
+I worked across source control, Dockerized workflows, QA validation, UAT coordination, release-readiness checks, deployment, rollback planning, and post-release verification. I prepared technical documentation and helped teams establish a more repeatable path from implementation to production.
 
-For the Python ticket platform, I built FastAPI REST APIs and automated validation services for each integrated application. I used Redis caching, pandas, and NumPy to clean and validate data, identify invalid records, and reduce unnecessary repeated work before data was used by dependent services.
+**Outcome:** Teams could detect defects earlier, coordinate releases more consistently, and recover from deployment issues without relying on informal server-by-server procedures.
 
-I containerized the platform with Docker and Kubernetes for repeatable deployments across AWS and Azure environments. GitLab CI/CD automated validation and deployment steps, Ansible supported environment configuration and end-to-end workflow checks, AWS RDS supported database workloads, and Kafka handled asynchronous events.
+---
 
-I worked with senior engineers on code reviews, implemented Pytest-based test coverage, prepared API integration and UAT documentation, and configured Datadog for alerts, error reporting, and production visibility. This created a delivery path where API, data, and deployment problems could be detected before production and debugged quickly after release.
+### Story 06 — Multi-Server Deployment Automation and Rollback
 
-## Story 11: TCS Python Operational Automation and Dashboards
+**Role fit:** DevOps Engineer, Platform Engineer, Production Engineer
 
-I built Python automation for server cleanup, health checks, notification delivery, recurring maintenance, operational dashboards, and environment-readiness checks across application environments. The work addressed repetitive operational tasks that consumed engineering time and delayed the discovery of environment problems before releases.
+**Keywords:** GitLab CI/CD, Ruby, GIT, deployment automation, multi-server deployment, validation, rollback, release engineering, technical documentation
 
-I used Linux, AWS, Docker, Kubernetes, Datadog, CloudWatch, and GitLab CI/CD to automate routine checks and surface operational signals through dashboards and notifications. The automation reduced manual health-check effort by 90%, improved release readiness and debugging visibility, and gave teams a more reliable process for maintaining application environments.
+**Context:** Application deployments required manual coordination across multiple servers, which increased deployment effort and made rollback slower during production issues.
 
-## Story 12: TCS C#/.NET Enterprise Portal Architecture
+**Story:** I standardized a GitLab CI/CD workflow for build, validation, deployment, and rollback activities. I integrated Ruby deployment scripts into the pipeline so teams could deploy coordinated changes from one repeatable workflow instead of handling each server separately.
 
-I contributed to the design, development, and deployment of an enterprise business portal using C#, .NET Core, ASP.NET Core, Web APIs, Entity Framework, SQL Server, HTML, and CSS. Working in a seven-member Agile team, I helped translate business requirements into a centralized portal where users could submit, track, validate, and manage business requests rather than relying on disconnected manual processes.
+I added staged validation checks and a one-command rollback path, then documented the approach for reuse across application teams.
 
-I developed backend services and REST API endpoints for portal workflows, user actions, data retrieval, validation, and business-process automation. I applied object-oriented programming and object-oriented design to separate business logic from data-access layers, then used Entity Framework and SQL Server to support reliable database operations. The portal gave users a smoother way to manage business requests while giving the team a maintainable backend structure for future workflow changes.
+**Outcome:** The unit gained a more predictable deployment process with less manual coordination, faster recovery options, and clearer release ownership.
 
-## Story 13: TCS C#/.NET Portal Security and Controlled Deployment
+---
 
-For the enterprise portal, I implemented OAuth-based authentication, Azure Key Vault secret management, and role-based access control so users could access only the functions and data approved for their roles. Azure Key Vault kept credentials, connection details, and sensitive configuration outside source code and static application settings.
+### Story 07 — AWS, Linux, Docker, Kubernetes, and Cloud Operations
 
-I supported deployment through Azure and Windows Server environments and contributed to CI/CD workflows for build, validation, and release activities. I worked with the team on code review, testing validation, release coordination, and production support so releases remained stable, secure, and aligned with business requirements. The result was a centralized portal with stronger access governance and a controlled delivery process.
+**Role fit:** Cloud Engineer, DevOps Engineer, Platform Engineer, Backend Engineer
 
-## Story 14: TCS React and TypeScript File Workflow Dashboard
+**Keywords:** AWS, EC2, Amazon S3, Lambda, IAM, CloudWatch, Linux, Amazon Linux, Docker, Kubernetes, Bash, Python, GitLab CI/CD, infrastructure automation, production support
 
-I built a React and TypeScript dashboard for the Java and Spring Boot file-upload platform using reusable components, lazy loading, HTML, CSS, JavaScript, Material UI, and Bootstrap. The component architecture and deferred loading improved maintainability, responsiveness, and page-load behavior for users working with file-processing workflows.
+**Context:** Enterprise applications needed supported Linux environments, repeatable maintenance procedures, cloud operations support, and a safer path away from aging server platforms.
 
-I connected the dashboard to REST APIs so users could track file-upload status, perform file-related actions, manage alerts, and receive live notification updates from the Kafka-backed backend workflow. Frontend validation reduced invalid submissions before requests reached backend services, while OAuth 2.0 and role-based access control limited file actions and dashboard views to authorized users. The dashboard gave users a clearer, safer way to monitor and manage file activity without needing to inspect multiple backend systems.
+**Story:** I supported migration work from CentOS to Amazon Linux, contributed to later upgrade planning, investigated missing packages and environment problems with Amazon engineers, and documented repeatable upgrade procedures.
 
-## Story 15: TCS Angular Operations and Ticket Management Dashboard
+I used AWS services including EC2, S3, Lambda, IAM, and CloudWatch alongside Linux, Docker, Kubernetes, Python, Bash, and GitLab CI/CD. My work included deployment support, server cleanup, maintenance automation, environment readiness checks, and production troubleshooting.
 
-I developed an Angular-based dashboard with TypeScript, JavaScript, HTML, CSS, Bootstrap, and Material UI-style components for Python backend applications. The dashboard brought application status, ticket workflows, alerts, requests, payment-state visibility, notifications, and operational data into one interface so users did not need to switch between multiple systems.
+**Outcome:** Application teams moved toward supported operating environments with less disruption to users and gained reusable procedures for upgrades, maintenance, and cloud operations.
 
-I integrated the UI with Python REST APIs, backend data services, Datadog monitoring, CloudWatch views, live request data, notification workflows, and RBAC-enabled authentication. Responsive UI behavior and asynchronous API integration let users see updates while backend services processed dependent work. The dashboard improved workflow transparency and made it easier for users and support teams to identify operational issues from one place.
+---
 
-## Story 16: TCS Full-Stack Banking and Transfer Workflow
+### Story 08 — Python Ticket Platform and Cross-Application Orchestration
 
-I led development of a banking application that combined Node.js and Express backend services with Angular and React user interfaces. The application used REST APIs, microservice workflows, MongoDB, Oracle, Kafka-backed queues, and TypeScript-based UI components to support high-volume transfer requests and bulk-transfer workflows.
+**Role fit:** Backend Engineer — Python, Distributed Systems Engineer, Forward Deployed Engineer, Platform Engineer
 
-I designed database structures and applied design patterns across backend and frontend components, then built user-facing pages with HTML, CSS, TypeScript, and Material UI. For latency-sensitive functions, I used C and C++ implementation paths intended to execute more quickly than the surrounding application stack. I also created an observability portal so support teams could monitor service health and operational behavior. The application gave stakeholders a new transfer workflow designed for faster responses, higher request volume, and better support visibility.
+**Keywords:** Python, Django, FastAPI, REST APIs, data pipelines, ETL, SQL, MySQL, PostgreSQL, MongoDB, asynchronous processing, queues, Kafka, retry logic, rollback, distributed systems
 
-## Story 17: TCS SharePoint Authentication Recovery
+**Context:** External users needed to create tasks across several dependent applications. Previously, users had to coordinate systems manually, understand each application’s requirements, and wait for multiple teams or services to complete related work.
 
-I led production triage when a Microsoft change to the SharePoint authentication process broke a live workflow. I traced the issue across frontend, backend, data, and SharePoint API layers, coordinated with Microsoft developers, external engineering teams, and internal stakeholders, and identified the authentication-flow change as the root cause.
+**Story:** I led development of a Python, Django, and FastAPI platform that centralized task creation across dependent systems. I designed REST APIs, validation workflows, and data pipelines that ingested, normalized, reconciled, and checked information from SQL, MySQL, PostgreSQL, and MongoDB sources before requests moved downstream.
 
-I designed a reusable internal authentication module with Java, Spring Boot, Spring Security, OAuth 2.0, and SharePoint APIs to centralize authentication and later API access. I validated the solution across lower environments, QA, and UAT before deploying the production fix within forty-eight hours. The reusable module restored the immediate workflow and reduced the likelihood that future SharePoint API calls would fail for the same reason.
+I designed an orchestration layer where dependent API calls could run in parallel through asynchronous processing and queue-based execution. A synchronous orchestration model would have turned the user-facing workflow into a fragile chain of blocking calls — if any one of the connected services was slow or unavailable, the entire user submission would stall. I used async parallel execution so each dependent system could process at its own pace while the platform managed coordination, failure recovery, and state consistency behind the scenes. When a connected service failed, retry and rollback behavior protected the overall workflow state so one unavailable dependency could not corrupt related records in other systems.
 
-## Story 18: TCS Role-Based Access Control Across Enterprise Applications
+**Outcome:** External users could initiate a complex cross-application workflow from one place, while the platform handled validation, coordination, failure recovery, and downstream processing behind the scenes.
 
-I implemented role-based access control workflows across ten enterprise applications by integrating internal APIs with relational and non-relational data stores. The design enforced consistent permissions across application workflows, allowing teams to manage authorization through reusable controls instead of handling user access as disconnected manual exceptions.
+---
 
-I used Java, Spring Boot, Spring Security, OAuth 2.0, REST APIs, SQL, NoSQL, IAM, API testing, integration testing, and UAT to validate the access-control behavior before release. The implementation improved access governance, reduced access-request tickets by 22%, and gave enterprise users a more consistent experience across connected applications.
+### Story 09 — Python Validation, Deployment, and Production Monitoring
 
-## Story 19: TCS TLS Certificate Lifecycle Automation
+**Role fit:** Backend Engineer — Python, Cloud Engineer, DevOps Engineer, Data Engineer
 
-I managed TLS and SSL certificate updates across application environments and built a Python script that parameterized certificate replacement and renewal. The script allowed engineers to rotate certificates with minimal rework as expiration dates approached, rather than repeating a manual update process for every application and environment.
+**Keywords:** FastAPI, Redis, pandas, NumPy, Pytest, Docker, Kubernetes, AWS, Azure, AWS RDS, Ansible, GitLab CI/CD, Datadog, API integration, observability
 
-I documented the renewal process and helped standardize certificate-rotation practices across the unit. The automation reduced manual certificate-maintenance work, lowered the risk of expiration-related incidents, and gave teams a repeatable process for maintaining certificate-based security.
+**Context:** The ticket platform depended on data from several applications, so invalid records, deployment differences, and environment failures could interrupt user workflows.
 
-## Story 20: TCS Dependency Remediation and Secure Release Readiness
+**Story:** I built FastAPI services and Python validation scripts for connected applications. I used Redis caching to reduce repeated work and pandas and NumPy to identify invalid records before data reached dependent workflows.
 
-I used Polaris and Black Duck to identify vulnerable dependencies and code-quality issues in React, Java, Spring, and Spring Security applications. I prioritized remediation work, upgraded affected dependencies, cleaned vulnerable or low-quality code paths, and validated the changes through testing before production deployment.
+I containerized services with Docker and Kubernetes, supported deployment across AWS and Azure, used AWS RDS for database workloads, and automated environment configuration and workflow checks with Ansible and GitLab CI/CD. I added Pytest coverage, API-integration documentation, UAT materials, Datadog alerts, and production error reporting.
 
-I also developed Python- and Java-based automation to streamline vulnerability and code-quality triage across three applications. The work closed SAST findings before release, improved secure-release readiness, and helped teams resolve dependency risk as part of normal engineering delivery rather than after a production issue.
+**Outcome:** The platform gained a more controlled delivery path where data, API, and deployment problems could be found earlier and diagnosed faster after release.
 
-## Story 21: TCS Observability, Monitoring, and Production Debugging
+---
 
-I implemented Datadog monitoring workflows, connected CloudWatch telemetry, configured alerts, and created dashboard views over live requests, application data, errors, and service behavior. The monitoring covered connected applications where support teams needed visibility into request flows, data movement, failures, and operational health.
+### Story 10 — Python Operations Automation and Environment Readiness
 
-I used these signals to debug multi-application issues and help engineering teams investigate production behavior more quickly. The dashboards reduced issue diagnosis from hours to minutes, improved post-release follow-up, and gave teams a shared operational view instead of relying on fragmented logs and manual status checks.
+**Role fit:** DevOps Engineer, Python Backend Engineer, Site Reliability Engineer
 
-## Story 22: TCS Technical Leadership, Mentorship, and Delivery Discipline
+**Keywords:** Python, Linux, AWS, Docker, Kubernetes, Datadog, CloudWatch, GitLab CI/CD, automation, monitoring, health checks, notifications, debugging
 
-I guided a nine-developer team for more than two years, directly mentored five junior engineers, and delivered technical sessions for more than forty junior developers. The sessions covered code review, object-oriented design, design patterns, Java and Spring Boot practices, API design, debugging, Agile delivery, SDLC, and production-release discipline.
+**Context:** Manual health checks, server cleanup, recurring maintenance, and release-readiness work consumed engineering time and delayed the discovery of environment problems.
 
-I used code reviews, design guidance, release coordination, and stakeholder communication to improve team delivery without holding a people-manager title. This work strengthened onboarding, design consistency, code quality, and production readiness across a multi-application portfolio, and I received more than three recognitions for coding practice and delivery quality.
+**Story:** I built Python automation for server cleanup, health checks, notification delivery, recurring maintenance, operational dashboards, and environment-readiness checks. I connected Linux, AWS, Docker, Kubernetes, Datadog, CloudWatch, and GitLab CI/CD workflows to surface operational signals through dashboards and alerts.
 
-## Story 23: Global Health Impact Data Pipeline
+**Outcome:** Engineering teams spent less time on repetitive checks and had better visibility into environment health before releases and during production support.
 
-At Global Health Impact, I worked on a six-engineer research platform that analyzed how pharmaceutical interventions affected disease burden across tuberculosis, malaria, HIV/AIDS, and neglected tropical diseases. I led data-processing work that transformed raw WHO and research data from CSV and Excel sources into validated datasets for analytics, dashboards, APIs, and machine-learning workflows.
+---
 
-I built Python data pipelines with pandas and NumPy to extract disease, drug, country, and health-impact data; standardize inconsistent formats; handle missing or invalid values; and identify malformed records, duplicate values, inconsistent names, missing fields, and invalid numeric values before data moved downstream. I loaded validated records into PostgreSQL, MySQL, and MongoDB according to the query, reporting, and flexible-document needs of each workflow.
+### Story 11 — C#/.NET Enterprise Portal Architecture
 
-The pipeline processed more than ten million weekly health records and reduced manual data preparation by 90%. It replaced spreadsheet-heavy preparation with repeatable ingestion, validation, storage, and analysis workflows so researchers could spend more time interpreting results and less time cleaning source files.
+**Role fit:** Backend Engineer — C#/.NET, Enterprise Application Engineer, Full-Stack Engineer
 
-## Story 24: Global Health Impact Backend APIs and Research Integrations
+**Keywords:** C#, .NET Core, ASP.NET Core, Web API, REST APIs, Entity Framework, SQL Server, object-oriented programming, object-oriented design, HTML, CSS, Agile, SDLC
 
-I built RESTful Python backend services that exposed validated health data, research parameters, dashboard analytics, and model outputs through consistent API contracts. The services connected processed data to frontend applications and downstream research workflows, allowing researchers and approved external integrations to use reusable backend endpoints instead of receiving one-off spreadsheet exports.
+**Context:** Business users needed a single portal to submit, track, validate, and manage requests instead of relying on disconnected manual processes.
 
-I implemented API validation and testing with Postman, debugged data-processing and API issues, used Git and GitLab for collaboration and release management, and supported GCP deployment. I structured the backend as reusable service components and built microservice-style integration paths for sharing data with other applications or external users. RBAC protected approved workflows, and backend validation reduced invalid requests before they could affect research data.
+**Story:** I contributed to the design, development, and deployment of a centralized enterprise portal using C#, .NET Core, ASP.NET Core, Web APIs, Entity Framework, SQL Server, HTML, and CSS. Working with an Agile delivery team, I translated business requirements into backend services, API endpoints, validation flows, data retrieval, and business-process automation.
 
-## Story 25: Global Health Impact Research Dashboard and Visualization
+I applied object-oriented design to separate business logic from the data-access layer and used Entity Framework with SQL Server for reliable request and workflow processing.
 
-I developed React, JavaScript, HTML, and CSS dashboards that connected researchers to processed health data, backend APIs, model outputs, historical trends, graphs, and interactive world-map views. The interface supported disease, drug, country, year, and parameter selection with validation feedback and responsive updates, giving users one application for research tasks that had previously required multiple spreadsheets and disconnected data sources.
+**Outcome:** Users gained a more consistent way to manage business requests, and the engineering team gained a maintainable portal structure for future workflow changes.
 
-I integrated the frontend with REST APIs to retrieve dynamic data and display country-level information across more than 150 countries. Role-based access control limited the application to approved users, while frontend and backend validation helped protect research workflows from invalid actions. The dashboard reduced reporting and query work from hours to approximately 30 seconds and gave researchers a faster way to compare country-level results and intervention data.
+---
 
-## Story 26: Global Health Impact Machine Learning and Prediction Integration
+### Story 12 — .NET Portal Security and Controlled Deployment
 
-I prepared machine-learning datasets from validated WHO and research records by standardizing categorical values, handling missing or invalid data, preparing numerical inputs, and aligning disease, drug, country, and time-based features. I separated data-preparation logic from model logic so the team could rerun processing, retrain models, and validate output quality as source data changed.
+**Role fit:** Backend Engineer — C#/.NET, Security Engineer, Cloud Engineer
 
-I led the development of Python-based prediction workflows using model training, K-fold cross-validation, model evaluation, and hyperparameter tuning. The model used disease, drug, country, and health-data inputs to generate country-level disease-impact predictions, and the selected workflow achieved approximately 93% validation accuracy for the defined task.
+**Keywords:** OAuth, RBAC, Azure Key Vault, Azure, Windows Server, CI/CD, authentication, authorization, secret management, code review, production support
 
-I integrated validated model outputs into backend APIs, React dashboards, and world-map visualizations so researchers could generate and compare predictions within the application instead of running separate manual analyses. I also supported debugging across the data pipeline, model workflow, backend APIs, and frontend visualization layers. For any resume use, confirm that validation accuracy is the appropriate metric for the final prediction task before presenting the number.
+**Context:** The portal handled business workflows and sensitive configuration, so users needed appropriate access controls and the application needed a controlled release process.
 
-## Story 27: Global Health Impact Stakeholder Delivery
+**Story:** I implemented OAuth-based authentication, role-based access control, and Azure Key Vault secret management. Key Vault kept credentials, connection details, and sensitive configuration outside source code and static settings.
 
-I translated research and stakeholder needs into technical workflows for data ingestion, backend APIs, dashboards, visualizations, and machine-learning features. I worked with backend, frontend, data, and ML contributors to define data inputs, application behavior, reporting needs, country-level analysis requirements, and user feedback loops.
+I supported Azure and Windows Server deployment workflows and contributed to CI/CD build, validation, and release activities. I worked with the team on code review, testing validation, release coordination, and production support.
 
-I supported technical discovery, validation, implementation, testing, debugging, documentation, deployment, and end-user delivery across the research platform. I used Cursor and Codex during development and testing while keeping validation and final workflow decisions grounded in the underlying research requirements. The resulting application connected validated data, dashboards, and predictive analysis to the real questions researchers needed to answer.
+**Outcome:** The portal provided stronger access governance and a safer delivery process for business workflows and sensitive application configuration.
 
-## Story 28: Academic Software Engineering and Teaching Assistantship
+---
 
-As a Teaching Assistant for Database Systems and Object-Oriented Programming at Binghamton University, I reviewed Java and C++ assignments, evaluated SQL and database projects, and helped students debug code, query correctness, concurrency concepts, design patterns, data structures, and algorithms.
+### Story 13 — React File Workflow Dashboard
 
-I used the role as academic software-engineering practice by giving technical feedback on object-oriented design, database behavior, query optimization, and implementation decisions. I supported more than 120 students, strengthening my mentoring, code-review, database, debugging, and technical-communication skills.
+**Role fit:** Frontend Engineer, Full-Stack Engineer, Product Engineer
 
-## Story 29: JobPulse Job Aggregation and Semantic Search Platform
+**Keywords:** React, TypeScript, JavaScript, HTML, CSS, Material UI, Bootstrap, component architecture, lazy loading, REST APIs, OAuth 2.0, RBAC, frontend validation
 
-I built JobPulse, a multi-tenant job-aggregation platform that collects job postings from Greenhouse, Lever, and Ashby, normalizes job, skill, company, and location data, and exposes semantic search through a React dashboard and REST APIs. The platform solved the problem of searching disconnected applicant-tracking systems by giving users a single place to discover, compare, and filter roles.
+**Context:** File-platform users needed a clear way to submit files, understand processing status, manage alerts, and receive updates without inspecting several backend systems.
 
-I designed the TypeScript backend with Node.js and Fastify, PostgreSQL and pgvector for structured storage and vector similarity search, Prisma for database access, Redis for caching job lists and search results, and BullMQ workers for asynchronous ingestion, skill extraction, embedding generation, and background processing. I integrated OpenAI APIs to convert unstructured job descriptions into structured skill tags and vector embeddings, allowing natural-language searches to return semantically related jobs instead of relying only on exact phrase matching.
+**Story:** I built a React and TypeScript dashboard for the Java and Spring Boot file platform using reusable components, lazy loading, HTML, CSS, JavaScript, Material UI, and Bootstrap. I connected the UI to REST APIs for file status, user actions, notifications, and live workflow updates from the Kafka-backed backend.
 
-I implemented tenant middleware and tenant-scoped database queries so each tenant had separate job data, filtering behavior, configuration, and Redis cache namespaces. I added Zod request validation, pagination, filtering, health checks, structured logging, error handling, cache TTLs, React and TypeScript dashboard components, Vite, TanStack Query, Tailwind CSS, Docker, and Docker Compose. The result was a controlled multi-service architecture for job search, search-result relevance, and reliable local development across the API, workers, database, cache, and frontend.
+I added frontend validation to reduce invalid submissions before requests reached backend services. OAuth 2.0 and role-based access control limited file actions and dashboard views to authorized users.
 
-## Story 30: FraudSift Transaction Analytics and ML Risk Detection
+**Outcome:** Users could manage file activity through one responsive interface, with clearer status visibility and controlled access to sensitive workflow actions.
 
-I built FraudSift, a full-stack financial analytics application that accepted uploaded bank-transaction CSV files, processed them through an asynchronous backend workflow, and returned categorized transactions, anomaly signals, fraud indicators, spending forecasts, and a financial-health score. The product converted raw financial exports into decision-ready views so users could identify unusual activity and spending patterns without manually sorting large transaction files.
+---
 
-I built a Node.js and Express backend for multipart CSV uploads, parsing, asynchronous processing jobs, polling endpoints, API rate limiting, and integration with a separate Python service. The Python FastAPI service exposed health and prediction endpoints and processed raw transaction records in memory with pandas and NumPy for data preprocessing and feature preparation.
+### Story 14 — Angular Operations and Ticket Dashboard
 
-I implemented TF-IDF vectorization and Logistic Regression for transaction categorization, IsolationForest for anomaly detection, and Linear Regression for four-week spend forecasting. I also included rules for unusually large transactions, unusual transaction times, abnormal daily transaction volume, merchant-risk scoring, high-risk keyword detection, transaction bursts, and monthly category-drift alerts. A Hugging Face transaction-categorization dataset served as the primary training source, with fallback keyword templates when the external dataset was unavailable. The Node backend translated FastAPI results into dashboard data, and React, TypeScript, and Vite presented categories, flagged activity, forecasts, risk signals, and financial-health insights.
+**Role fit:** Frontend Engineer, Full-Stack Engineer, Operations Engineer
 
-## Story 31: Resume Agent Evidence-Grounded Resume Automation
+**Keywords:** Angular, TypeScript, JavaScript, HTML, CSS, Bootstrap, Material UI, REST APIs, Datadog, CloudWatch, RBAC, asynchronous API integration, responsive UI
 
-I built Resume Agent, a Python desktop application that transformed pasted job descriptions and verified candidate evidence into structured resume JSON, recruiter-reviewed output, tailored application responses, LinkedIn outreach drafts, DOCX files, and PDF deliverables. The application addressed a practical risk in resume automation: generated content can introduce unsupported claims unless it is checked against real candidate evidence before final output.
+**Context:** Users and support teams needed one interface for ticket workflows, application status, alerts, payment states, notifications, and operational data across connected services.
 
-I designed a multi-stage workflow with Python and Tkinter that supported NVIDIA-hosted models through the OpenAI SDK and Claude through the Anthropic SDK. Users could select supported models, configure thinking behavior, and run independent application workflows in separate tabs. The first prompt stage analyzed job descriptions, identified ATS gaps, and generated candidate evidence statements for human review or an automated approval path.
+**Story:** I developed an Angular-based dashboard using TypeScript, JavaScript, HTML, CSS, Bootstrap, and Material UI-style components. I integrated the interface with Python REST APIs, backend data services, Datadog monitoring, CloudWatch views, notification workflows, and role-based authentication.
 
-I built a second-stage JSON generation workflow that converted approved evidence into structured resume content, followed by a three-stage final QA process with an audit, evidence-safe repair, and independent validation. I added recruiter-review workflows, application-question generation, recruiter and hiring-manager outreach drafts, artifact logging, per-request folders, cost tracking, request restoration, concurrent execution, cancellation controls, and document-generation workflows. I kept API keys, pipeline configuration, generated resumes, request artifacts, and PDF archives out of version control to support secure local configuration and traceable output management.
+The dashboard used asynchronous API integration to display updates while backend services processed dependent work.
 
-## Story 32: JobFill AI Browser Application Automation
+**Outcome:** Support teams could identify operational issues, track requests, and understand application health from one place rather than switching among multiple systems.
 
-I built JobFill AI, a Chrome Manifest V3 extension that scans job-application pages, identifies form fields, stores candidate profile data locally, uploads saved resumes, and autofills Workday-specific and generic job-application workflows. The extension reduced repetitive application-form work while keeping core profile data, resumes, parsed structures, and user settings in browser-local storage rather than requiring a dedicated backend.
+---
 
-I designed the extension with JavaScript, HTML, CSS, Chrome extension APIs, service workers, content scripts, popup interfaces, and Chrome local storage. I implemented browser-side support for PDF, DOC, DOCX, TXT, and LaTeX resumes, including parsing supported LaTeX files into structured contact details, skills, work history, education, projects, and summary data. The application converted work experience and education into date-aware structures for multi-page Workday forms.
+### Story 15 — Banking and Transfer Workflow
 
-I implemented dedicated Workday automation for personal information, education, skills, work history, resume upload, LinkedIn fields, disclosure pages, custom questions, and signature steps. Generic fallback logic used text labels, placeholders, field names, and input types when a page did not match a known workflow. I added optional Anthropic Claude integration for free-response questions, built candidate context from locally stored resume data, generated suggested answers, and required user review before applying output. Configurable default-answer mappings handled recurring questions without requiring changes to the core form-fill engine.
+**Role fit:** Full-Stack Engineer, Backend Engineer — Node.js, Financial Systems Engineer
 
-## Story 33: Bistro AI Structured Restaurant Ordering Application
+**Keywords:** Node.js, Express, React, Angular, TypeScript, REST APIs, microservices, MongoDB, Oracle, Kafka, queues, design patterns, Material UI, observability
 
-I built Bistro AI, a full-stack restaurant-ordering application that combined a mobile-first ordering interface, PostgreSQL-backed menu and order workflows, REST APIs, and an AI waiter that translated natural-language requests into structured cart actions. The application let users describe an order in normal language while keeping cart changes bounded to validated operations rather than free-form text.
+**Context:** Stakeholders needed a transfer workflow that could support high request volume, bulk transfers, user-facing status visibility, and operational support.
 
-I developed the backend with TypeScript, Node.js, Express, Prisma, and PostgreSQL. The API supported health checks, menu retrieval, category filtering, order creation, recent-order retrieval, one-shot AI parsing, and multi-turn AI chat. Zod validation checked AI and API request structures, while typed `ADD`, `REMOVE`, and `UPDATE_QTY` actions allowed the AI workflow to return safe, structured cart changes that the frontend could apply to application state.
+**Story:** I led work on a banking application that combined Node.js and Express backend services with Angular and React user interfaces. The application used REST APIs, microservice workflows, MongoDB, Oracle, Kafka-backed queues, TypeScript, HTML, CSS, and Material UI components.
 
-I integrated Anthropic Claude into the API layer for natural-language order interpretation and implemented layered caching to reduce repeated model calls. The backend used disk and memory caching with configurable TTLs, while the mobile application used in-memory per-session caching. I added timeouts and retry settings to improve external-model-call resilience, then built the client with Expo, Expo Router, React Native, TypeScript, Zustand stores, and shared types. The application supported menu browsing, cart management, tax estimation, checkout, recent orders, AI chat, action-based updates, and order-status display. I containerized the API and PostgreSQL services with Docker and Docker Compose, added an Nginx-backed web demo flow, and supported local mobile testing through Expo Go.
+I designed database structures and applied design patterns across backend and frontend components. I also contributed selected C and C++ implementation paths for latency-sensitive functions and created an observability portal so support teams could monitor service health and operational behavior.
 
-## Story 34: Project Development Workflow
+**Outcome:** The application gave stakeholders a more capable transfer workflow with better request handling, bulk-transfer support, and clearer visibility for production support teams.
 
-Across my personal projects, I used Cursor, Codex, Claude Code, and Git to support implementation, debugging, testing, and iteration. I used these tools to accelerate development work while retaining responsibility for system design, validation, test results, and final technical decisions.
+---
 
-## Personal Project Selection Metadata
+### Story 16 — SharePoint Authentication Recovery
 
-Use the detailed project stories above as factual evidence. This section decides whether a project is eligible for a specific resume. A project name, repository, language, or dependency list alone is not evidence.
+**Role fit:** Backend Engineer — Java, Security Engineer, Forward Deployed Engineer, Production Support Engineer
 
-### Global Project Rules
+**Keywords:** Java, Spring Boot, Spring Security, OAuth 2.0, SharePoint APIs, REST APIs, SQL, NoSQL, IAM, root-cause analysis, API testing, integration testing, UAT
 
-1. Select a maximum of two projects.
-2. Select the two closest projects when two safe, role-relevant project slices exist.
-3. Do not omit a project merely because Experience already proves the same language, database, API pattern, or workflow.
-4. Evaluate the usable slice of each project, not the entire repository stack. Many projects include backend, frontend, data, automation, and AI pieces.
-5. A project may reinforce a qualification only when it proves a different system context, user workflow, or supporting capability.
-6. Each selected project bullet must show what was built, how it worked, project context, and a plain-language reason it mattered.
-7. For Backend and Fullstack resumes, remove AI, ML, model, inference, RAG, embedding, semantic search, LLM, OpenAI, agent, prediction, and evaluation language unless the JD explicitly asks for it.
-8. Do not reject a mixed-stack project solely because an unused slice contains frontend, backend, AI, ML, or a secondary language.
-9. Do not select a project from this section unless its detailed story above verifies the claim.
-10. Do not use a project only to fill the projects array. Use it because it is the closest truthful support for the JD.
-11. Do not use more than one database, cloud provider, framework, or language in a bullet unless each is relevant to the JD and necessary to explain the work.
+**Context:** A Microsoft change to the SharePoint authentication process interrupted a live workflow. The failure could have originated in the frontend, backend, data layer, or external API integration.
 
-### Project P01: JobPulse
+**Story:** I led production triage across the frontend, backend, data layer, and SharePoint API integration. I coordinated with Microsoft contacts, external engineering teams, and internal stakeholders, traced the failure to the changed authentication process, and designed a reusable internal authentication component.
 
-Primary stack: TypeScript, Node.js, Fastify, PostgreSQL, Redis, BullMQ, React, Docker Compose.
+I built the solution with Java, Spring Boot, Spring Security, OAuth 2.0, and SharePoint APIs, then validated it through lower environments, QA, and UAT before production deployment.
 
-Best fit: Backend Node.js, Fullstack, AI Engineer, Forward Deployed Engineer, backend API/database/search workflow roles, and roles asking for REST APIs, PostgreSQL, Redis, async processing, validation, logging, Docker, or multi-service architecture.
+**Outcome:** The immediate workflow was restored, and later SharePoint API requests could use a reusable authentication approach instead of repeating the same integration failure.
 
-Use cautiously for Python-only, Java-only, or C#/.NET-only Backend roles: do not present Node.js or TypeScript as the primary qualification, but the project may be selected when its API, PostgreSQL, Redis, BullMQ, validation, logging, tenant-isolation, or Docker evidence is one of the two closest supports for the JD.
+---
 
-Non-AI resume variant: Focus only on Fastify REST APIs, PostgreSQL storage, Redis caching, BullMQ workers, tenant isolation, request validation, logging, health checks, and Docker Compose. Remove semantic-search and AI language.
+### Story 17 — Enterprise RBAC and Access Governance
 
-### Project P02: FraudSift
+**Role fit:** Security Engineer, Backend Engineer — Java, Identity and Access Engineer
 
-Primary stack: Python, FastAPI, pandas, NumPy, Node.js, Express, React, TypeScript.
+**Keywords:** RBAC, Java, Spring Boot, Spring Security, OAuth 2.0, IAM, REST APIs, SQL, NoSQL, API testing, integration testing, UAT
 
-Best fit: ML Engineer, AI Engineer, Python data-processing roles, financial analytics roles, backend upload-processing roles, and jobs asking for FastAPI, CSV processing, pandas, NumPy, asynchronous jobs, API polling, rate limiting, or dashboard-ready data.
+**Context:** Multiple enterprise applications handled access differently, creating inconsistent permissions and unnecessary access-management effort.
 
-Use cautiously for Backend or Fullstack resumes that do not request AI or ML: remove model, prediction, anomaly, and forecasting claims, then use only CSV upload, Python FastAPI processing, pandas/NumPy preprocessing, Node.js API orchestration, polling, rate limiting, and dashboard data if those are JD-relevant.
+**Story:** I implemented reusable role-based access-control workflows across connected applications by integrating internal APIs with relational and non-relational data stores. I used Java, Spring Boot, Spring Security, OAuth 2.0, IAM, SQL, NoSQL, API testing, integration testing, and UAT to validate authorization behavior before release.
 
-### Project P03: Resume Agent
+**Outcome:** Teams could enforce permissions more consistently across application workflows and provide users with a clearer, more controlled access experience.
 
-Primary stack: Python, Tkinter, structured JSON generation, validation, concurrent workflows, document generation, local configuration management.
+---
 
-Best fit: AI Engineer, AI tooling, developer productivity, Forward Deployed Engineer, or Python automation roles.
+### Story 18 — Certificate Automation and Secure Dependency Remediation
 
-Conditional fit: Backend Python only when the JD values workflow automation, structured data handling, internal tools, validation, or concurrent task execution.
+**Role fit:** Security Engineer, DevSecOps Engineer, Python Engineer, Java Engineer
 
-Use cautiously for traditional API-first Backend roles when stronger direct API or database project evidence is available. It may still be selected as the second project when Python workflow automation, structured JSON validation, review checkpoints, concurrency, document generation, or local configuration management is the closest remaining support for the JD.
+**Keywords:** Python, Java, TLS, SSL, certificate rotation, Spring Security, React, dependency management, SAST, Polaris, Black Duck, automated testing, CI/CD, secure release engineering
 
-Non-AI resume variant: Focus on Python workflow orchestration, structured JSON validation, review checkpoints, artifact organization, concurrent execution, cancellation handling, document generation, and local secret management.
+**Context:** Certificate renewal, vulnerable dependencies, and code-quality findings created recurring operational and release risks across Java, Spring, Spring Security, and React applications.
 
-### Project P04: JobFill AI Extension
+**Story:** I built a Python automation script for parameterized TLS and SSL certificate replacement so engineers could update expiring certificates with less repetitive work. I documented the approach and helped standardize certificate renewal across the unit.
 
-Primary stack: JavaScript, HTML, CSS, Chrome Manifest V3, service workers, content scripts, Chrome storage, browser-side parsing.
+I also used Polaris and Black Duck to identify vulnerable dependencies and code-quality findings, upgraded affected libraries, cleaned vulnerable code paths, validated changes through testing, and created Python and Java automation to streamline security triage.
 
-Best fit: Fullstack, Frontend, Forward Deployed Engineer, browser automation, and workflow automation roles.
+**Outcome:** Teams gained a more repeatable certificate-maintenance process and could address dependency risk before releases instead of responding after production exposure.
 
-Use cautiously for Backend-only roles unless the JD values automation, integrations, workflow tools, form processing, document parsing, browser APIs, or client-side workflow design.
+---
 
-Non-AI resume variant: Focus on form detection, local storage, configurable mappings, document parsing, Workday workflows, generic fallback logic, and user-reviewed autofill.
+### Story 19 — Observability and Production Debugging
 
-### Project P05: Bistro AI
+**Role fit:** Site Reliability Engineer, DevOps Engineer, Platform Engineer, Backend Engineer
 
-Primary stack: TypeScript, Node.js, Express, Prisma, PostgreSQL, REST APIs, Zod, Docker, React Native.
+**Keywords:** Datadog, CloudWatch, monitoring, alerting, dashboards, observability, production debugging, root-cause analysis, operational support
 
-Best fit: Backend Node.js, Fullstack, mobile product engineering, AI Engineer roles, and jobs asking for REST APIs, PostgreSQL, Prisma, validation, caching, retries, Docker, menu/order workflows, or product-facing API design.
+**Context:** Support teams needed shared visibility into requests, errors, data movement, service behavior, and environment health across connected applications.
 
-Use cautiously for Python-only, Java-only, or C#/.NET-only Backend roles: do not present Node.js or TypeScript as the primary qualification, but the project may be selected when its REST API, PostgreSQL, Prisma, Zod validation, caching, retry, Docker, or order-workflow evidence is one of the two closest supports for the JD.
+**Story:** I implemented Datadog monitoring workflows, connected CloudWatch telemetry, configured alerts, and created dashboard views for live requests, application data, errors, and service health. I used these signals to investigate multi-application failures and support post-release follow-up.
 
-Non-AI resume variant: Focus on Express APIs, PostgreSQL menu and order workflows, Prisma data access, Zod validation, health checks, caching, retries, Docker Compose, and mobile checkout flows.
+**Outcome:** Teams could diagnose production behavior from shared operational signals rather than relying on fragmented logs and manual status checks.
 
-### New GitHub Repository Gate
+---
 
-A repository not listed above may become eligible only when Story_GPT contains a factual project record with all of the following:
+### Story 20 — Technical Leadership, Mentoring, and Delivery Discipline
 
-* Project name
-* Actual stack
-* What was built
-* How the system worked
-* User or workflow context
-* Plain-language reason it mattered
-* Role fit
-* Roles or stacks for which it must not be selected
-* AI and ML exclusion guidance when needed
+**Role fit:** Senior Software Engineer, Technical Lead, Engineering Mentor
 
-Do not select repositories from a project name, README-only claim, dependency file, or assumed architecture.
+**Keywords:** code review, object-oriented design, design patterns, Java, Spring Boot, API design, debugging, Agile, SDLC, stakeholder communication, release coordination, technical documentation
+
+**Context:** Teams working across several enterprise applications needed consistent design guidance, review standards, onboarding support, and release discipline.
+
+**Story:** I guided a team of engineers, mentored junior developers, and delivered technical sessions on code review, object-oriented design, design patterns, Java and Spring Boot practices, API design, debugging, Agile delivery, SDLC, and production-release discipline.
+
+I used design guidance, code reviews, release coordination, and stakeholder communication to improve implementation consistency and delivery readiness without holding a formal people-manager title.
+
+**Outcome:** The work strengthened onboarding, code quality, design consistency, and production readiness across a multi-application engineering portfolio.
+
+---
+
+### Story 21 — Global Health Impact Data Pipeline
+
+**Role fit:** Data Engineer, Backend Engineer — Python, ML Engineer, Healthcare Technology Engineer
+
+**Keywords:** Python, pandas, NumPy, CSV, Excel, data pipelines, data preprocessing, data validation, PostgreSQL, MySQL, MongoDB, WHO data, analytics
+
+**Context:** Researchers needed to analyze how pharmaceutical interventions affected disease burden across tuberculosis, malaria, HIV/AIDS, and neglected tropical diseases. Source data arrived in CSV and Excel formats and required validation before it could support analysis, APIs, dashboards, or prediction workflows.
+
+**Story:** At Global Health Impact, I led data-processing work for a research platform that transformed WHO and research records into validated datasets. I built Python pipelines with pandas and NumPy to standardize formats, handle missing or invalid values, identify malformed records and duplicates, and prepare disease, drug, country, and health-impact data for downstream use.
+
+I loaded validated records into PostgreSQL, MySQL, and MongoDB according to reporting, query, and flexible-document requirements.
+
+**Outcome:** Researchers gained repeatable data ingestion and validation workflows, reducing reliance on spreadsheet-heavy preparation and making more time available for interpreting health outcomes.
+
+---
+
+### Story 22 — Global Health Impact APIs and Research Integrations
+
+**Role fit:** Backend Engineer — Python, Data Engineer, Forward Deployed Engineer
+
+**Keywords:** Python, REST APIs, microservices, PostgreSQL, MySQL, MongoDB, Postman, GCP, GitLab, RBAC, data validation, debugging, API integration
+
+**Context:** Researchers and connected workflows needed reliable access to validated health data, research parameters, dashboard analytics, and predictive outputs.
+
+**Story:** I built Python REST APIs that exposed validated health data, research parameters, dashboard analytics, and model outputs through reusable API contracts. I structured the backend as service components that connected data processing with frontend workflows and external integrations.
+
+I used Postman for API validation and testing, GIT and GitLab for collaboration and release management, GCP for deployment support, and role-based access control to protect approved research workflows.
+
+**Outcome:** Research users could work with validated information through reusable APIs instead of depending on isolated spreadsheet exports and manual data requests.
+
+---
+
+### Story 23 — Global Health Impact Dashboard and Visualization
+
+**Role fit:** Full-Stack Engineer, Frontend Engineer, Data Visualization Engineer
+
+**Keywords:** React, JavaScript, HTML, CSS, REST APIs, data visualization, world-map visualization, responsive UI, frontend validation, RBAC, API integration
+
+**Context:** Researchers needed a single interface for disease, drug, country, year, and intervention analysis instead of using multiple spreadsheets and disconnected data sources.
+
+**Story:** I developed React, JavaScript, HTML, and CSS dashboards that connected researchers to processed health data, backend APIs, model outputs, historical trends, graphs, and interactive world-map views. The interface supported parameter selection, validation feedback, and responsive updates across country-level research workflows.
+
+I integrated frontend and backend validation and role-based access control to protect research workflows from invalid actions and unauthorized access.
+
+**Outcome:** Researchers could compare country-level results and intervention data through one application instead of assembling analysis manually from multiple sources.
+
+---
+
+### Story 24 — Global Health Impact Machine Learning and Prediction Integration
+
+**Role fit:** ML Engineer, AI Engineer, Backend Engineer — Python, Data Scientist
+
+**Keywords:** Python, machine learning, model training, model evaluation, K-fold cross-validation, hyperparameter tuning, inference, feature engineering, data preprocessing, REST APIs, React, data visualization
+
+**Context:** Researchers needed predictive analysis that could be used alongside validated health data, disease trends, country context, and pharmaceutical-intervention information.
+
+**Story:** I prepared machine-learning datasets from validated WHO and research records by standardizing categorical values, handling missing data, preparing numerical inputs, and aligning disease, drug, country, and time-based features. I separated data-preparation logic from model logic so the team could rerun processing, retrain models, and validate output quality as source data changed.
+
+I led Python-based model training, K-fold cross-validation, model evaluation, and hyperparameter tuning for country-level disease-impact predictions. I integrated validated model outputs into backend APIs, React dashboards, and world-map visualizations.
+
+**Outcome:** Researchers could generate and compare predictive insights inside the application rather than running separate manual analyses outside the research platform.
+
+---
+
+### Story 25 — Global Health Impact Stakeholder Delivery
+
+**Role fit:** Forward Deployed Engineer, Product Engineer, Technical Consultant, Full-Stack Engineer
+
+**Keywords:** stakeholder communication, requirements gathering, technical discovery, implementation, data pipelines, APIs, dashboards, machine learning, testing, debugging, documentation, deployment, user feedback
+
+**Context:** The research platform needed to translate health and intervention questions into data workflows, APIs, dashboards, visualizations, and predictive analysis that researchers could use in practice.
+
+**Story:** I worked with backend, frontend, data, and ML contributors to define data inputs, application behavior, reporting needs, country-level analysis requirements, and user feedback loops. I supported technical discovery, validation, implementation, testing, debugging, documentation, deployment, and end-user delivery across the research platform.
+
+I used Cursor and Codex during implementation and testing while retaining responsibility for data validation, architecture decisions, and final workflow behavior.
+
+**Outcome:** The platform connected validated data, dashboards, APIs, and predictive analysis to the questions researchers needed to answer.
+
+---
+
+### Story 26 — Academic Software Engineering and Teaching Assistance
+
+**Role fit:** Software Engineer, Backend Engineer, Engineering Mentor, Database Engineer
+
+**Keywords:** Java, C++, SQL, database systems, object-oriented programming, object-oriented design, design patterns, concurrency, data structures, algorithms, debugging, code review, technical communication
+
+**Context:** As a Teaching Assistant for Database Systems and Object-Oriented Programming at Binghamton University, I supported students working on programming, database, and software-design assignments.
+
+**Story:** I reviewed Java and C++ assignments, evaluated SQL and database projects, and helped students debug code, query correctness, concurrency concepts, design patterns, data structures, and algorithms. I provided technical feedback on object-oriented design, database behavior, query optimization, and implementation decisions.
+
+**Outcome:** The role strengthened my ability to review code, explain technical tradeoffs clearly, and help engineers improve implementation quality through practical feedback.
+
+---
+
+## Open-Source and Personal Projects
+
+### Story 27 — JobPulse: Multi-Tenant Job Aggregation and Semantic Search
+
+**Role fit:** Backend Engineer — Node.js, Full-Stack Engineer, AI Engineer, Forward Deployed Engineer
+
+**Keywords:** TypeScript, Node.js, Fastify, React, PostgreSQL, pgvector, Redis, BullMQ, Prisma, REST APIs, OpenAI, embeddings, vector search, semantic search, Docker, multi-tenancy, structured logging, Zod
+
+**Context:** Job seekers often need to search disconnected applicant-tracking systems and compare openings that use different wording for similar skills.
+
+**Story:** I built JobPulse, a multi-tenant platform that collects job postings from Greenhouse, Lever, and Ashby, normalizes job data, extracts structured skills, and exposes semantic search through a React dashboard and REST APIs.
+
+I designed the backend with TypeScript, Node.js, Fastify, PostgreSQL, pgvector, Prisma, Redis, and BullMQ workers. Background workers handle job ingestion, skill extraction, embedding generation, and asynchronous processing. OpenAI APIs convert unstructured job descriptions into structured skill tags and embeddings so users can search by intent rather than relying only on exact phrases.
+
+I added tenant-scoped data isolation, request validation, pagination, filtering, health checks, structured logging, error handling, Redis cache namespaces, and Docker Compose support for local multi-service development.
+
+**Outcome:** Users can discover, compare, and filter roles from multiple job sources in one system while receiving more relevant search results for natural-language queries.
+
+---
+
+### Story 28 — FraudSift: Transaction Analytics and ML Risk Detection
+
+**Role fit:** ML Engineer, Backend Engineer — Python, AI Engineer, Full-Stack Engineer, Financial Technology Engineer
+
+**Keywords:** Python, FastAPI, scikit-learn, pandas, NumPy, TF-IDF, Logistic Regression, IsolationForest, Linear Regression, REST APIs, React, TypeScript, Node.js, Express, anomaly detection, forecasting, model inference
+
+**Context:** Raw bank-transaction exports are difficult for users to interpret manually, especially when unusual activity, changing behavior, and spending patterns must be identified quickly.
+
+**Story:** I built FraudSift, a financial analytics application that processes transaction data and returns categorized activity, anomaly signals, fraud indicators, spending forecasts, and financial-health insights.
+
+The Python service uses FastAPI for health and prediction endpoints, pandas and NumPy for preprocessing, TF-IDF and Logistic Regression for transaction categorization, IsolationForest for anomaly detection, and Linear Regression for spend forecasting. The system also evaluates merchant risk, high-risk terms, transaction bursts, unusual transaction timing, and category drift.
+
+A Node.js and Express layer integrates the ML service with user-facing workflows, while React and TypeScript present categories, alerts, forecasts, and risk signals in a dashboard.
+
+**Outcome:** Users can turn raw financial exports into understandable decision-support views without manually sorting and interpreting each transaction.
+
+---
+
+### Story 29 — FilingQuery: Citation-Grounded SEC Filing Intelligence
+
+**Role fit:** AI Engineer, Backend Engineer — Python, RAG Engineer, Financial Technology Engineer
+
+**Keywords:** Python, RAG, hybrid retrieval, BM25, pgvector, embeddings, sentence-transformers, CrossEncoder reranking, FastAPI, PostgreSQL, Docker, SEC EDGAR, citation grounding
+
+**Context:** SEC filings are large, dense, and difficult to search manually. Users need answers that can be traced back to the filing sections that support them.
+
+**Story:** I built FilingQuery, a retrieval-augmented system for asking natural-language questions over SEC filings such as 10-K, 10-Q, and 8-K documents. The ingestion workflow retrieves filings from EDGAR, performs section-aware chunking, and enriches chunks with metadata such as ticker, form type, year, and section.
+
+I implemented hybrid retrieval with BM25 for exact terms and pgvector for semantic similarity, then added a CrossEncoder reranker to improve final context quality before answer generation. The system uses sentence-transformer embeddings, a citation-enforced answer chain, a FastAPI query endpoint, PostgreSQL, and Dockerized local deployment.
+
+**Outcome:** Users can investigate financial filings through a searchable question-answering workflow while retaining source references for the generated answer.
+
+---
+
+### Story 30 — EvalTrace: RAG Evaluation and CI Quality Gates
+
+**Role fit:** AI Engineer, ML Engineer, MLOps Engineer, Developer Productivity Engineer
+
+**Keywords:** Python, DeepEval, pytest, GitHub Actions, RAG evaluation, answer relevancy, faithfulness, contextual recall, contextual precision, hallucination detection, CI/CD, benchmark datasets
+
+**Context:** RAG applications can appear effective in a demo while silently degrading after retrieval, prompting, model, or code changes.
+
+**Story:** I built EvalTrace as an automated evaluation harness for RAG workflows. It runs benchmark cases against FilingQuery, measures answer relevancy, faithfulness, contextual recall, contextual precision, and hallucination behavior, and saves baseline and final evaluation artifacts for comparison.
+
+I integrated DeepEval, pytest, GitHub Actions, version-controlled evaluation datasets, and merge-blocking quality gates. The workflow can continue a pipeline when configured quality thresholds are met or stop the merge when evaluation results fall below the required level.
+
+**Outcome:** AI-quality changes become measurable and reviewable in CI/CD rather than depending on subjective demo impressions.
+
+---
+
+### Story 31 — ReviewBot: Multi-Agent Pull Request Review
+
+**Role fit:** AI Engineer, Developer Tools Engineer, Backend Engineer — Python, DevSecOps Engineer
+
+**Keywords:** Python, LangGraph, FastAPI, Redis, GitHub webhooks, GitHub API, AI agents, OpenAI API, Docker, GitHub Actions, Bandit, pylint, code review, security scanning
+
+**Context:** Manual code review can become a bottleneck and may provide inconsistent coverage across architecture, security, style, and test completeness.
+
+**Story:** I built ReviewBot, a multi-agent pull-request review orchestrator. A FastAPI webhook receives GitHub pull-request events, a LangGraph workflow runs specialized architecture, security, style, test-coverage, and summary agents, and the system posts structured review feedback back to GitHub.
+
+I used Redis for short-term pull-request state and longer-term repository patterns. The project integrates GitHub APIs, Docker, GitHub Actions, Bandit security scanning, pylint style analysis, and OpenAI-powered review workflows.
+
+**Outcome:** Engineering teams can receive faster and more consistent automated review feedback while preserving distinct checks for design, security, style, and test coverage.
+
+---
+
+### Story 32 — Resume Agent: Evidence-Grounded AI Resume Automation
+
+**Role fit:** AI Engineer, Python Engineer, Developer Productivity Engineer, Forward Deployed Engineer
+
+**Keywords:** Python, Tkinter, OpenAI SDK, Anthropic SDK, NVIDIA models, structured JSON, LLM workflows, human review, validation, DOCX generation, PDF generation, concurrency, artifact logging, secure local configuration
+
+**Context:** Resume automation can produce unsupported claims when a system writes directly from a job description without checking candidate evidence.
+
+**Story:** I built Resume Agent, a Python desktop application that turns a pasted job description and candidate evidence into structured resume JSON, recruiter-reviewed content, application responses, outreach drafts, DOCX files, and PDF deliverables.
+
+I designed a multi-stage workflow with Python and Tkinter. It supports NVIDIA-hosted models through the OpenAI SDK and Claude through the Anthropic SDK. The application analyzes job descriptions, identifies potential coverage gaps, collects evidence for review, generates structured JSON, and performs separate audit, repair, and validation stages before output is finalized.
+
+I added artifact logging, request folders, cost tracking, request restoration, concurrent tab execution, cancellation controls, document generation, and local configuration practices that keep API keys and generated artifacts outside version control.
+
+**Outcome:** Users can move from a job description to reviewable application materials while keeping evidence, validation, and output traceability part of the workflow.
+
+---
+
+### Story 33 — JobFill AI: Browser Application Automation
+
+**Role fit:** Frontend Engineer, Full-Stack Engineer, Forward Deployed Engineer, Workflow Automation Engineer
+
+**Keywords:** JavaScript, HTML, CSS, Chrome Manifest V3, service workers, content scripts, Chrome storage, browser automation, Workday integration, document parsing, Anthropic Claude, client-side security
+
+**Context:** Job applications often require candidates to repeatedly enter the same information across long, inconsistent forms.
+
+**Story:** I built JobFill AI, a Chrome Manifest V3 extension that scans application pages, detects fields, stores candidate profile information locally, uploads saved resumes, and fills Workday-specific and generic job-application workflows.
+
+I used JavaScript, HTML, CSS, Chrome extension APIs, service workers, content scripts, popup interfaces, and Chrome local storage. The extension supports browser-side storage of resumes and parsing of supported LaTeX files into structured contact information, skills, work history, education, projects, and summary data.
+
+I implemented dedicated workflows for common Workday pages and generic fallback logic based on labels, placeholders, field names, and input types. Optional Anthropic Claude support creates suggested free-response answers from locally stored candidate context while retaining user review before output is applied.
+
+**Outcome:** Candidates can reduce repetitive application-form work while keeping profile data, resumes, and settings in browser-local storage instead of depending on a separate backend service.
+
+---
+
+### Story 34 — Bistro AI: Structured AI Restaurant Ordering
+
+**Role fit:** AI Engineer, Full-Stack Engineer, Backend Engineer — Node.js, Mobile Product Engineer
+
+**Keywords:** TypeScript, Node.js, Express, PostgreSQL, Prisma, REST APIs, Zod, Anthropic Claude, structured AI outputs, React Native, Expo, Zustand, Docker, caching, retries, timeout handling
+
+**Context:** Natural-language restaurant ordering is useful only when the application can turn a request into safe, valid cart changes rather than unpredictable free-form output.
+
+**Story:** I built Bistro AI, a mobile-first restaurant-ordering application with PostgreSQL-backed menu and order workflows, REST APIs, and an AI waiter that converts natural-language requests into structured cart actions.
+
+I developed the backend with TypeScript, Node.js, Express, Prisma, and PostgreSQL. The API supports health checks, menu retrieval, category filtering, order creation, recent-order retrieval, one-shot AI parsing, and multi-turn AI chat. I used Zod validation and typed `ADD`, `REMOVE`, and `UPDATE_QTY` actions so the AI workflow returns bounded, validated state changes.
+
+I integrated Anthropic Claude for order interpretation, added cache layers to reduce repeated model calls, and configured timeouts and retries for external-model resilience. The client uses Expo, Expo Router, React Native, TypeScript, Zustand, and shared types. Docker and Docker Compose support local API and PostgreSQL deployment, while an Nginx-backed web flow supports browser demos.
+
+**Outcome:** Users can describe an order naturally while the application keeps cart updates controlled, validated, and connected to real menu and checkout workflows.
+
+---
+
+### Story 35 — AI-Assisted Engineering Workflow
+
+**Role fit:** AI Engineer, Software Engineer, Developer Productivity Engineer
+
+**Keywords:** Cursor, Codex, Claude Code, GIT, debugging, testing, code generation, technical validation, architecture decisions, implementation iteration
+
+**Context:** AI coding tools can accelerate implementation, but useful engineering work still requires ownership of system design, test behavior, validation, debugging, and production decisions.
+
+**Story:** Across personal projects and research work, I used Cursor, Codex, Claude Code, and GIT to accelerate implementation, debugging, testing, documentation, and iteration. I used AI tooling as development support while retaining responsibility for architecture, integration behavior, validation, review of generated code, test outcomes, and final technical decisions.
+
+**Outcome:** The workflow improved development speed while keeping engineering judgment, verification, and accountability with the developer.
+
+## Positioning Summary by Role Family
+
+### Backend Engineer — Java
+Strongest stories: 01, 02, 03, 04, 05, 06, 07, 15, 16, 17. Lead with distributed systems, production API ownership, data consistency, Kafka event-driven design, testing discipline, and release maturity. Target: Amazon, Apple, JPMorgan, Walmart, Oracle, Bloomberg, Capital One.
+
+### Backend Engineer — Python
+Strongest stories: 08, 09, 10, 21, 22, 25, 28, 29. Lead with API ownership, orchestration, data pipelines, validation, async workflows, and cloud delivery. Target: Google, OpenAI, Databricks, Bloomberg, Capital One, NVIDIA, healthcare analytics.
+
+### Backend Engineer — C#/.NET
+Strongest stories: 11, 12. Lead with Microsoft stack, enterprise portal delivery, OAuth, Azure Key Vault, RBAC, and SQL Server. Target: Microsoft, JPMorgan, Capital One, Deloitte, Accenture.
+
+### Full-Stack Engineer
+Strongest stories: 01, 08, 13, 14, 15, 23, 27, 28, 32. Lead with end-to-end feature ownership, API-connected UI, auth, testing, and deployment. Target: Amazon, Meta, Adobe, Salesforce, DoorDash, Intuit.
+
+### Frontend Engineer
+Strongest stories: 13, 14, 23. Lead with React/TypeScript production dashboards, component architecture, async API integration, RBAC, and workflow visibility. Target: Meta, Adobe, Intuit, DoorDash, Uber.
+
+### AI Engineer
+Strongest stories: 27, 29, 30, 31, 32, 33, 24. Lead with RAG, vector search, embeddings, LLM integration, structured outputs, evaluation harnesses, and AI agent workflows. Target: OpenAI, Microsoft AI, Google, Databricks, Salesforce, Palantir, Adobe.
+
+### ML Engineer
+Strongest stories: 24, 28, 21, 22. Lead with model training, evaluation, inference integration, data pipelines, and dashboard-connected prediction delivery. Target: Google, Microsoft, Databricks, Snowflake, Bloomberg, JPMorgan AI teams.
+
+### Forward Deployed Engineer
+Strongest stories: 08, 25, 01, 27, 32. Lead with stakeholder translation, customer-facing delivery, integrations, debugging, and production-ready deployment. Target: Palantir, OpenAI, Databricks, Salesforce, Deloitte, EY.

@@ -47,6 +47,7 @@ PDF_DIR = ROOT / PDF_DIR_NAME
 PROMPT_PROFILE_LABELS = {
     "stable": "Stable",
     "v1": "V1",
+    "v2": "V2",
 }
 DEFAULT_PROMPT_PROFILE = "v1"
 
