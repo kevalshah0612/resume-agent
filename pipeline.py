@@ -791,10 +791,14 @@ def split_skill_terms(value: Any) -> list[str]:
     return terms
 
 
-V1_SKILL_CATEGORY_LIMIT = 5
-V1_SKILL_TOTAL_LIMIT = 18
+V1_SKILL_CATEGORY_LIMIT = 3
+V1_SKILL_TOTAL_LIMIT = 14
 V1_EXCLUDED_SKILLS = {
+    "code review",
+    "sdlc",
+    "design patterns",
     "multi-tenant architecture",
+    "async processing",
 }
 V1_SKILL_ALIASES = {
     "ec2": "AWS",
@@ -803,46 +807,6 @@ V1_SKILL_ALIASES = {
     "cloudwatch": "AWS",
     "azure key vault": "Azure",
 }
-V1_INFERRED_SKILL_TERMS = [
-    "Java",
-    "Python",
-    "TypeScript",
-    "JavaScript",
-    "C#",
-    "Spring Boot",
-    "FastAPI",
-    "Fastify",
-    "React",
-    "Node.js",
-    "REST APIs",
-    "Kafka",
-    "Redis",
-    "PostgreSQL",
-    "SQL",
-    "NoSQL",
-    "BullMQ",
-    "AWS",
-    "Azure",
-    "GCP",
-    "Docker",
-    "Kubernetes",
-    "CloudWatch",
-    "Datadog",
-    "Git",
-    "GitLab",
-    "GitLab CI/CD",
-    "CI/CD Pipelines",
-    "Jenkins",
-    "JUnit",
-    "Mockito",
-    "Postman",
-    "Coding Standards",
-    "Code Reviews",
-    "Design Patterns",
-    "Source Control",
-    "Automated Testing",
-    "Monitoring",
-]
 
 
 def skill_match_key(term: str) -> str:
@@ -875,18 +839,6 @@ def compact_skill_term(term: str) -> str:
     return V1_SKILL_ALIASES.get(cleaned.lower(), cleaned)
 
 
-def infer_v1_skills_from_evidence(evidence_text: str) -> list[str]:
-    inferred: list[str] = []
-    seen: set[str] = set()
-    for term in V1_INFERRED_SKILL_TERMS:
-        normalized = compact_skill_term(term)
-        key = normalized.lower()
-        if key not in seen and skill_visible_in_text(term, evidence_text):
-            inferred.append(normalized)
-            seen.add(key)
-    return inferred
-
-
 def categorize_v1_skill(term: str) -> str:
     lower = term.lower()
     if any(token in lower for token in ("java", "python", "spring", "fastapi", "fastify", "django", "node", "typescript", "javascript", "react", "angular", ".net", "c#", "html", "css")):
@@ -910,8 +862,7 @@ def normalize_v1_skills(skills: Any, evidence_text: str = "") -> dict[str, str]:
     grouped: dict[str, list[str]] = {}
     seen = {key: set() for key in grouped}
     total = 0
-    skill_terms = split_skill_terms(skills) + infer_v1_skills_from_evidence(evidence_text)
-    for raw_term in skill_terms:
+    for raw_term in split_skill_terms(skills):
         term = compact_skill_term(raw_term)
         if not term or term.lower() in V1_EXCLUDED_SKILLS:
             continue
