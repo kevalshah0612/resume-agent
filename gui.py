@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from app_properties import REQUESTS_DIR, RESUME_STEM, WORD_DIR
+from app_properties import DEFAULT_PROMPT_PROFILE, REQUESTS_DIR, RESUME_STEM, WORD_DIR
 from pipeline import (
     CostEvent,
     FinalReviewResult,
@@ -209,7 +209,7 @@ class JobTab(ttk.Frame):
             values=prompt_profile_options(),
         )
         self.prompt_selector.grid(row=0, column=3, sticky="e", padx=(0, 4))
-        self.prompt_selector.set(prompt_profile_label("stable"))
+        self.prompt_selector.set(prompt_profile_label(DEFAULT_PROMPT_PROFILE))
         self.prompt_selector.bind("<<ComboboxSelected>>", self.on_prompt_profile_selected)
         ttk.Label(output_header, text="Model").grid(row=0, column=4, sticky="e", padx=(4, 3))
         self.model_selector = ttk.Combobox(
@@ -1452,7 +1452,7 @@ class JobTab(ttk.Frame):
         self.output_title.set("Output")
         self.output_selector.configure(values=())
         self.output_selector.set("")
-        self.prompt_selector.set(prompt_profile_label("stable"))
+        self.prompt_selector.set(prompt_profile_label(DEFAULT_PROMPT_PROFILE))
         self.on_prompt_profile_selected()
         self.model_selector.set(get_default_nvidia_model_option())
         self.cost_label.config(text="$0.0000")
