@@ -207,6 +207,32 @@ class PromptProfileTests(unittest.TestCase):
         self.assertNotIn("Code review", rendered)
         self.assertLessEqual(sum(len(v.split(", ")) for v in mapped["technical_skills"].values()), 14)
 
+    def test_v1_skills_recover_final_bullet_evidence_when_model_returns_short_list(self):
+        compact = {
+            "type": "Backend",
+            "experience": [
+                {
+                    "title": "Software Engineer II",
+                    "company": "Tata Consultancy Services",
+                    "bullets": [
+                        "Built Java Spring Boot services with Kafka, Redis, GitLab CI/CD, Docker, Kubernetes, AWS, JUnit, and Mockito for release teams."
+                    ],
+                }
+            ],
+            "projects": [],
+            "skills": ["Java", "Coding Standards"],
+        }
+        mapped = pipeline.v1_compact_to_resume_json(
+            compact,
+            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Java services"),
+        )
+        rendered = json.dumps(mapped["technical_skills"])
+        self.assertIn("Spring Boot", rendered)
+        self.assertIn("Kafka", rendered)
+        self.assertIn("AWS", rendered)
+        self.assertIn("JUnit", rendered)
+        self.assertLessEqual(sum(len(v.split(", ")) for v in mapped["technical_skills"].values()), 18)
+
 
 class NvidiaModelProfileTests(unittest.TestCase):
     def fake_client(self, response):
