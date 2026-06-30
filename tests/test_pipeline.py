@@ -161,7 +161,7 @@ class PromptProfileTests(unittest.TestCase):
         system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
         self.assertIn("Resume Generation Prompt", system_text)
-        self.assertIn("Story_GPT", system_text)
+        self.assertIn("Story.md", system_text)
         self.assertIn("JD:\nBuild APIs", user_text)
         self.assertIn("ROLE TYPE:\nBackend", user_text)
         self.assertIn("Company:\nAcme", user_text)
@@ -176,14 +176,14 @@ class PromptProfileTests(unittest.TestCase):
         )
         self.assertEqual(mapped["config"]["prompt_profile"], "v2")
 
-    def test_v1_validator_rejects_full_schema(self):
+    def test_v1_validator_rejects_missing_experience(self):
         bad_response = (
             "```json\n"
             "{\"technical_skills\": {\"row1\": [\"React\", \"TypeScript\"], \"row2\": [\"Java\"]}}\n"
             "```"
         )
         error = pipeline.validate_v1_compact_response(bad_response)
-        self.assertIn("experience, projects, skills", error or "")
+        self.assertIn("include experience", error or "")
 
     def test_v1_validator_accepts_compact_schema(self):
         self.assertIsNone(pipeline.validate_v1_compact_response(valid_v1_compact_response()))
@@ -191,6 +191,32 @@ class PromptProfileTests(unittest.TestCase):
     def test_v1_validator_accepts_compact_schema_without_type(self):
         response = valid_v1_compact_response().replace("\"type\": \"Backend\", ", "")
         self.assertIsNone(pipeline.validate_v1_compact_response(response))
+
+    def test_v1_validator_accepts_extra_metadata_and_optional_skills(self):
+        response = (
+            "```json\n"
+            "{\"analysis\": \"ok\", \"experience\": [], \"projects\": [], \"notes\": \"diagnostic\"}\n"
+            "```"
+        )
+        self.assertIsNone(pipeline.validate_v1_compact_response(response))
+
+    def test_v1_mapper_accepts_professional_experience_shape(self):
+        mapped = pipeline.v1_compact_to_resume_json(
+            {
+                "professional_experience": [
+                    {
+                        "title": "Software Engineer II",
+                        "company": "Tata Consultancy Services",
+                        "bullets": ["Built Java APIs for users."],
+                    }
+                ],
+                "projects": [],
+                "technical_skills": {"Skills": "Java, Spring Boot"},
+            },
+            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+        )
+        self.assertEqual(mapped["professional_experience"][0]["title"], "Software Engineer II")
+        self.assertEqual(mapped["technical_skills"], {"Skills": "Java, Spring Boot"})
 
     def test_v1_compact_to_resume_json_adds_locked_resume_fields(self):
         compact = pipeline.extract_json(valid_v1_compact_response())

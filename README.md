@@ -69,7 +69,8 @@ The prompt dropdown is per tab:
 
 - `Stable` is the default production flow and uses `main_flow/`.
 - `V1` uses `v1_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
-- In V1, `Prompt` sends company, JD, location, and optional DES and expects compact `type`, `experience`, `projects`, and `skills` JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
+- `V2` uses `v2_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
+- In V1/V2, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
 
 LinkedIn outreach is role-specific rather than generic:
 

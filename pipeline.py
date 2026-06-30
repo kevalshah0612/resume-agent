@@ -751,17 +751,25 @@ def validate_v1_compact_response(text: str) -> str | None:
     if json_error:
         return json_error
     data = extract_json(text)
-    required = {"experience", "projects", "skills"}
-    optional = {"type"}
     lower_keys = {str(key).lower() for key in data}
-    if not required.issubset(lower_keys) or not lower_keys.issubset(required | optional):
-        return "V1 JSON must contain only experience, projects, skills, and optional type"
-    if not isinstance(data.get("experience") or data.get("Experience"), list):
+    if "experience" not in lower_keys and "professional_experience" not in lower_keys:
+        return "V1 JSON must include experience"
+
+    def first_present(*keys: str) -> Any:
+        for key in keys:
+            if key in data:
+                return data[key]
+        return None
+
+    experience = first_present("experience", "Experience", "professional_experience", "Professional_Experience")
+    if not isinstance(experience, list):
         return "V1 JSON experience must be a list"
-    if not isinstance(data.get("projects") or data.get("Projects"), list):
-        return "V1 JSON projects must be a list"
-    if not isinstance(data.get("skills") or data.get("Skills"), list):
-        return "V1 JSON skills must be a list"
+    projects = first_present("projects", "Projects")
+    if projects is not None and not isinstance(projects, list):
+        return "V1 JSON projects must be a list when present"
+    skills = first_present("skills", "Skills", "technical_skills", "Technical_Skills")
+    if skills is not None and not isinstance(skills, (list, dict, str)):
+        return "V1 JSON skills must be a list, object, or string when present"
     return None
 
 
@@ -849,7 +857,14 @@ def v1_header_location(inp: ResumeInput) -> str:
 
 def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v1") -> dict[str, Any]:
     jobs: list[dict[str, Any]] = []
-    for item in compact.get("experience") or compact.get("Experience") or []:
+    source_experience = (
+        compact.get("experience")
+        or compact.get("Experience")
+        or compact.get("professional_experience")
+        or compact.get("Professional_Experience")
+        or []
+    )
+    for item in source_experience:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or item.get("Title") or "").strip()
@@ -912,7 +927,12 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
         ],
         "professional_experience": jobs,
         "projects": projects,
-        "technical_skills": v1_model_skills_to_technical_skills(compact.get("skills") or compact.get("Skills")),
+        "technical_skills": v1_model_skills_to_technical_skills(
+            compact.get("skills")
+            or compact.get("Skills")
+            or compact.get("technical_skills")
+            or compact.get("Technical_Skills")
+        ),
     })
 
 

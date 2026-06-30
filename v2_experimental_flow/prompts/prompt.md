@@ -61,7 +61,7 @@ Resume Configuration:
 - bullet count per entry.
 
 Evidence Bank:
-- Story_GPT.md;
+- Story.md;
 - verified Project Bank.
 ```
 
