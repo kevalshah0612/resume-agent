@@ -67,9 +67,9 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 
 The prompt dropdown is per tab:
 
-- `Stable new_flow` is the default production flow.
-- `V1 experimental` uses `Prompt_V1/pass_1.md`, `Prompt_V1/pass_2.md`, `Prompt_V1/final_check.md`, and `Prompt_V1/story.md`.
-- In V1, `PASS 1` runs the specialized planning/DES prompt, `Generate JSON` runs the PASS 2 resume JSON prompt, and the `Final Check` button runs the combined ATS, recruiter, and hiring-manager review prompt.
+- `Stable` is the default production flow and uses `main_flow/`.
+- `V1` uses `v1_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
+- In V1, `Prompt` sends company, JD, location, and optional DES and expects compact `type`, `experience`, `projects`, and `skills` JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
 
 LinkedIn outreach is role-specific rather than generic:
 

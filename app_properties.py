@@ -19,6 +19,22 @@ LINKEDIN_DISPLAY = "linkedin.com/in/keval-shah0612"
 GITHUB_URL = "https://github.com/kevalshah0612"
 GITHUB_DISPLAY = "github.com/kevalshah0612"
 
+DEFAULT_BINGHAMTON_GRADUATION = "Expected Aug 2026"
+GUJARAT_GRADUATION = "Graduated Sep 2020"
+TCS_II_EMPLOYMENT_NOTE = "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization"
+GHI_EMPLOYMENT_NOTE = ""
+
+V1_PROJECT_URLS = {
+    "jobpulse": "https://github.com/kevalshah0612/jobpulse",
+    "fraudsift": "https://github.com/kevalshah0612/fraudsift",
+    "reviewbot": "https://github.com/kevalshah0612/reviewbot",
+    "filingquery": "https://github.com/kevalshah0612/filingquery",
+    "evaltrace": "https://github.com/kevalshah0612/evaltrace",
+    "resume agent": "https://github.com/kevalshah0612/resume-agent",
+    "jobfill": "https://github.com/kevalshah0612/jobfill-ai-extension",
+    "bistro": "https://github.com/kevalshah0612/bistro-ai",
+}
+
 REQUESTS_DIR_NAME = "requests"
 WORD_DIR_NAME = "Resume-word"
 PDF_DIR_NAME = "Resume-pdf"

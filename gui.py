@@ -46,10 +46,17 @@ from pipeline import (
     save_json,
     save_text,
     slug,
+    v1_compact_to_resume_json,
 )
 
 
 ROOT = Path(__file__).parent
+
+
+def manager_script_for_profile(prompt_profile: str) -> Path:
+    if prompt_profile == "v1":
+        return ROOT / "v1_experimental_flow" / "manager_Updated.py"
+    return ROOT / "manager.py"
 
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
@@ -218,6 +225,7 @@ class JobTab(ttk.Frame):
         self.output_selector.grid(row=0, column=6, sticky="ew")
         self.output_selector.bind("<<ComboboxSelected>>", self.on_output_selected)
         self.output = self._text_box(right, 1, height=28, sticky="nsew")
+        self.apply_prompt_profile_view()
 
     def _labeled_text(self, parent: ttk.Frame, label: str, row: int, height: int) -> tk.Text:
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w")
@@ -275,9 +283,7 @@ class JobTab(ttk.Frame):
         return resolve_prompt_profile_label(self.prompt_selector.get())
 
     def on_prompt_profile_selected(self, _event=None) -> None:
-        self.recruiter_btn.config(
-            text="Final Check" if self.selected_prompt_profile() == "v1" else "Recruiter"
-        )
+        self.apply_prompt_profile_view()
         if not self.request_dir:
             return
         self.update_request_metadata({
@@ -292,6 +298,27 @@ class JobTab(ttk.Frame):
             "nvidia model": f"NVIDIA Model: {model}",
             "nvidia thinking": f"NVIDIA Thinking: {'ON' if thinking else 'OFF'}",
         })
+
+    def apply_prompt_profile_view(self) -> None:
+        is_v1 = self.selected_prompt_profile() == "v1"
+        if is_v1:
+            self.pass1_btn.grid_remove()
+            self.auto_btn.grid_remove()
+            self.final_qa_btn.grid_remove()
+            self.questions_btn.grid_remove()
+            self.json_btn.config(text="Prompt")
+            self.recruiter_btn.config(text="Hotdog")
+            self.approval.master.grid_remove()
+            self.app_questions.master.grid_remove()
+        else:
+            self.pass1_btn.grid()
+            self.auto_btn.grid()
+            self.final_qa_btn.grid()
+            self.questions_btn.grid()
+            self.json_btn.config(text="Generate JSON")
+            self.recruiter_btn.config(text="Recruiter")
+            self.approval.master.grid()
+            self.app_questions.master.grid()
 
     def update_request_metadata(self, updates: dict[str, str]) -> None:
         metadata_path = self.existing_request_file("request") or self.request_file("request")
@@ -746,13 +773,13 @@ class JobTab(ttk.Frame):
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
+            prompt_profile = self.selected_prompt_profile()
             pass1_text = self.pass1_raw or self.text_value(self.output)
-            if not pass1_text:
+            if prompt_profile != "v1" and not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
-            approval = normalize_approval(approval_raw)
+            approval = "" if prompt_profile == "v1" else normalize_approval(approval_raw)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
-            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Missing step", str(exc), parent=self)
             return
@@ -776,6 +803,8 @@ class JobTab(ttk.Frame):
             save_text(self.request_file("resume_process", request_dir), raw)
             try:
                 data = extract_json(raw)
+                if prompt_profile == "v1":
+                    data = v1_compact_to_resume_json(data, inp)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "04_resume_generation_error.txt", str(exc))
@@ -789,7 +818,9 @@ class JobTab(ttk.Frame):
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            if not self.show_and_save_linkedin_outreach(request_dir, raw):
+            if prompt_profile == "v1":
+                self.show_output("V1 Prompt", self.response_summary(raw) or "V1 prompt JSON is ready.")
+            elif not self.show_and_save_linkedin_outreach(request_dir, raw):
                 self.show_output("PASS 2 Result", self.response_summary(raw) or "Final resume JSON is ready.")
             self.add_cost_events(events)
             if parse_error:
@@ -801,7 +832,7 @@ class JobTab(ttk.Frame):
             self.final_qa_json_path = None
             self.docx_path = None
             self.select_output_artifact("Output | Resume JSON")
-            self.set_stage(f"JSON: {self.final_json_path.name}")
+            self.set_stage(f"{'V1 Prompt' if prompt_profile == 'v1' else 'JSON'}: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
 
@@ -935,6 +966,8 @@ class JobTab(ttk.Frame):
             save_text(self.request_file("recruiter_process", request_dir), raw)
             try:
                 data = extract_json(raw)
+                if prompt_profile == "v1":
+                    data = v1_compact_to_resume_json(data, inp)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "06_recruiter_review_error.txt", str(exc))
@@ -951,7 +984,9 @@ class JobTab(ttk.Frame):
                 messagebox.showerror(title, str(err), parent=self)
                 return
             raw, data, events, parse_error = result
-            if not self.show_and_save_linkedin_outreach(request_dir, raw):
+            if prompt_profile == "v1":
+                self.show_output("Hotdog", self.response_summary(raw) or "Hotdog JSON is ready.")
+            elif not self.show_and_save_linkedin_outreach(request_dir, raw):
                 title = "Final Check" if prompt_profile == "v1" else "Recruiter Review"
                 fallback = "Final check JSON is ready." if prompt_profile == "v1" else "Recruiter JSON is ready."
                 self.show_output(title, self.response_summary(raw) or fallback)
@@ -964,7 +999,7 @@ class JobTab(ttk.Frame):
             self.final_qa_json_path = None
             self.final_json_path = self.recruiter_json_path
             self.select_output_artifact("Output | Recruiter Resume JSON")
-            label = "Final check JSON" if prompt_profile == "v1" else "Recruiter JSON"
+            label = "Hotdog JSON" if prompt_profile == "v1" else "Recruiter JSON"
             self.set_stage(f"{label}: {self.recruiter_json_path.name}")
 
         run_bg(self.app, task, done)
@@ -1191,11 +1226,16 @@ class JobTab(ttk.Frame):
             self.final_json_path = Path(path)
 
         company = self.text_value(self.company) or "Company"
+        prompt_profile = self.selected_prompt_profile()
+        manager_script = manager_script_for_profile(prompt_profile)
+        if not manager_script.exists():
+            messagebox.showerror("Build DOCX failed", f"Renderer not found: {manager_script}", parent=self)
+            return
         self.set_busy(True, "Building DOCX...")
 
         def task():
             result = subprocess.run(
-                [sys.executable, str(ROOT / "manager.py"), str(self.final_json_path), company],
+                [sys.executable, str(manager_script), str(self.final_json_path), company],
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
@@ -1238,11 +1278,16 @@ class JobTab(ttk.Frame):
             self.docx_path = Path(path)
 
         company = self.text_value(self.company) or "Company"
+        prompt_profile = self.selected_prompt_profile()
+        manager_script = manager_script_for_profile(prompt_profile)
+        if not manager_script.exists():
+            messagebox.showerror("PDF archive failed", f"Renderer not found: {manager_script}", parent=self)
+            return
         self.set_busy(True, "PDF archive running...")
 
         def task():
             result = subprocess.run(
-                [sys.executable, str(ROOT / "manager.py"), str(self.docx_path), company],
+                [sys.executable, str(manager_script), str(self.docx_path), company],
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,

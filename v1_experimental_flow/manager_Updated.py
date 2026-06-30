@@ -1,5 +1,5 @@
 """
-resume.py — Simple Resume Builder for Jyotsna Pathak
+resume.py — Simple Resume Builder for Keval Shah
 ================================================
 
 Only 3 commands:
@@ -16,10 +16,10 @@ Only 3 commands:
    python resume.py resume.docx
    python resume.py resume.docx "Palo Alto Networks"
 
-   This keeps final PDF in the current folder, copies one PDF into archives/YYYY-MM-DD/,
-   and deletes the DOCX from the current folder.
+   This keeps DOCX files in Resume-word, keeps final PDFs in Resume-pdf,
+   copies one PDF into Resume-pdf/archives/YYYY-MM-DD/, and deletes the DOCX.
 
-3. Clear current folder
+3. Clear generated DOCX/PDF files
    python resume.py clear
 
 Gap args (only for JSON → DOCX):
@@ -50,8 +50,12 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app_properties import ARCHIVES_DIR_NAME, RESUME_STEM, WORD_DIR_NAME, PDF_DIR_NAME
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -59,45 +63,50 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 
 
-# CONTACT FIELD MAY CONTAIN TWO VISUAL LINES USING \n; renderer splits contact with splitlines() before pipe/link parsing.
 # ── Formatting constants ─────────────────────────────────────────────────────
-DEFAULT_FONT = "Calibri"
+DEFAULT_FONT = "Arial"
 BODY_PT = Pt(10.5)
-SUB_PT = Pt(11)
-SEC_PT = Pt(12)
-NAME_PT = Pt(22)
-CONTACT_PT = Pt(10)
+SUB_PT = Pt(10.5)
+SEC_PT = Pt(10.5)
+NAME_PT = Pt(14)
+CONTACT_PT = Pt(12)
 ZERO = Pt(0)
 
 PAGE_W = Inches(8.5)
 PAGE_H = Inches(11)
-M_TOP = Inches(0.40)
-M_BOT = Inches(0.40)
-M_LEFT = Inches(0.40)
-M_RIGHT = Inches(0.23)
+M_TOP = Inches(0.50)
+M_BOT = Inches(0.94)
+M_LEFT = Inches(1.00)
+M_RIGHT = Inches(1.00)
 TAB_PAD = Inches(0.05)
+LINE_SPACING = 360          # 360 = 1.5 line spacing in Word XML
+BULLET_LEFT_TWIPS = 720     # 0.5 inch
+BULLET_HANGING_TWIPS = 360  # 0.25 inch
+INDENT_LEFT = Inches(0.5)
 
 DEFAULT_SECTION_GAP = 4   # pts between sections
 DEFAULT_SUB_GAP = 4       # pts between entries within a section
 
-RESUME_STEM = "Jyotsna_Pathak"
-ARCHIVES_DIR = "archives"
+ARCHIVES_DIR = ARCHIVES_DIR_NAME
+WORD_DIR = WORD_DIR_NAME
+PDF_DIR = PDF_DIR_NAME
+TEMPLATE_DOCX = "Headless+Resume+Template.docx"
 
 
 # ── Configs ──────────────────────────────────────────────────────────────────
 CONFIGS = {
-    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 4): {"label": "SWE Backend Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Jan 2025 - May 2026", "order": ["education", "skills", "projects", "experience"]},
-    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Jan 2025 - May 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Jan 2025 - Dec 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 4): {"label": "SWE Backend Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Expected Aug 2026", "order": ["education", "skills", "projects", "experience"]},
+    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
 }
 
 
@@ -117,7 +126,7 @@ ATS_KEYWORDS = {
     "backend": "Software Engineer, Backend Engineer, Java, Python, Spring Boot, AWS, Microservices, Docker, REST APIs, Distributed Systems, PostgreSQL, Redis, Kubernetes",
     "fullstack": "Software Engineer, Full Stack, Java, Python, React, TypeScript, JavaScript, Spring Boot, AWS, Microservices, Docker, REST APIs, PostgreSQL",
     "aiml": "AI Engineer, Machine Learning, LLM, RAG, LangChain, Python, FastAPI, MLOps, Docker, AWS, pgvector, HuggingFace, model evaluation",
-    "aitool": "Software Engineer, AI Tooling, AI agents, Python, TypeScript, Cloudflare Workers AI, OpenAI, automation, developer workflows, Docker, AWS, GitHub Actions",
+    "aitool": "Software Engineer, AI Tooling, Claude Code, AI agents, Python, Bash, Linux, automation, scripting, developer workflows, Docker, AWS, GitHub Actions",
 }
 
 
@@ -338,6 +347,83 @@ def bool_value(value: Any, default: bool = False) -> bool:
     return default
 
 
+def build_render_profile(data: dict) -> dict[str, Any]:
+    """Describe the exact content order the DOCX renderer will use."""
+    cfg = config(data)
+    rtype = normalize_type(cfg.get("type", "fullstack"))
+    level = normalize_level(cfg.get("level", 3))
+    layout_profile = normalize_layout_profile(cfg.get("layout_profile", ""), rtype, level)
+    conf = CONFIGS[(rtype, level)]
+    configured_sections = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+
+    present = {
+        "summary": bool(clean(data.get("summary", ""))),
+        "education": bool(data.get("education")),
+        "skills": bool(get_skills_rows(data)),
+        "experience": bool(get_jobs(data)),
+        "projects": bool(get_projects(data)),
+    }
+    rendered_sections = [section for section in configured_sections if present.get(section, False)]
+    jobs = ordered_experience(data, level, layout_profile)
+    projects = get_projects(data)
+    education = data.get("education") or []
+    render_ta = level in {2, 4} and bool_value(cfg.get("ta_active"), default=False)
+
+    return {
+        "resume_type": rtype,
+        "level": level,
+        "level_label": "Entry/SWE I" if level == 2 else "Mid" if level == 3 else "Intern",
+        "layout_profile": layout_profile,
+        "configured_section_order": list(configured_sections),
+        "rendered_section_order": rendered_sections,
+        "experience_order": [
+            {
+                "position": index,
+                "company": clean(job.get("company", "")),
+                "title": clean(job.get("title", "")),
+                "location": clean(job.get("location", "")),
+                "dates": clean(job.get("dates", "")),
+                "employment_note": clean(job.get("employment_note", "")),
+                "bullet_count": len(job.get("bullets") or []),
+            }
+            for index, job in enumerate(jobs, start=1)
+        ],
+        "education_order": [
+            {
+                "position": index,
+                "university": clean(item.get("university", "")),
+                "degree": clean(item.get("degree", "")),
+                "graduation": clean(item.get("graduation", "")) or (conf["grad"] if index == 1 else ""),
+            }
+            for index, item in enumerate(education, start=1)
+        ],
+        "project_order": [
+            {
+                "position": index,
+                "name": clean(project.get("name", "")),
+                "technology": get_project_tech(project),
+                "bullet_count": len(project.get("bullets") or []),
+            }
+            for index, project in enumerate(projects, start=1)
+        ],
+        "skill_rows": [
+            {"position": index, "label": label, "terms": terms}
+            for index, (label, terms) in enumerate(get_skills_rows(data), start=1)
+        ],
+        "ta_bullet_rendered_under_education": bool(
+            render_ta
+            and education
+            and clean(education[0].get("ta_bullet", ""))
+        ),
+        "renderer_constraints": {
+            "experience_order_is_calculated_from_layout": True,
+            "empty_sections_are_skipped": True,
+            "titles_render_exactly_from_json": True,
+            "bullet_counts_must_remain_unchanged_during_final_review": True,
+        },
+    }
+
+
 # ── PDF helpers ──────────────────────────────────────────────────────────────
 def pdf_with_word(docx_path: str) -> str:
     try:
@@ -408,7 +494,7 @@ def pdf_with_libreoffice(docx_path: str) -> str:
 
 def infer_company_from_docx(docx_path: str) -> str:
     stem = os.path.splitext(os.path.basename(docx_path))[0]
-    match = re.match(r"Jyotsna_Pathak_(.+?)_Resume$", stem, re.IGNORECASE)
+    match = re.match(r"Keval_Shah_(.+?)_Resume$", stem, re.IGNORECASE)
     return match.group(1) if match else "Company"
 
 
@@ -418,7 +504,9 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
 
     company = company_override or infer_company_from_docx(docx_path)
     company_safe = safe_name(company)
-    work_dir = os.path.dirname(os.path.abspath(docx_path)) or "."
+    source_dir = os.path.dirname(os.path.abspath(docx_path)) or "."
+    pdf_dir = os.path.abspath(PDF_DIR)
+    os.makedirs(pdf_dir, exist_ok=True)
     now = datetime.now()
 
     try:
@@ -431,14 +519,14 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
         except Exception as libre_error:
             fail(f"Could not convert DOCX to PDF. Word error: {word_error}. LibreOffice error: {libre_error}")
 
-    final_pdf = os.path.join(work_dir, f"{RESUME_STEM}_{company_safe}_Resume.pdf")
+    final_pdf = os.path.join(pdf_dir, f"{RESUME_STEM}_{company_safe}_Resume.pdf")
 
     if os.path.abspath(pdf_path) != os.path.abspath(final_pdf):
         if os.path.exists(final_pdf):
             os.remove(final_pdf)
         shutil.move(pdf_path, final_pdf)
 
-    archive_dir = os.path.join(work_dir, ARCHIVES_DIR, now.strftime("%Y-%m-%d"))
+    archive_dir = os.path.join(pdf_dir, ARCHIVES_DIR, now.strftime("%Y-%m-%d"))
     os.makedirs(archive_dir, exist_ok=True)
 
     archive_pdf = os.path.join(archive_dir, f"{RESUME_STEM}_{company_safe}_{now.strftime('%H-%M-%S')}.pdf")
@@ -450,7 +538,7 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
         print(f"Warning: could not delete DOCX: {e}")
 
     lock_name = "~$" + os.path.basename(docx_path)[2:]
-    lock_path = os.path.join(work_dir, lock_name)
+    lock_path = os.path.join(source_dir, lock_name)
     if os.path.exists(lock_path):
         try:
             os.remove(lock_path)
@@ -465,14 +553,20 @@ def docx_to_pdf(docx_path: str, company_override: str = "") -> None:
 
 def clear_folder() -> None:
     deleted = 0
-    for name in os.listdir("."):
-        if name.lower().endswith((".docx", ".pdf")) or name.startswith("~$"):
-            try:
-                os.remove(name)
-                deleted += 1
-                print(f"Deleted: {name}")
-            except Exception as e:
-                print(f"Could not delete {name}: {e}")
+    for folder in [".", WORD_DIR, PDF_DIR]:
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if os.path.isdir(path):
+                continue
+            if name.lower().endswith((".docx", ".pdf")) or name.startswith("~$"):
+                try:
+                    os.remove(path)
+                    deleted += 1
+                    print(f"Deleted: {path}")
+                except Exception as e:
+                    print(f"Could not delete {path}: {e}")
     print(f"Done. Removed {deleted} file(s).")
 
 
@@ -487,6 +581,17 @@ def do_layout(doc: Document) -> None:
     s.right_margin = M_RIGHT
 
 
+def document_from_template() -> Document:
+    """Start from the Headless template when present so Word styles/numbering match."""
+    doc = Document(TEMPLATE_DOCX) if os.path.exists(TEMPLATE_DOCX) else Document()
+    body = doc._element.body
+    for child in list(body):
+        if child.tag != qn("w:sectPr"):
+            body.remove(child)
+    do_layout(doc)
+    return doc
+
+
 def rtab(doc: Document) -> int:
     s = doc.sections[0]
     return int(s.page_width - s.left_margin - s.right_margin - TAB_PAD)
@@ -499,7 +604,7 @@ def rf(run, *, sz=BODY_PT, bold=False, italic=False) -> None:
     run.italic = italic
 
 
-def sp(paragraph, *, before=0, after=0, line=240) -> None:
+def sp(paragraph, *, before=0, after=0, line=LINE_SPACING) -> None:
     ppr = paragraph._element.get_or_add_pPr()
     for child in list(ppr):
         if child.tag == qn("w:spacing"):
@@ -510,6 +615,10 @@ def sp(paragraph, *, before=0, after=0, line=240) -> None:
     el.set(qn("w:line"), str(line))
     el.set(qn("w:lineRule"), "auto")
     ppr.append(el)
+
+
+def headless_sp(paragraph, *, before=0, after=0, line=LINE_SPACING) -> None:
+    sp(paragraph, before=before, after=after, line=line)
 
 
 def gap(doc: Document, pts: int = 4) -> None:
@@ -600,42 +709,30 @@ def star_bold(paragraph, text: str, bold_markers: bool = True) -> None:
 # ── DOCX render blocks ───────────────────────────────────────────────────────
 def section_heading(doc: Document, text: str) -> None:
     p = doc.add_paragraph()
-    sp(p)
-    r = p.add_run(clean(text).upper())
+    headless_sp(p)
+    r = p.add_run(clean(text))
     rf(r, sz=SEC_PT, bold=True)
-
-    ppr = p._element.get_or_add_pPr()
-    border = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "8")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
-    border.append(bottom)
-    ppr.append(border)
 
 
 def company_header(doc: Document, company: str, title: str, location: str, dates: str) -> None:
     p = doc.add_paragraph()
-    sp(p)
+    headless_sp(p)
     tabs = p.paragraph_format.tab_stops
     tabs.clear_all()
     tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
 
-    r = p.add_run(clean(company))
-    rf(r, sz=SUB_PT, bold=True)
-
-    meta = []
-    if clean(title):
-        meta.append(clean(title))
+    label_parts = []
+    if clean(title) and clean(company):
+        label_parts.append(f"{clean(title)} at {clean(company)}")
+    elif clean(title):
+        label_parts.append(clean(title))
+    elif clean(company):
+        label_parts.append(clean(company))
     if clean(location):
-        meta.append(clean(location))
+        label_parts.append(clean(location))
 
-    if meta:
-        sep = p.add_run(" | ")
-        rf(sep, sz=SUB_PT)
-        r2 = p.add_run(", ".join(meta))
-        rf(r2, sz=SUB_PT, italic=True)
+    r = p.add_run(", ".join(label_parts))
+    rf(r, sz=SUB_PT, italic=True)
 
     if clean(dates):
         tab = p.add_run("\t")
@@ -646,29 +743,59 @@ def company_header(doc: Document, company: str, title: str, location: str, dates
 
 def project_header(doc: Document, name: str, tech: str, url: str) -> None:
     p = doc.add_paragraph()
-    sp(p)
+    headless_sp(p)
+    tabs = p.paragraph_format.tab_stops
+    tabs.clear_all()
+    tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
+
+    r = p.add_run(clean(name))
+    rf(r, sz=SUB_PT, italic=True)
 
     if clean(url):
-        hyperlink(p, clean(name), clean(url), size=SUB_PT)
-    else:
-        r = p.add_run(clean(name))
-        rf(r, sz=SUB_PT, bold=True)
+        tab = p.add_run("\t")
+        rf(tab, sz=SUB_PT)
+        hyperlink(p, "Project Link", clean(url), size=SUB_PT)
 
-    if clean(tech):
-        sep = p.add_run(" | ")
-        rf(sep, sz=SUB_PT)
-        r2 = p.add_run(clean(tech))
-        rf(r2, sz=SUB_PT)
+
+def set_template_bullet(
+    paragraph,
+    *,
+    num_id: int = 2,
+    left_twips: int = BULLET_LEFT_TWIPS,
+    hanging_twips: int = BULLET_HANGING_TWIPS,
+) -> None:
+    ppr = paragraph._element.get_or_add_pPr()
+    for child in list(ppr):
+        if child.tag in {qn("w:numPr"), qn("w:ind")}:
+            ppr.remove(child)
+
+    num_pr = OxmlElement("w:numPr")
+    ilvl = OxmlElement("w:ilvl")
+    ilvl.set(qn("w:val"), "0")
+    num_pr.append(ilvl)
+    num_id_el = OxmlElement("w:numId")
+    num_id_el.set(qn("w:val"), str(num_id))
+    num_pr.append(num_id_el)
+    ppr.append(num_pr)
+
+    ind = OxmlElement("w:ind")
+    ind.set(qn("w:left"), str(left_twips))
+    ind.set(qn("w:hanging"), str(hanging_twips))
+    ppr.append(ind)
+
+
+def bullet_paragraph(doc: Document, *, num_id: int = 2, line: int = LINE_SPACING):
+    p = doc.add_paragraph()
+    headless_sp(p, line=line)
+    set_template_bullet(p, num_id=num_id)
+    return p
 
 
 def bullet(doc: Document, text: str, bold_markers: bool = True) -> None:
     text = clean_bullet_text(text)
     if not text:
         return
-    p = doc.add_paragraph(style="List Bullet")
-    sp(p)
-    p.paragraph_format.left_indent = Inches(0.25)
-    p.paragraph_format.first_line_indent = Inches(-0.12)
+    p = bullet_paragraph(doc)
     star_bold(p, text, bold_markers)
 
 
@@ -679,7 +806,7 @@ def render_summary(doc: Document, data: dict, bold_markers: bool, sub_gap: int) 
         return False
     section_heading(doc, "Summary")
     p = doc.add_paragraph()
-    sp(p)
+    headless_sp(p)
     star_bold(p, summary, bold_markers)
     return True
 
@@ -692,37 +819,46 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
     cfg = config(data)
     render_ta = level in {2, 4} and bool_value(cfg.get("ta_active"), default=False)
 
-    section_heading(doc, "Education")
+    section_heading(doc, "Education & Certificates")
 
     for i, edu in enumerate(education):
-        p = doc.add_paragraph()
-        sp(p)
+        p = bullet_paragraph(doc, num_id=1)
+        headless_sp(p)
         tabs = p.paragraph_format.tab_stops
         tabs.clear_all()
         tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
 
-        r = p.add_run(clean(edu.get("university", "")))
-        rf(r, sz=SUB_PT, bold=True)
-
-        if clean(edu.get("location", "")):
-            sep = p.add_run(" | ")
-            rf(sep, sz=SUB_PT)
-            r2 = p.add_run(clean(edu.get("location", "")))
-            rf(r2, sz=SUB_PT, italic=True)
+        r = p.add_run(clean(edu.get("degree", "")))
+        rf(r, sz=SUB_PT)
 
         # Prefer the graduation value from JSON so Prompt/Story remain source of truth.
         # Fall back to config default only when JSON omits the field.
         display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
         if display_grad:
+            if not display_grad.lower().startswith("status"):
+                display_grad = f"Status - {display_grad}"
             tab = p.add_run("\t")
             rf(tab, sz=SUB_PT)
             r3 = p.add_run(display_grad)
-            rf(r3, sz=SUB_PT, italic=True)
+            rf(r3, sz=SUB_PT)
 
-        p2 = doc.add_paragraph()
-        sp(p2)
-        r4 = p2.add_run(clean(edu.get("degree", "")))
-        rf(r4, italic=True)
+        university = clean(edu.get("university", ""))
+        location = clean(edu.get("location", ""))
+        if university or location:
+            p2 = doc.add_paragraph()
+            headless_sp(p2)
+            p2.paragraph_format.left_indent = INDENT_LEFT
+            tabs2 = p2.paragraph_format.tab_stops
+            tabs2.clear_all()
+            tabs2.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
+
+            r4 = p2.add_run(university)
+            rf(r4, sz=SUB_PT)
+            if location:
+                tab2 = p2.add_run("\t")
+                rf(tab2, sz=SUB_PT)
+                r5 = p2.add_run(location)
+                rf(r5, sz=SUB_PT)
 
         if i == 0 and render_ta and clean(edu.get("ta_bullet", "")):
             bullet(doc, edu.get("ta_bullet", ""), bold_markers)
@@ -738,12 +874,12 @@ def render_skills(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -
     if not rows:
         return False
 
-    section_heading(doc, "Technical Skills")
+    section_heading(doc, "Skills")
     for label, terms in rows:
         p = doc.add_paragraph()
-        sp(p)
+        headless_sp(p)
         r = p.add_run(f"{label}: ")
-        rf(r, bold=True)
+        rf(r)
         star_bold(p, terms, bold_markers)
     return True
 
@@ -753,9 +889,19 @@ def render_experience(doc: Document, data: dict, level: int, layout_profile: str
     if not jobs:
         return False
 
-    section_heading(doc, "Professional Experience")
+    section_heading(doc, "Work History")
     for i, job in enumerate(jobs):
         company_header(doc, job.get("company", ""), job.get("title", ""), job.get("location", ""), job.get("dates", ""))
+        employment_note = str(job.get("employment_note", "") or "").strip()
+
+        if employment_note:
+            note_p = doc.add_paragraph()
+            headless_sp(note_p)
+
+            note_run = note_p.add_run(employment_note)
+            note_run.italic = True
+            note_run.font.size = BODY_PT
+
         for b in job.get("bullets") or []:
             bullet(doc, b, bold_markers)
         if i < len(jobs) - 1:
@@ -793,24 +939,26 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
         fail(f"Unsupported type/level: {rtype}, {level}")
 
     conf = CONFIGS[(rtype, level)]
-    section_order = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+    section_order = ["summary", "education", "experience", "projects", "skills"]
     company = company_override or clean(cfg.get("company", ""))
 
     if company_override:
-        output = f"{RESUME_STEM}_{safe_name(company_override)}_Resume.docx"
+        output_name = f"{RESUME_STEM}_{safe_name(company_override)}_Resume.docx"
     else:
-        output = clean(cfg.get("output", "")) or f"{RESUME_STEM}_{safe_name(company or rtype)}_Resume.docx"
+        output_name = clean(cfg.get("output", "")) or f"{RESUME_STEM}_{safe_name(company or rtype)}_Resume.docx"
 
-    if not output.lower().endswith(".docx"):
-        output += ".docx"
+    if not output_name.lower().endswith(".docx"):
+        output_name += ".docx"
+
+    os.makedirs(WORD_DIR, exist_ok=True)
+    output = os.path.join(WORD_DIR, os.path.basename(output_name))
 
     bold_markers = bool_value(cfg.get("bold_markers"), default=True)
 
     if os.path.exists(output):
         os.remove(output)
 
-    doc = Document()
-    do_layout(doc)
+    doc = document_from_template()
 
     props = doc.core_properties
     props.author = clean(data.get("name", ""))
@@ -832,15 +980,26 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
     rf(r, sz=NAME_PT, bold=True)
 
     contact = clean(data.get("contact", ""))
-    contact_lines = [line.strip() for line in contact.splitlines() if line.strip()] or [contact]
+    raw_contact_lines = [line.strip() for line in contact.splitlines() if line.strip()] or [contact]
+    contact_parts = []
+    location_line = clean(data.get("location", "") or cfg.get("location", ""))
 
-    for line_index, line in enumerate(contact_lines):
+    for line in raw_contact_lines:
+        parts = [p.strip() for p in line.split(" | ")] if " | " in line else [line]
+        if parts and not location_line:
+            first = parts[0]
+            looks_like_location = "," in first and "@" not in first and "linkedin" not in first.lower() and "github" not in first.lower()
+            if looks_like_location:
+                location_line = first
+                parts = parts[1:]
+        contact_parts.extend(p for p in parts if p)
+
+    if contact_parts:
         p_contact = doc.add_paragraph()
         p_contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
         sp(p_contact)
 
-        parts = [p.strip() for p in line.split(" | ")] if " | " in line else [line]
-        for i, part in enumerate(parts):
+        for i, part in enumerate(contact_parts):
             low = part.lower()
             if "linkedin" in low:
                 hyperlink(p_contact, part, data.get("linkedin_url", ""), size=CONTACT_PT)
@@ -850,9 +1009,18 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
                 rr = p_contact.add_run(part)
                 rf(rr, sz=CONTACT_PT)
 
-            if i < len(parts) - 1:
+            if i < len(contact_parts) - 1:
                 sep = p_contact.add_run(" | ")
                 rf(sep, sz=CONTACT_PT)
+
+    citizenship = clean(data.get("citizenship", "") or cfg.get("citizenship", ""))
+    if location_line or citizenship:
+        p_location = doc.add_paragraph()
+        p_location.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sp(p_location)
+        location_text = f"{citizenship} in {location_line}" if citizenship and location_line else citizenship or location_line
+        rr = p_location.add_run(location_text)
+        rf(rr, sz=CONTACT_PT)
 
     gap(doc, 6)
 

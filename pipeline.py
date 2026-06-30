@@ -7,7 +7,7 @@ Flow 1:
 Flow 2:
   recruiter review -> final JSON for DOCX
 
-The Markdown prompt files are loaded as-is from new_flow. The provider layer is
+The Markdown prompt files are loaded as-is from main_flow. The provider layer is
 kept intentionally small: NVIDIA first when configured, direct Claude fallback
 when enabled.
 """
@@ -30,14 +30,26 @@ from typing import Any, Callable
 
 import anthropic
 
-from app_properties import PROMPT_PROFILE_LABELS
+from app_properties import (
+    CANDIDATE_NAME,
+    CURRENT_LOCATION,
+    DEFAULT_BINGHAMTON_GRADUATION,
+    GHI_EMPLOYMENT_NOTE,
+    GITHUB_URL,
+    GUJARAT_GRADUATION,
+    LINKEDIN_URL,
+    PROMPT_PROFILE_LABELS,
+    TCS_II_EMPLOYMENT_NOTE,
+    V1_PROJECT_URLS,
+    candidate_contact_line,
+)
 from manager import build_render_profile
 
 
 ROOT = Path(__file__).parent
-PROMPT_DIR = ROOT / "new_flow"
-PROMPT_V1_DIR = ROOT / "Prompt_V1"
-FINAL_QA_PROMPT_DIR = ROOT / "claude_resume_workflow"
+PROMPT_DIR = ROOT / "main_flow"
+PROMPT_V1_DIR = ROOT / "v1_experimental_flow"
+FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
 ENV_FILE = ROOT / ".env"
@@ -213,13 +225,13 @@ class NvidiaModelSpec:
 
 NVIDIA_MODEL_SPECS = (
     NvidiaModelSpec(
-        display_name="Nemotron 3 Ultra",
+        display_name="Nemo",
         model_id="nvidia/nemotron-3-ultra-550b-a55b",
         thinking_key="enable_thinking",
         stream=True,
     ),
     NvidiaModelSpec(
-        display_name="DeepSeek V4 Pro",
+        display_name="DS",
         model_id="deepseek-ai/deepseek-v4-pro",
         thinking_key="thinking",
         stream=False,
@@ -389,7 +401,7 @@ def get_nvidia_model_spec(model: str) -> NvidiaModelSpec:
 
 def nvidia_model_option_label(model: str, thinking: bool) -> str:
     spec = get_nvidia_model_spec(model)
-    return f"{spec.display_name} | Thinking {'ON' if thinking else 'OFF'}"
+    return f"{spec.display_name}-{'on' if thinking else 'off'}"
 
 
 def nvidia_model_options() -> list[str]:
@@ -417,7 +429,7 @@ def get_default_nvidia_model_option() -> str:
 
 def normalize_prompt_profile(value: str | None) -> str:
     raw = (value or "").strip().lower()
-    if raw in {"v1", "prompt_v1", "experimental", "v1 experimental"}:
+    if raw in {"v1", "prompt_v1", "v1_experimental_flow", "experimental", "v1 experimental"}:
         return "v1"
     return "stable"
 
@@ -563,7 +575,7 @@ def call_nvidia_sync(
 
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
-    return PROMPT_V1_DIR if normalize_prompt_profile(prompt_profile) == "v1" else PROMPT_DIR
+    return (PROMPT_V1_DIR / "prompts") if normalize_prompt_profile(prompt_profile) == "v1" else PROMPT_DIR
 
 
 def read_prompt(name: str, prompt_profile: str | None = None) -> str:
@@ -722,22 +734,284 @@ def validate_json_response(text: str) -> str | None:
     return None
 
 
-def validate_v1_resume_response(text: str) -> str | None:
+def validate_v1_compact_response(text: str) -> str | None:
     json_error = validate_json_response(text)
     if json_error:
         return json_error
     data = extract_json(text)
-    technical_skills = data.get("technical_skills")
-    if not isinstance(technical_skills, dict):
-        return "technical_skills must be a flat object with dynamic skill-category titles"
-    for key, value in technical_skills.items():
-        if re.fullmatch(r"row\d+(?:_(?:label|terms))?", str(key).strip(), flags=re.IGNORECASE):
-            return "technical_skills must use dynamic category titles, not row1/row2 keys"
-        if isinstance(value, (list, dict)):
-            return "technical_skills values must be comma-separated strings, not arrays or objects"
-        if not str(key).strip() or not str(value).strip():
-            return "technical_skills keys and values must be non-empty"
+    required = {"type", "experience", "projects", "skills"}
+    lower_keys = {str(key).lower() for key in data}
+    if lower_keys != required:
+        return "V1 JSON must contain only type, experience, projects, and skills"
+    if not isinstance(data.get("experience") or data.get("Experience"), list):
+        return "V1 JSON experience must be a list"
+    if not isinstance(data.get("projects") or data.get("Projects"), list):
+        return "V1 JSON projects must be a list"
+    if not isinstance(data.get("skills") or data.get("Skills"), list):
+        return "V1 JSON skills must be a list"
     return None
+
+
+def v1_config_type(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw == "aiml":
+        return "aiml"
+    if raw == "fullstack":
+        return "fullstack"
+    return "backend"
+
+
+def v1_type_label(value: Any) -> str:
+    return {"backend": "Backend", "fullstack": "Fullstack", "aiml": "AIML"}[v1_config_type(value)]
+
+
+def split_skill_terms(value: Any) -> list[str]:
+    def explode(text: str) -> list[str]:
+        expanded = re.sub(r"([A-Za-z0-9+#. /-]+)\(([^)]*)\)", r"\1, \2", text)
+        return re.split(r",|;", expanded)
+
+    if isinstance(value, dict):
+        raw_items: list[Any] = []
+        for item in value.values():
+            raw_items.extend(item if isinstance(item, list) else explode(str(item or "")))
+    elif isinstance(value, list):
+        raw_items = []
+        for item in value:
+            raw_items.extend(explode(str(item or "")))
+    else:
+        raw_items = explode(str(value or ""))
+    terms: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        cleaned = re.sub(r"\s+", " ", str(item or "")).strip()
+        key = cleaned.lower()
+        if cleaned and key not in seen:
+            terms.append(cleaned)
+            seen.add(key)
+    return terms
+
+
+V1_SKILL_CATEGORY_LIMIT = 3
+V1_SKILL_TOTAL_LIMIT = 14
+V1_EXCLUDED_SKILLS = {
+    "code review",
+    "sdlc",
+    "design patterns",
+    "multi-tenant architecture",
+    "async processing",
+}
+V1_SKILL_ALIASES = {
+    "ec2": "AWS",
+    "s3": "AWS",
+    "lambda": "AWS",
+    "cloudwatch": "AWS",
+    "azure key vault": "Azure",
+}
+
+
+def skill_match_key(term: str) -> str:
+    return re.sub(r"[^a-z0-9+#.]+", "", term.lower())
+
+
+def skill_visible_in_text(term: str, text: str) -> bool:
+    if not text.strip():
+        return True
+    lower = text.lower()
+    normalized_text = skill_match_key(text)
+    candidates = [term]
+    paren = re.search(r"\((.*?)\)", term)
+    if paren:
+        candidates.extend(part.strip() for part in re.split(r",|/", paren.group(1)) if part.strip())
+        candidates.append(re.sub(r"\s*\(.*?\)", "", term).strip())
+    for candidate in candidates:
+        cleaned = candidate.strip()
+        if not cleaned:
+            continue
+        if re.search(rf"(?<![a-z0-9]){re.escape(cleaned.lower())}(?![a-z0-9])", lower):
+            return True
+        if skill_match_key(cleaned) and skill_match_key(cleaned) in normalized_text:
+            return True
+    return False
+
+
+def compact_skill_term(term: str) -> str:
+    cleaned = re.sub(r"\s+", " ", term).strip(" ,;()")
+    return V1_SKILL_ALIASES.get(cleaned.lower(), cleaned)
+
+
+def categorize_v1_skill(term: str) -> str:
+    lower = term.lower()
+    if any(token in lower for token in ("java", "python", "spring", "fastapi", "fastify", "django", "node", "typescript", "javascript", "react", "angular", ".net", "c#", "html", "css")):
+        return "Languages"
+    if any(token in lower for token in ("aws", "gcp", "azure", "ec2", "s3", "lambda", "cloudwatch", "cloud", "docker", "kubernetes")):
+        return "Cloud and Infrastructure"
+    if any(token in lower for token in ("postgres", "mysql", "mongodb", "redis", "kafka", "bullmq", "sql", "database", "api", "microservice")):
+        return "Backend and Data"
+    return "Testing and Delivery"
+
+
+def v1_skill_category_label(category: str, values: list[str]) -> str:
+    if category == "Languages":
+        framework_tokens = ("spring", "fastapi", "fastify", "django", "react", "angular", ".net")
+        if any(any(token in value.lower() for token in framework_tokens) for value in values):
+            return "Languages and Frameworks"
+    return category
+
+
+def normalize_v1_skills(skills: Any, evidence_text: str = "") -> dict[str, str]:
+    grouped: dict[str, list[str]] = {}
+    seen = {key: set() for key in grouped}
+    total = 0
+    for raw_term in split_skill_terms(skills):
+        term = compact_skill_term(raw_term)
+        if not term or term.lower() in V1_EXCLUDED_SKILLS:
+            continue
+        if not skill_visible_in_text(term, evidence_text):
+            continue
+        category = categorize_v1_skill(term)
+        grouped.setdefault(category, [])
+        seen.setdefault(category, set())
+        key = term.lower()
+        if key not in seen[category]:
+            if len(grouped[category]) >= V1_SKILL_CATEGORY_LIMIT or total >= V1_SKILL_TOTAL_LIMIT:
+                continue
+            grouped[category].append(term)
+            seen[category].add(key)
+            total += 1
+    return {v1_skill_category_label(category, values): ", ".join(values) for category, values in grouped.items() if values}
+
+
+def v1_experience_lock(company: str, title: str) -> dict[str, str]:
+    company_key = company.strip().lower()
+    title_key = title.strip().lower()
+    if "global health impact" in company_key:
+        return {"location": "New York, NY", "dates": "Jun 2025 - Aug 2025", "employment_note": GHI_EMPLOYMENT_NOTE}
+    if "tata consultancy services" in company_key and "ii" in title_key:
+        return {"location": "", "dates": "Oct 2022 - Present", "employment_note": TCS_II_EMPLOYMENT_NOTE}
+    if "tata consultancy services" in company_key:
+        return {"location": "Gandhinagar, India", "dates": "Mar 2021 - Sep 2022", "employment_note": ""}
+    return {"location": "", "dates": "", "employment_note": ""}
+
+
+def v1_project_url(name: str) -> str:
+    lower = name.lower()
+    for key, url in V1_PROJECT_URLS.items():
+        if key in lower:
+            return url
+    return ""
+
+
+def v1_header_location(inp: ResumeInput) -> str:
+    target = str(inp.words or "").strip()
+    if target and target.lower() != CURRENT_LOCATION.lower():
+        city = target.split(",", 1)[0].strip()
+        if city:
+            return f"{CURRENT_LOCATION} | Moving to {city} by July 2026; available to relocate earlier."
+    return CURRENT_LOCATION
+
+
+def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput) -> dict[str, Any]:
+    jobs: list[dict[str, Any]] = []
+    for item in compact.get("experience") or compact.get("Experience") or []:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("Title") or "").strip()
+        company = str(item.get("company") or item.get("Company") or "").strip()
+        lock = v1_experience_lock(company, title)
+        jobs.append({
+            "title": title,
+            "company": company,
+            "location": lock["location"],
+            "dates": lock["dates"],
+            "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
+            "employment_note": lock["employment_note"],
+        })
+
+    projects: list[dict[str, Any]] = []
+    for item in compact.get("projects") or compact.get("Projects") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("Name") or item.get("title") or item.get("Title") or "").strip()
+        projects.append({
+            "title": name,
+            "name": name,
+            "location": "",
+            "dates": "",
+            "github_url": v1_project_url(name),
+            "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
+        })
+
+    evidence_text = " ".join(
+        bullet
+        for collection in (jobs, projects)
+        for item in collection
+        for bullet in item.get("bullets", [])
+    )
+
+    return normalize_resume_json({
+        "config": {
+            "type": v1_config_type(compact.get("type") or compact.get("Type")),
+            "level": 3,
+            "layout_profile": "mid",
+            "output": "",
+            "bold_markers": False,
+            "ta_active": False,
+            "company": inp.company,
+            "role": inp.title or "Software Engineer",
+            "prompt_profile": "v1",
+        },
+        "name": CANDIDATE_NAME,
+        "contact": candidate_contact_line(),
+        "location": v1_header_location(inp),
+        "linkedin_url": LINKEDIN_URL,
+        "github_url": GITHUB_URL,
+        "summary": "",
+        "education": [
+            {
+                "university": "Binghamton University, State University of New York",
+                "degree": "M.S. Computer Science, AI Specialization",
+                "location": "Binghamton, NY",
+                "graduation": DEFAULT_BINGHAMTON_GRADUATION,
+            },
+            {
+                "university": "Gujarat Technological University",
+                "degree": "B.E. Computer Engineering",
+                "location": "Ahmedabad, India",
+                "graduation": GUJARAT_GRADUATION,
+            },
+        ],
+        "professional_experience": jobs,
+        "projects": projects,
+        "technical_skills": normalize_v1_skills(compact.get("skills") or compact.get("Skills"), evidence_text),
+    })
+
+
+def v1_resume_json_to_compact(data: dict[str, Any]) -> dict[str, Any]:
+    if all(key in data for key in ("type", "experience", "projects", "skills")):
+        return data
+    return {
+        "type": v1_type_label((data.get("config") or {}).get("type") or data.get("type")),
+        "experience": [
+            {
+                "title": item.get("title", ""),
+                "company": item.get("company", ""),
+                "location": item.get("location", ""),
+                "dates": item.get("dates", ""),
+                "bullets": item.get("bullets") or [],
+            }
+            for item in data.get("professional_experience") or data.get("experience") or []
+            if isinstance(item, dict)
+        ],
+        "projects": [
+            {
+                "name": item.get("name") or item.get("title") or "",
+                "bullets": item.get("bullets") or [],
+            }
+            for item in data.get("projects") or []
+            if isinstance(item, dict)
+        ],
+        "skills": split_skill_terms(data.get("technical_skills") or data.get("skills") or {}),
+    }
 
 
 def validate_nonempty_response(text: str) -> str | None:
@@ -1055,8 +1329,8 @@ async def call_model(
 def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     if normalize_prompt_profile(prompt_profile) == "v1":
         return [
-            cached_text_block(read_prompt("pass_1.md", prompt_profile)),
-            cached_text_block(read_prompt("story.md", prompt_profile)),
+            cached_text_block(read_prompt("prompt.md", prompt_profile)),
+            cached_text_block(read_prompt("Story.md", prompt_profile)),
         ]
     return [
         cached_text_block(read_prompt("prompt.md", prompt_profile)),
@@ -1065,17 +1339,12 @@ def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
 
 
 def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
-    if normalize_prompt_profile(prompt_profile) == "v1":
-        return [
-            cached_text_block(read_prompt("pass_2.md", prompt_profile)),
-            cached_text_block(read_prompt("story.md", prompt_profile)),
-        ]
     return pass1_system(prompt_profile)
 
 
 def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     if normalize_prompt_profile(prompt_profile) == "v1":
-        return [cached_text_block(read_prompt("final_check.md", prompt_profile))]
+        return [cached_text_block(read_prompt("hotdog.md", prompt_profile))]
     return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
 
@@ -1094,7 +1363,13 @@ async def run_pass1(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     if profile == "v1":
-        user_message = input_to_text(inp)
+        user_message = "\n\n".join([
+            read_prompt("prompt_short.md", profile),
+            f"JD:\n{inp.jd.strip()}",
+            f"Company:\n{inp.company.strip()}",
+            f"Location:\n{inp.words.strip()}",
+            f"DES (optional):\n{inp.des.strip()}",
+        ])
     else:
         user_message = "\n\n".join([
             read_prompt("prompt_short.md", profile),
@@ -1130,17 +1405,16 @@ async def run_pass2(
     prompt_profile: str = "stable",
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    normalized_approval = normalize_approval(approval_text)
+    normalized_approval = approval_text.strip() if profile == "v1" else normalize_approval(approval_text)
     if profile == "v1":
         messages = [{
             "role": "user",
             "content": "\n\n".join([
-                "ORIGINAL INPUT:",
-                input_to_text(inp),
-                "PASS 1 OUTPUT:",
-                pass1_text.strip(),
-                "APPROVED DES:",
-                normalized_approval,
+                read_prompt("prompt_short.md", profile),
+                f"JD:\n{inp.jd.strip()}",
+                f"Company:\n{inp.company.strip()}",
+                f"Location:\n{inp.words.strip()}",
+                "DES (optional):\n" + "\n".join(part for part in (inp.des.strip(), normalized_approval.strip()) if part),
             ]),
         }]
     else:
@@ -1160,7 +1434,7 @@ async def run_pass2(
         label=labeled_step(request_label, "PASS 2"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_resume_response if profile == "v1" else validate_json_response,
+        output_validator=validate_v1_compact_response if profile == "v1" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -1185,21 +1459,12 @@ async def run_recruiter_review(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     if profile == "v1":
-        render_profile = build_render_profile(normalize_resume_json(copy.deepcopy(resume1_json)))
         parts = [
-            HUMAN_TEXT_STYLE_RULE.strip(),
-            "",
-            "Original JD:",
+            "JD:",
             jd.strip(),
             "",
-            "Source resume JSON:",
-            json.dumps(resume1_json, indent=2),
-            "",
-            "Stage 1 audit:",
-            pass1_audit.strip() or "Not available.",
-            "",
-            "Render profile from manager.py:",
-            json.dumps(render_profile, indent=2),
+            "Current Resume JSON:",
+            json.dumps(v1_resume_json_to_compact(resume1_json), indent=2),
         ]
     else:
         parts = [
@@ -1228,7 +1493,7 @@ async def run_recruiter_review(
         label=labeled_step(request_label, "FINAL CHECK" if profile == "v1" else "RECRUITER REVIEW"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_resume_response if profile == "v1" else validate_json_response,
+        output_validator=validate_v1_compact_response if profile == "v1" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
