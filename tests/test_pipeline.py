@@ -118,11 +118,13 @@ class PromptProfileTests(unittest.TestCase):
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
         self.assertIn("Resume Bullet Writer", system_text)
         self.assertIn("Career Story Bank", system_text)
+        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
         self.assertIn("JD:\nBuild APIs", user_text)
         self.assertIn("ROLE TYPE:\nBackend", user_text)
         self.assertIn("Company:\nAcme", user_text)
         self.assertIn("Location:\nBoston, MA", user_text)
         self.assertIn("DES (optional):\nUse API work", user_text)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v1_hotdog_routes_to_hotdog_prompt_with_compact_json(self):
         with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
@@ -147,25 +149,82 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn('"experience"', user_text)
         self.assertNotIn("professional_experience", user_text)
         self.assertIn("FINAL CHECK", call_mock.await_args.kwargs["label"])
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
+    def test_v2_hotdog_includes_configuration_story_and_current_json(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_recruiter_review(
+                    jd="Build APIs",
+                    resume1_json={
+                        "config": {"type": "backend"},
+                        "professional_experience": [{"title": "Software Engineer II", "company": "Tata Consultancy Services", "bullets": ["Built Java APIs."]}],
+                        "projects": [],
+                        "technical_skills": {"Backend": "Java, Spring Boot"},
+                    },
+                    company="Acme",
+                    title="Backend Engineer",
+                    des="Use API work",
+                    inp=pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
+                    prompt_profile="v2",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("Hotdog Review and Repair", system_text)
+        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
+        self.assertIn("=== INPUT START ===", user_text)
+        self.assertIn("JD:\nBuild APIs", user_text)
+        self.assertIn("DES (optional):\nUse API work", user_text)
+        self.assertIn("STORY.md:\n# Story.md", user_text)
+        self.assertIn("PROJECT BANK:", user_text)
+        self.assertIn("CURRENT RESUME JSON:", user_text)
+        self.assertIn('"experience"', user_text)
+        self.assertNotIn("professional_experience", user_text)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
+    def test_v2_pass1_includes_configuration_and_uses_no_des_validator(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value="PLANNING ANALYSIS\n--------\n")) as call_mock:
+            asyncio.run(
+                pipeline.run_pass1(
+                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
+                    prompt_profile="v2",
+                )
+            )
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("RUN MODE:\nPASS 1 - PLAN ONLY", user_text)
+        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
+        self.assertIn("Plan ID: AIML", user_text)
+        self.assertIn("Required project count: 3", user_text)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v2_prompt_uses_v2_prompt_story_and_direct_inputs(self):
         with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
             asyncio.run(
                 pipeline.run_pass2(
                     pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
-                    pass1_text="",
-                    approval_text="",
+                    pass1_text="PLANNING ANALYSIS\n--------\nACTIVE PLAN:\nBackend",
+                    approval_text="CONFIRM",
                     prompt_profile="v2",
                 )
             )
         system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("Resume Generation Prompt", system_text)
+        messages = call_mock.await_args.kwargs["messages"]
+        user_text = messages[0]["content"]
+        self.assertIn("Resume Qualification Engine", system_text)
         self.assertIn("Story.md", system_text)
+        self.assertEqual(messages[1]["role"], "assistant")
+        self.assertIn("PLANNING ANALYSIS", messages[1]["content"])
+        self.assertIn("RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON", messages[2]["content"])
+        self.assertIn("CONFIRM", messages[2]["content"])
+        self.assertIn("DES CANDIDATE BANK", messages[2]["content"])
+        self.assertIn("Approved: 1,2", messages[2]["content"])
+        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
         self.assertIn("JD:\nBuild APIs", user_text)
-        self.assertIn("ROLE TYPE:\nBackend", user_text)
+        self.assertIn("ROLE TYPE:\nAuto", user_text)
         self.assertIn("Company:\nAcme", user_text)
         self.assertIn("Location:\nBoston, MA", user_text)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v2_compact_to_resume_json_marks_v2_profile(self):
         compact = pipeline.extract_json(valid_v1_compact_response())
@@ -175,6 +234,34 @@ class PromptProfileTests(unittest.TestCase):
             "v2",
         )
         self.assertEqual(mapped["config"]["prompt_profile"], "v2")
+        self.assertEqual(mapped["config"]["experience_order"], "json_order")
+
+    def test_v2_compact_to_resume_json_preserves_ghi_first_for_docx(self):
+        compact = {
+            "type": "AIML",
+            "experience": [
+                {
+                    "title": "Software Engineer",
+                    "company": "Global Health Impact",
+                    "bullets": ["Built Python model workflows for researchers."],
+                },
+                {
+                    "title": "Software Engineer II",
+                    "company": "Tata Consultancy Services",
+                    "bullets": ["Built Java services for enterprise users."],
+                },
+            ],
+            "projects": [],
+            "skills": ["Python", "Java"],
+        }
+        mapped = pipeline.v1_compact_to_resume_json(
+            compact,
+            pipeline.ResumeInput(company="Acme", title="AI Engineer", jd="Build ML systems"),
+            "v2",
+        )
+
+        self.assertEqual(mapped["config"]["experience_order"], "json_order")
+        self.assertEqual(mapped["professional_experience"][0]["company"], "Global Health Impact")
 
     def test_v1_validator_rejects_missing_experience(self):
         bad_response = (

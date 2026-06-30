@@ -308,8 +308,8 @@ class JobTab(ttk.Frame):
         })
 
     def apply_prompt_profile_view(self) -> None:
-        is_experimental = is_experimental_profile(self.selected_prompt_profile())
-        if is_experimental:
+        prompt_profile = self.selected_prompt_profile()
+        if prompt_profile == "v1":
             self.words.field_label.config(text="Location")
             self.pass1_btn.grid_remove()
             self.auto_btn.grid_remove()
@@ -318,6 +318,19 @@ class JobTab(ttk.Frame):
             self.json_btn.config(text="Prompt")
             self.recruiter_btn.config(text="Hotdog")
             self.approval.master.grid_remove()
+            self.app_questions.master.grid_remove()
+        elif prompt_profile == "v2":
+            self.words.field_label.config(text="Location")
+            self.pass1_btn.grid()
+            self.auto_btn.grid_remove()
+            self.final_qa_btn.grid_remove()
+            self.questions_btn.grid_remove()
+            self.json_btn.config(text="Prompt")
+            self.recruiter_btn.config(text="Hotdog")
+            self.approval.master.grid()
+            if self.text_value(self.approval).lower() in {"approved:", "approved"}:
+                self.approval.delete("1.0", "end")
+                self.approval.insert("1.0", "CONFIRM")
             self.app_questions.master.grid_remove()
         else:
             self.words.field_label.config(text="Words / Keywords")
@@ -478,12 +491,16 @@ class JobTab(ttk.Frame):
 
             block = [f"DES {des_id}"]
             for label, key in [
+                ("Scope", "scope"),
                 ("Keyword", "keyword"),
+                ("Story match", "story match"),
+                ("Short story", "short story"),
                 ("Use when", "use when"),
                 ("Bullet", "bullet"),
                 ("Story/context", "story/context"),
                 ("Number", "number"),
                 ("Safe wording", "safe wording"),
+                ("Approve text", "approve text"),
             ]:
                 value = fields.get(key, "")
                 if value:
@@ -773,13 +790,6 @@ class JobTab(ttk.Frame):
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
-                rejected_response_cb=lambda attempt, text, reason: self.save_rejected_ai_response(
-                    request_dir,
-                    "04_resume_generation",
-                    attempt,
-                    text,
-                    reason,
-                ),
             ))
             return result, events
 
@@ -805,10 +815,17 @@ class JobTab(ttk.Frame):
             request_dir = self.ensure_request_dir(inp)
             prompt_profile = self.selected_prompt_profile()
             pass1_text = self.pass1_raw or self.text_value(self.output)
-            if not is_experimental_profile(prompt_profile) and not pass1_text:
+            if prompt_profile != "v1" and not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
-            approval = "" if is_experimental_profile(prompt_profile) else normalize_approval(approval_raw)
+            if prompt_profile == "v1":
+                approval = ""
+            elif prompt_profile == "v2":
+                approval = approval_raw.strip()
+                if not approval:
+                    raise ValueError("Add CONFIRM or approved DES before running Prompt.")
+            else:
+                approval = normalize_approval(approval_raw)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Missing step", str(exc), parent=self)
@@ -829,6 +846,13 @@ class JobTab(ttk.Frame):
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
+                rejected_response_cb=lambda attempt, text, reason: self.save_rejected_ai_response(
+                    request_dir,
+                    "04_resume_generation",
+                    attempt,
+                    text,
+                    reason,
+                ),
             ))
             save_text(self.request_file("resume_process", request_dir), raw)
             try:
@@ -985,6 +1009,7 @@ class JobTab(ttk.Frame):
                 company=inp.company,
                 title=inp.title,
                 des=approval,
+                inp=inp,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,

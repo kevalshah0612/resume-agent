@@ -1,604 +1,585 @@
-# Resume Generation Prompt — V11: Core Qualification Bullet Engine
+# Resume Qualification Engine
 
-## Purpose
+Use this prompt to create only three resume sections for one job:
 
-Generate only the **Experience**, **Projects**, and **Skills** content for one role-targeted resume.
+1. Experience
+2. Projects
+3. Skills
 
-The goal is simple:
+Do not create header, contact, summary, education, links, DOCX text, cover letter text, or outreach text.
 
-> **Maximize truthful JD qualification coverage in Experience first, while making every bullet a clear qualification rather than a keyword list.**
-
-Do not try to prove every technology in the evidence bank. Do not write a generic resume. Do not use unrelated technical detail merely because it is real.
-
-A resume bullet is valid only when it proves a relevant qualification through:
-
-```text
-WHAT:
-What was built, changed, delivered, handled, tested, released, or fixed.
-
-HOW:
-How the relevant JD terms were used through verified technology, method, or practice.
-
-WHERE / CONTEXT:
-Where the work happened: application, service, workflow, integration, data process,
-release path, user journey, or project.
-
-WHY:
-The plain-language, nontechnical reason it mattered:
-what improved for users, stakeholders, operations, security, compliance, customers,
-researchers, or delivery teams.
-```
-
-The four elements may appear in any natural order. The nontechnical reason is required. A technical result alone is not enough.
-
----
-
-## Inputs
-
-```text
-JD:
-<paste the complete job description>
-
-Company:
-<paste the company name>
-
-DES (optional):
-<paste plain-English candidate-confirmed evidence, missing tools, work context,
-or emphasis instructions relevant to this application>
-```
-
-Python supplies these immutable inputs separately:
-
-```text
-Candidate Profile:
-- titles, employers, locations, dates, education, work authorization, relocation,
-  and approved header facts.
-
-Resume Configuration:
-- Experience entries and order;
-- whether consecutive roles are merged for AIML output;
-- required project count;
-- bullet count per entry.
-
-Evidence Bank:
-- Story.md;
-- verified Project Bank.
-```
-
-Do not change Candidate Profile or Resume Configuration.
-
----
-
-## Source Rules: Verify Before Writing
-
-Use only:
-
-```text
-1. Literal JD qualification criteria;
-2. Candidate-confirmed DES;
-3. Verified Evidence Bank;
-4. Candidate Profile for profile facts only.
-```
-
-Never guess, infer, broaden, substitute, or upgrade a claim.
-
-```text
-- A similar tool does not prove the named JD tool.
-- A generic category does not prove one specific member of that category.
-- A project name, title, Skills item, dependency list, or adjacent story is not proof.
-- A technology mentioned in one job cannot be moved to another job without direct evidence.
-```
-
-### Dynamic DES Rule
-
-DES is candidate-confirmed evidence written in plain English.
-
-Use only the scope the candidate explicitly states.
-
-```text
-- If DES names a high-priority JD term and the relevant Experience entry or Project,
-  prioritize it in that entry.
-- If DES provides enough What, How, Context, and Why, the term may appear in a bullet.
-- If DES confirms only minor tool familiarity without usable context, it may appear in
-  Skills only when it is JD-relevant and linked to a specific entry.
-- Do not expand a DES-confirmed tool into unconfirmed workflows, outcomes, or related capabilities.
-```
-
-### Evidence Ledger
-
-Before drafting, create an internal ledger for every selected JD group:
-
-```text
-JD group | exact JD wording | evidence source | allowed Experience/Project entry | priority
-```
-
-A JD group without a verified source is a gap. Do not use it.
-
-Do not reveal chain-of-thought. In visible analysis, show only a concise evidence and allocation summary.
-
----
-
-## JD Qualification Extraction
-
-Extract bullet qualifications only from explicit JD **candidate-criteria** sections, such as sections that state:
-
-```text
-requirements
-qualifications
-required skills
-specific skills
-minimum qualifications
-preferred qualifications
-must have
-need to have
-what the candidate brings
-what the candidate needs
-```
-
-Use the meaning of the heading, not an exact heading name.
-
-Do not create qualification groups from:
-
-```text
-responsibilities
-duties
-what the person will do
-company description
-benefits
-compensation
-legal notices
-application instructions
-```
-
-Responsibilities may help describe the work context, but they never create ATS keyword targets, coverage groups, Skills, or unsupported bullet claims.
-
-Classify extracted JD items:
-
-```text
-A. Bullet Evidence Terms:
-   Skills, tools, practices, systems, and capabilities that can be proven in bullets.
-
-B. Profile Facts:
-   Degree, years, location, work authorization, relocation, compensation, and similar
-   facts controlled by Candidate Profile. Do not force these into bullets.
-
-C. Gaps:
-   Terms without Story Bank or DES evidence. Do not invent them.
-```
-
----
-
-## Coverage Plan
-
-Create one canonical list of literal, bullet-provable JD qualification groups.
-
-```text
-Experience coverage =
-number of JD groups proven in Experience bullets
-÷
-number of bullet-provable JD groups in the JD
-```
-
-Target approximately 75% **when verified evidence supports it**. The target is a diagnostic, never permission to invent, stretch, or stuff terms.
-
-### Allocation Order
-
-1. Cover the highest-priority verified JD groups in Experience.
-2. Put the strongest high-priority proof in the first configured Experience entry.
-3. Use later Experience entries for different verified JD groups or distinct verified stack evidence.
-4. Use Projects only for distinct remaining gaps or complementary evidence.
-5. Build Skills last.
-
-When multiple languages, stacks, or technologies are literal JD requirements, different Experience entries may specialize in different verified terms. Do not force one stack into every entry.
-
----
-
-## Experience Structure
-
-Each Experience entry follows the configured bullet count. Normally it has three bullets.
-
-### Bullet 1: Experience Summary
-
-The first bullet is a simple role summary.
-
-It must:
-
-```text
-- use 1 to 3 primary JD qualification groups;
-- state what the candidate delivered or handled;
-- state how the primary qualification was used;
-- state the work context;
-- state a plain-language, nontechnical reason it mattered;
-- be past tense, one sentence, one period maximum, and 25 words or fewer;
-- be understandable to a nontechnical reader;
-- avoid low-priority tools, several databases, and technology inventories.
-```
-
-The summary is not required to use 3 to 6 groups.
-
-### Later Experience Bullets
-
-Every non-summary Experience bullet must:
-
-```text
-- use 3 to 6 distinct, meaningful JD qualification groups;
-- prove a different verified work slice;
-- include What, How, Where/Context, and a plain-language nontechnical Why;
-- be past tense, one sentence, one period maximum, and 25 words or fewer;
-- begin with one direct action verb;
-- use only terms assigned to that bullet.
-```
-
-Do not add a later bullet unless a distinct, verified qualification slice exists.
-
----
-
-## Project Structure
-
-Projects are supplemental, not replacements for relevant Experience.
-
-Select only configured-count projects that add a distinct, role-relevant, verified context. Return fewer only when another project would be irrelevant or unverified.
-
-Every Project bullet follows the same formula and validation rules as a later Experience bullet:
-
-```text
-- 3 to 6 distinct, meaningful JD qualification groups;
-- What, How, Where/Context, and plain-language nontechnical Why;
-- one sentence, one period maximum, past tense, 25 words or fewer;
-- a distinct verified project slice from the other bullet.
-```
-
-Do not use a project as a feature list, technology inventory, or a substitute for missing professional evidence.
-
----
-
-## Exact Terms, Acronyms, and Punctuation
-
-### Exact-Term Rule
-
-Use a named technology, method, or capability only when:
-
-```text
-- it is a literal JD qualification; or
-- it is necessary verified support for explaining the selected JD qualification.
-```
-
-Do not add adjacent tools simply because they appear in the same story.
-
-### Acronym Rule
-
-Use the full term and acronym together only at the first meaningful proof point when the expansion is standard and supported.
-
-```text
-<Full Term> (<ACRONYM>)
-```
-
-Treat the full term and acronym as one qualification group. Do not repeat the acronym or full term in another bullet within the same entry.
-
-### Punctuation Rule
-
-Clearly separate distinct named technologies.
-
-```text
-Good:
-Built <JD capability> with <tool A>, <tool B>, and <tool C> for <workflow>.
-
-Bad:
-Built <tool A> <tool B> <tool C> services for <workflow>.
-```
-
-Use commas between three or more named terms and `and` before the final item.
-
----
-
-## Hot-Dog Rule
-
-A “hot dog” is a technically real detail that does not help prove the allocated JD qualification.
-
-Keep a phrase only when it does at least one of these jobs:
-
-```text
-- proves an allocated JD qualification;
-- explains how the qualification was used;
-- provides necessary work context;
-- explains the plain-language nontechnical reason it mattered.
-```
-
-Remove the phrase when it does none of these jobs.
-
-### Good and Bad Examples
-
-```text
-Bad:
-Built <tool A>, <tool B>, <tool C>, and <tool D> services.
-
-Why it fails:
-It is a tool list. It does not show the work context or why anyone benefited.
-
-Good:
-Built <JD capability> with <tool A> and <tool B> in <workflow>,
-allowing <user or team> to <plain-language outcome>.
-
-Why it works:
-It shows What, How, Where, and nontechnical Why, while keeping only the tools
-needed for the qualification.
-```
-
-```text
-Bad:
-Improved <technical metric> with <tool A>, <tool B>, and <tool C>.
-
-Why it fails:
-The technical metric does not explain the business purpose or user benefit.
-
-Good:
-Automated <JD workflow> with <tool A> in <verified context>,
-reducing manual <task> for <stakeholder group>.
-
-Why it works:
-The qualification is clear, the context is clear, and the nontechnical value is clear.
-```
-
----
-
-## Entry-Level Repeat Locks
-
-Before drafting an Experience or Project entry, allocate distinct qualification groups to its bullets.
-
-After a bullet passes validation, lock its meaningful terms for the rest of that entry:
-
-```text
-- programming languages;
-- frameworks;
-- databases;
-- cloud providers;
-- queues and caches;
-- API types;
-- authentication and authorization terms;
-- testing and delivery tools;
-- primary JD qualification groups;
-- meaningful core system phrases when another distinct work slice is available.
-```
-
-Treat an acronym, full name, alternate spelling, and equivalent alias as the same group.
-
-Do not repeat a locked meaningful term in the same entry.
-
-Ordinary grammar words may repeat only when needed for clear writing:
-
-```text
-user, team, application, service, workflow, data, release, request
-```
-
-Avoid repeating the same opening verb within an entry or adjacent bullets when a natural truthful alternative exists. Do not force globally unique verbs across the whole resume.
-
----
-
-## Immediate Draft-and-Validate Loop
-
-Write one bullet at a time.
-
-### Step 1: Allocate
-
-For the current Experience or Project entry:
-
-```text
-- select verified JD groups;
-- assign distinct groups to each bullet;
-- identify the exact Story Bank or DES evidence;
-- identify the nontechnical reason each bullet matters;
-- create the initial term-lock list.
-```
-
-### Step 2: Draft
-
-Write one completed bullet using only its allocated qualification groups and evidence.
-
-### Step 3: Validate Before Moving On
-
-Reject and rewrite the bullet unless every check passes:
-
-```text
-EVIDENCE
-[ ] Every technology, outcome, metric, user, and ownership claim is directly verified.
-[ ] Every term stays within the stated DES scope when DES is the source.
-[ ] No similar, adjacent, implied, or guessed term appears.
-[ ] Every retained tool is a literal JD term or necessary support for one.
-
-QUALIFICATION
-[ ] Summary: 1 to 3 primary JD groups.
-[ ] Other Experience or Project bullet: 3 to 6 meaningful JD groups.
-[ ] What is clear.
-[ ] How the JD terms were used is clear.
-[ ] Where or in what system/workflow it happened is clear.
-[ ] The plain-language, nontechnical reason it mattered is clear.
-
-HOT-DOG AND REPEAT CHECK
-[ ] Every meaningful phrase proves the qualification, explains How, provides Context,
-    or explains nontechnical Why.
-[ ] No unrelated technical detail, tool inventory, or decorative metric remains.
-[ ] No locked meaningful term or alias repeats from an earlier bullet in this entry.
-
-WRITING
-[ ] Past tense.
-[ ] One sentence and one period maximum.
-[ ] 25 words or fewer.
-[ ] One direct action verb at the start.
-[ ] No stacked opening verbs.
-[ ] No em dash.
-[ ] No dense unexplained acronym chain.
-[ ] No buzzwords, hype, generic corporate filler, or AI-sounding language.
-[ ] No vague ending such as “for performance,” “for reliability,” or “for scalability”
-    without explaining the real effect on people, work, security, or operations.
-[ ] Distinct named terms are comma-separated when needed.
-```
-
-If any check fails, rewrite the same bullet. Do not draft the next bullet.
-
-### Step 4: Lock
-
-Only after the bullet passes:
-
-```text
-1. Add its meaningful terms to the entry term-lock list.
-2. Remove those groups from later bullet allocations.
-3. Draft the next bullet.
-```
-
-### Step 5: Entry Check
-
-After the entry is complete:
-
-```text
-[ ] Each bullet proves a distinct qualification slice.
-[ ] The summary is a role summary, not a tool list.
-[ ] No meaningful qualification repeats within the entry.
-[ ] The entry tells one coherent, role-relevant story.
-[ ] The bullets maximize verified JD coverage without hot dogs.
-```
-
----
-
-## Human Writing Rules
-
-Use direct, natural past-tense verbs when true.
-
-Do not use:
-
-```text
-- stacked openings such as “Designed and built”;
-- em dashes;
-- hype, buzzwords, or generic corporate filler;
-- vague claims without a plain-language result;
-- long technical benchmark dumps;
-- dense, unexplained technology chains.
-```
-
-Write for a recruiter, manager, executive, or eight-year-old at the business-purpose level, while preserving the technical proof a hiring manager needs.
-
-Use numbers only when verified, explainable in an interview, and necessary to show meaningful user, business, team, or operational scale. Prefer plain-language value over technical benchmark numbers.
-
-For non-AIML roles, remove AI/ML claims unless the JD explicitly requires them.
-
----
-
-## Skills
-
-Build Skills only after Experience and Projects are final.
-
-A skill may appear only when:
-
-```text
-1. It appears directly in a final Experience or Project bullet and is verified; or
-2. It is a DES-confirmed, JD-relevant minor tool linked to a specific Experience or Project,
-   but lacks enough context for an honest bullet.
-```
-
-A Skills-only item does not count as bullet-proven ATS coverage.
-
-Keep Skills short, technical, role-specific, and deduplicated.
-
-Return only 8 to 14 total skills unless the JD clearly requires more.
-
-Prefer literal JD qualification terms that also appear in final Experience or Project bullets.
-
-Do not include every technology from Story.md. Do not include tools used only in weak, unrelated, or removed bullet drafts.
-
-Do not include soft skills, generic phrases, unsupported tools, approximate claims, or aliases used to inflate coverage.
-
----
-
-## Concise Analysis Output
-
-Return a short `ANALYSIS` before JSON:
-
-```text
-ANALYSIS
-
-JD QUALIFICATIONS:
-<comma-separated Bullet Evidence Terms only>
-
-EVIDENCE AND ALLOCATION:
-Experience 1: Summary <groups>; Bullet 2 <groups>; Bullet 3 <groups>
-Experience 2: Summary <groups>; Bullet 2 <groups>; Bullet 3 <groups>
-Experience 3: Summary <groups>; Bullet 2 <groups>; Bullet 3 <groups>
-Projects: <project and groups, or None>
-
-ATS COVERAGE:
-Experience: <proven>/<bullet-provable JD groups> | <NN%>
-Projects add: <distinct supplemental groups or None>
-
-GAPS:
-<unverified JD terms or None>
-
-FINAL VALIDATION:
-Every final bullet passed evidence, formula, hot-dog, punctuation, term-lock,
-and writing checks.
-```
-
-Do not show hidden reasoning or draft bullet alternatives.
-
----
-
-## JSON Output
-
-Return valid JSON immediately after ANALYSIS, with exactly these top-level keys in this order:
+The final JSON must match the app schema:
 
 ```json
 {
   "type": "Backend | Fullstack | AIML",
   "experience": [
     {
-      "title": "<Candidate Profile title>",
-      "company": "<Candidate Profile company>",
-      "location": "<Candidate Profile location>",
-      "dates": "<Candidate Profile dates>",
+      "title": "<copied from active manifest>",
+      "company": "<copied from active manifest>",
+      "location": "<copied from active manifest>",
+      "dates": "<copied from active manifest>",
       "bullets": [
-        "<final bullet>",
-        "<final bullet>",
-        "<final bullet>"
+        "<summary bullet>",
+        "<qualification bullet>",
+        "<qualification bullet>"
       ]
     }
   ],
   "projects": [
     {
-      "name": "<verified project name>",
+      "name": "<approved selected project>",
       "bullets": [
-        "<final bullet>",
-        "<final bullet>"
+        "<project bullet>",
+        "<project bullet>"
       ]
     }
   ],
   "skills": [
-    "<verified skill>"
+    "<skill>"
   ]
 }
 ```
 
----
+The JSON example above is a template. The active configuration decides the real number of Experience and Project objects.
 
-## Final Gate
+## Core Standard
 
-Do not return JSON until the final text, not just the plan, passes all checks:
+Recruiters are qualification hunting, not keyword hunting.
+
+A keyword counts only when the bullet shows:
 
 ```text
-[ ] JD groups came only from explicit candidate-criteria sections.
-[ ] Candidate Profile facts were not turned into bullet claims.
-[ ] Every claim came from the Evidence Bank or DES.
-[ ] Every DES claim stayed within its explicit scope.
-[ ] Experience carries maximum verified JD coverage before Projects.
-[ ] Summary bullets use 1 to 3 primary groups.
-[ ] Other Experience and Project bullets use 3 to 6 distinct groups.
-[ ] Every bullet includes What, How, Where/Context, and a plain-language,
-    nontechnical Why.
-[ ] Every bullet is past tense, one sentence, one period maximum, and 25 words or fewer.
-[ ] No hot dogs remain.
-[ ] No meaningful terms repeat within an Experience or Project entry.
-[ ] Named terms are exact and clearly punctuated.
-[ ] Skills are traceable to final bullets or permitted DES-confirmed Skills-only evidence.
-[ ] ATS coverage is calculated from bullet-proven Experience evidence, not Skills.
-[ ] No unsupported claim, metric, tool, project detail, or profile fact appears.
-[ ] JSON contains only type, experience, projects, and skills.
+WHAT  - what was built, delivered, fixed, tested, released, supported, or handled
+HOW   - how the keyword, tool, method, or practice was used
+WHERE - the system, service, workflow, project, release path, integration, or data flow
+WHY   - the plain-language reason it mattered to users, researchers, teams, delivery, operations, security, or stakeholders
 ```
 
-If a requirement cannot be met without guessing, omit it and list it under GAPS.
+If a bullet does not show WHAT, HOW, WHERE, and WHY, it does not prove the qualification.
+
+Write for a recruiter or nontechnical manager first. A hiring manager should still see real technical proof, but the sentence must be understandable without decoding a tool inventory.
+
+## Required Inputs
+
+The app provides:
+
+```text
+RUN MODE:
+PASS 1 - PLAN ONLY
+or
+PASS 2 - WRITE APPROVED RESUME JSON
+
+=== RESUME CONFIGURATION - IMMUTABLE ===
+<structure, routing, manifest, projects, and skills limits>
+=== END RESUME CONFIGURATION ===
+
+JD:
+<complete job description>
+
+ROLE TYPE:
+<Backend | Fullstack | AIML>
+
+Company:
+<target company>
+
+Location:
+<target or relocation location>
+
+DES (optional):
+<candidate-confirmed evidence for this run>
+```
+
+Story.md is supplied as a system file. It is the evidence bank.
+
+## Source Rules
+
+Use sources only for their assigned job:
+
+```text
+Configuration controls structure, order, metadata, bullet counts, project count, and skills limits.
+JD controls relevance and qualification priority.
+Story.md proves facts.
+Approved DES adds current-run evidence only for the named Experience ID or Project ID.
+```
+
+Never use prior chats, old resumes, memory, guesses, job titles, project names, skills lists, or unsupported assumptions as evidence.
+
+You may rewrite supported facts in clearer language. You may combine directly connected facts from the same Experience ID or the same Project ID.
+
+You may use a truthful shared capability when directly supported:
+
+```text
+- Java or C++ may support object-oriented programming.
+- Java, Python, TypeScript, C#, or JavaScript may support programming-language experience.
+- A verified CI/CD implementation may support generic CI/CD.
+- AWS, Azure, or GCP may support generic cloud.
+- One verified option may satisfy a JD requirement written as "A or B".
+```
+
+You may not rename one technology as another:
+
+```text
+- Java is not C++.
+- GitLab CI/CD is not GitHub Actions.
+- Docker Compose is not Kubernetes.
+- OpenAI API is not automatically RAG, agents, MLOps, ML, or production deployment.
+- A model workflow is not automatically a recommendation system.
+```
+
+Never invent or transfer tools, users, outcomes, scope, metrics, domains, deployment level, security claims, AI/ML claims, ownership, or evidence between employers and projects.
+
+## Two-Pass Workflow
+
+### PASS 1 - Plan Only
+
+When RUN MODE is `PASS 1 - PLAN ONLY`, do not write resume bullets, skills, or JSON.
+
+Do this:
+
+1. Read the immutable configuration.
+2. Read only JD candidate-criteria sections.
+3. Determine Entry or Mid using the configuration routing rules and user override when present.
+4. Check literal AIML / ML / LLM trigger terms in candidate criteria.
+5. Select the active configured plan.
+6. Freeze JD signals as PRIMARY, CORE, PREFERRED, or PROFILE FACT.
+7. Map Story.md and DES evidence to the correct Experience ID or Project ID.
+8. Estimate projected Experience coverage.
+9. Select closest-match projects required by the active plan.
+10. List missing or partial high-signal terms.
+11. Create a numbered DES candidate bank for high-value missing or partial signals.
+12. Stop.
+
+Candidate-criteria sections include:
+
+```text
+Requirements
+Qualifications
+Minimum Qualifications
+Preferred Qualifications
+Required Skills
+Must Have
+What You Bring
+What You Need
+or equivalent candidate-criteria wording
+```
+
+Do not create JD signals from benefits, company description, legal text, compensation, application instructions, or generic responsibilities that are not candidate qualifications.
+
+### JD Signal Rules
+
+Classify each bullet-provable JD qualification:
+
+```text
+PRIMARY   Required, repeated, or role-defining.
+CORE      Important and materially useful for fit.
+PREFERRED Helpful but not required.
+PROFILE FACT Degree, years, location, authorization, compensation, or similar non-bullet fact.
+```
+
+Keep the denominator honest:
+
+```text
+- One JD requirement usually stays one signal group.
+- Preserve AND / OR logic.
+- Parenthetical examples stay inside the parent group unless separately required.
+- Repeated terms count once.
+- Story.md technologies do not create new JD signals.
+```
+
+Projected Experience coverage uses PRIMARY and CORE signals only:
+
+```text
+Projected Experience Coverage =
+unique PRIMARY and CORE signals planned in Experience
+/
+total PRIMARY and CORE signals
+x 100
+```
+
+Target 75% or higher. If the plan is below 75%, show the missing important terms and DES candidates. Do not invent claims to reach 75%.
+
+### DES Candidate Rules
+
+DES candidates are short candidate-confirmation prompts. They help the user approve evidence by ID, the same way the main flow works.
+
+Create DES candidates only for high-value PRIMARY or CORE signals, important project selection proof, or a strong missing keyword that could materially improve the resume.
+
+Each DES candidate must:
+
+```text
+- start with a stable ID: DES 1, DES 2, DES 3, etc.;
+- name one exact Experience ID or Project ID as scope;
+- name the JD keyword or signal it supports;
+- explain the closest Story.md match in one short phrase;
+- create one short candidate-confirmable story for that topic;
+- avoid inventing the answer;
+- ask for confirmation, not assume the fact is true.
+```
+
+The short story should read like:
+
+```text
+Used <tool/practice> in <scoped Story/workflow> to <plain-language reason>.
+```
+
+If Story.md has no close match, write:
+
+```text
+Story match: No direct Story.md match; needs candidate confirmation.
+```
+
+Do not create vague DES such as "tell me about ML" or "confirm all AI work." Each DES must be one specific, scoped, bullet-usable fact.
+
+The user may approve by ID:
+
+```text
+Approved: 1,2
+Approved: DES 1 and DES 3
+CONFIRM
+CONFIRM: <free-form candidate-confirmed fact>
+```
+
+In PASS 2, an approved ID means the matching DES line from PASS 1 becomes current-run DES evidence for its named scope only.
+
+### PASS 1 Output
+
+Return exactly this shape, then stop:
+
+```text
+PLANNING ANALYSIS
+--------
+ACTIVE PLAN:
+<Plan ID> | <Backend / Fullstack / AIML> | <Entry or Mid>
+
+ACTIVE OUTPUT MANIFEST:
+- <Display entry ID> | <Standard or Teaching Assistant> | <required bullet count>
+- <Display entry ID> | <Standard or Teaching Assistant> | <required bullet count>
+Projects: <required count> | <selected closest-match project names>
+
+JD SIGNALS:
+- <Signal> | <PRIMARY / CORE / PREFERRED>
+
+EXPERIENCE COVERAGE PLAN:
+- <Display entry ID>: <X/Y> | <NN%>
+  Planned signals: <signals>
+
+OVERALL PROJECTED EXPERIENCE COVERAGE:
+<X/Y> | <NN%>
+
+PROJECT SELECTION:
+- <Project name>: <closest JD signals and distinct proof slice>
+
+MISSING OR PARTIAL SIGNALS:
+- <Signal> | <priority> | <PARTIAL / DES NEEDED / MISSING> | <why it matters>
+- None
+
+DES CANDIDATE BANK:
+DES 1 | scope: <Experience ID or Project ID> | keyword: <exact JD signal> | story match: <Story label and closest existing evidence, or no direct match> | short story: <one candidate-confirmable work story in 18 words or fewer> | use when: <why this matters for the JD> | approve text: Approved: 1
+DES 2 | scope: <Experience ID or Project ID> | keyword: <exact JD signal> | story match: <Story label and closest existing evidence, or no direct match> | short story: <one candidate-confirmable work story in 18 words or fewer> | use when: <why this matters for the JD> | approve text: Approved: 2
+None
+
+NEXT STEP:
+Reply CONFIRM to write with current evidence, or approve DES by ID:
+Approved: 1,2
+--------
+```
+
+## PASS 2 - Write After Approval
+
+When RUN MODE is `PASS 2 - WRITE APPROVED RESUME JSON`, use the approved PASS 1 plan and any approved DES.
+
+Build in this order:
+
+1. Experience
+2. Projects
+3. Skills
+
+Write one bullet at a time. Finish and validate one bullet before drafting the next.
+
+## Configuration Control
+
+The active manifest determines every Experience object.
+
+```text
+- Create one Experience object for each active-manifest row, in the same order.
+- Copy title, company, location, and dates exactly.
+- Standard entry = exactly 3 bullets.
+- Teaching Assistant entry = exactly 2 bullets, only when present in the manifest.
+- Do not add, remove, reorder, merge, split, rename, or leave empty a configured entry.
+- Do not infer optional entries from the template.
+```
+
+Project control:
+
+```text
+- Use exactly the active plan's required project count.
+- AIML plans must use exactly 3 projects.
+- Non-AIML plans must use at least 2 projects.
+- Projects remain required even when Experience coverage is 100%.
+- Every project has exactly 2 bullets.
+- Use only allowed Project IDs from the active plan.
+- If open-source project is required, select at least one eligible verified open-source project.
+```
+
+## Bullet Rules
+
+### Standard Experience Entries
+
+Bullet 1 is the summary bullet.
+
+It must:
+
+```text
+- summarize what the candidate did in that job;
+- use 1 to 3 highest-signal allocated JD terms or capability groups;
+- be basic enough for a nontechnical reader;
+- include WHAT, HOW, WHERE, and WHY;
+- use past tense, even for current employment;
+- start with one direct action verb;
+- be one sentence with exactly one period;
+- target 20 to 26 words;
+- never exceed 28 words or 190 visible characters;
+- never exceed three rendered lines.
+```
+
+Bullets 2 and 3 are qualification bullets.
+
+Each must:
+
+```text
+- prove a different work slice from the summary and from each other;
+- include WHAT, HOW, WHERE, and WHY;
+- use 3 to 6 meaningful JD terms or capability groups when natural;
+- never add a term only to reach three;
+- use past tense, one direct action verb, one sentence, and exactly one period;
+- target 22 to 28 words;
+- never exceed 30 words or 215 visible characters;
+- never exceed three rendered lines.
+```
+
+Different work slices may include architecture, integration, data, reliability, security, testing, deployment, observability, code review, requirements, stakeholder communication, or delivery only when evidence supports them.
+
+### Teaching Assistant Entry
+
+Use only when the active manifest includes a Teaching Assistant row.
+
+```text
+- Write exactly 2 bullets.
+- Bullet 1: closest JD-relevant technical proof.
+- Bullet 2: different debugging, review, evaluation, mentoring, feedback, or communication proof.
+- Each bullet uses WHAT, HOW, WHERE, and WHY.
+- Each bullet is past tense, one sentence, one period.
+- Target 18 to 26 words.
+- Never exceed 28 words or 200 visible characters.
+```
+
+### Project Bullets
+
+Each selected project gets exactly 2 bullets:
+
+```text
+- Bullet 1: core project workflow, closest JD proof, and plain-language value.
+- Bullet 2: different verified slice such as validation, evaluation, quality, data flow, integration, security, deployment, or operations.
+- Each bullet uses WHAT, HOW, WHERE, and WHY.
+- Each bullet is past tense, one sentence, one period.
+- Target 20 to 28 words.
+- Never exceed 30 words or 215 visible characters.
+```
+
+Projects are closest-match supplemental proof. They are not feature dumps and do not replace missing Experience proof.
+
+## Word, Character, and Line Rules
+
+```text
+- Count words as whitespace-separated tokens after trimming the bullet marker.
+- Hyphenated compounds and slash terms count as one token.
+- Count every visible character, including spaces and punctuation.
+- Character caps are conservative proxies for Arial 10.5 to 11 pt with normal resume margins.
+- If a rendered bullet reaches four lines, it fails even if word count passes.
+```
+
+## Repetition Rules
+
+Within the same Experience entry or Project, do not repeat meaningful terms after they pass in an earlier bullet.
+
+Locked terms include:
+
+```text
+languages
+frameworks
+databases
+cloud providers
+queues or caches
+API types
+authentication or authorization terms
+testing tools
+delivery tools
+primary JD signals
+core system phrases when another distinct slice exists
+```
+
+Treat acronyms, aliases, and full names as the same term.
+
+Normal words may repeat when needed: user, team, system, service, workflow, data, release, request.
+
+Clearly separate three or more named technologies with commas and `and` before the last item.
+
+## Live Hotdog Audit
+
+A hotdog is any phrase that may be true but does not help prove the job qualification.
+
+After drafting each single bullet:
+
+1. Tag every phrase as QUALIFICATION, HOW, WHERE, or WHY.
+2. Delete every phrase with no tag.
+3. Remove tool lists, feature lists, raw technical benchmarks, unrelated tools, repeated terms, and unsupported claims.
+4. Reject vague endings such as `for scalability`, `for reliability`, `for performance`, or `for operational excellence` unless the bullet states the real effect.
+5. Check evidence, term locks, tense, sentence count, period count, word count, character count, and line limit.
+6. Lock the accepted bullet's meaningful terms before drafting the next bullet.
+
+Hotdogs include:
+
+```text
+- a tool inventory with no system context or value;
+- a feature list with no qualification focus;
+- a technical metric with no human or operational reason;
+- a vague claim of scale, reliability, security, performance, or ownership;
+- generic collaboration without a requirement, decision, or result;
+- an implied capability stated as fact;
+- repeated proof from an earlier bullet in the same entry.
+```
+
+Use numbers only when directly verified, understandable to a nontechnical reader, and useful for scale or value. Do not use percentages, latency, benchmark scores, model accuracy, or raw technical metrics by default.
+
+Do not use bold markers, Markdown formatting, em dashes, buzzwords, hype, passive voice, stacked opening verbs, dense acronym chains, or unresolved placeholders.
+
+## Skills
+
+Build Skills last.
+
+```text
+- Include only short, technical, JD-relevant skills.
+- A skill must appear in a final Experience or Project bullet, or be approved DES-supported as a minor skill.
+- Skills never increase Experience coverage.
+- Exclude soft skills, buzzwords, aliases, broad inventories, duplicate terms, and discarded-draft tools.
+- Obey the active plan's skills minimum and maximum.
+- Prefer minimal skills over long lists.
+```
+
+## PASS 2 Output
+
+Return exactly:
+
+1. `ANALYSIS`
+2. One valid JSON object
+
+Do not wrap the JSON in Markdown fences. Do not write anything after the JSON.
+
+### ANALYSIS Shape
+
+```text
+ANALYSIS
+--------
+ACTIVE PLAN:
+<Plan ID> | <Backend / Fullstack / AIML> | <Entry or Mid>
+
+EXPERIENCE COVERAGE:
+- <Display entry ID>: <X/Y> | <NN%>
+  Proven signals: <signals visible in final bullets>
+
+OVERALL EXPERIENCE COVERAGE:
+<X/Y> | <NN%>
+
+PROJECT RELEVANCE:
+- <Project name>: <closest JD signals and distinct proof slice>
+
+MISSING OR PARTIAL SIGNALS:
+- <Signal> | <priority> | <reason>
+- None
+
+QUALITY CHECK:
+All bullets passed WHAT/HOW/WHERE/WHY, hotdog, repetition, length, tense, and evidence checks.
+--------
+```
+
+### Final JSON Shape
+
+Use this complete structure style. The active manifest decides how many objects appear.
+
+```json
+{
+  "type": "Backend",
+  "experience": [
+    {
+      "title": "Software Engineer II",
+      "company": "Tata Consultancy Services",
+      "location": "",
+      "dates": "Oct 2022 - Dec-2024",
+      "bullets": [
+        "<Summary bullet>",
+        "<Qualification slice A>",
+        "<Qualification slice B>"
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Mar 2021 - Sep 2022",
+      "bullets": [
+        "<Summary bullet>",
+        "<Qualification slice A>",
+        "<Qualification slice B>"
+      ]
+    },
+    {
+      "title": "Software Engineer",
+      "company": "Global Health Impact",
+      "location": "New York, NY",
+      "dates": "Jun 2025 - Aug 2025",
+      "bullets": [
+        "<Summary bullet>",
+        "<Qualification slice A>",
+        "<Qualification slice B>"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "<approved selected project 1>",
+      "bullets": [
+        "<Project bullet 1>",
+        "<Project bullet 2>"
+      ]
+    },
+    {
+      "name": "<approved selected project 2>",
+      "bullets": [
+        "<Project bullet 1>",
+        "<Project bullet 2>"
+      ]
+    }
+  ],
+  "skills": [
+    "<final verified JD-relevant skill>"
+  ]
+}
+```
+
+For AIML, include exactly 3 project objects. For non-AIML, include the required project count from the active plan.
+
+Before returning PASS 2, silently verify:
+
+```text
+- JSON parses.
+- Top-level keys are exactly type, experience, projects, skills.
+- Active plan, order, metadata, bullet counts, and project count are followed exactly.
+- Every Standard Experience entry has exactly 3 bullets.
+- Every Teaching Assistant entry has exactly 2 bullets when included.
+- Every selected project has exactly 2 bullets.
+- No bullet exceeds word, character, sentence, period, or line limits.
+- No bullet contains bold markers or Markdown.
+- Every counted signal is visibly proven in an Experience bullet.
+- Skills follow the rules.
+```

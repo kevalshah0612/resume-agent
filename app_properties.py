@@ -21,7 +21,7 @@ GITHUB_DISPLAY = "github.com/kevalshah0612"
 
 DEFAULT_BINGHAMTON_GRADUATION = "Expected Aug 2026"
 GUJARAT_GRADUATION = "Graduated Sep 2020"
-TCS_II_EMPLOYMENT_NOTE = "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization"
+TCS_II_EMPLOYMENT_NOTE = "Academic Leave for M.S. in Computer Science (AI), Binghamton, NY; last working day: Dec 2024."
 GHI_EMPLOYMENT_NOTE = ""
 
 V1_PROJECT_URLS = {

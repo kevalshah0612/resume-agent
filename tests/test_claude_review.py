@@ -85,6 +85,29 @@ class RenderProfileTests(unittest.TestCase):
         )
         self.assertFalse(profile["ta_bullet_rendered_under_education"])
 
+    def test_mid_layout_can_use_json_experience_order(self):
+        resume = sample_resume()
+        resume["config"]["level"] = 3
+        resume["config"]["layout_profile"] = "mid"
+        resume["config"]["experience_order"] = "json_order"
+
+        profile = manager.build_render_profile(resume)
+
+        self.assertEqual(
+            [item["company"] for item in profile["experience_order"]],
+            ["Tata Consultancy Services", "Global Health Impact Project", "Binghamton University"],
+        )
+
+    def test_mid_layout_can_force_ghi_first(self):
+        resume = sample_resume()
+        resume["config"]["level"] = 3
+        resume["config"]["layout_profile"] = "mid"
+        resume["config"]["experience_order"] = "ghi_first"
+
+        profile = manager.build_render_profile(resume)
+
+        self.assertEqual(profile["experience_order"][0]["company"], "Global Health Impact Project")
+
 
 class FinalQACandidateValidationTests(unittest.TestCase):
     def test_allows_supported_text_rewrites_with_same_structure(self):

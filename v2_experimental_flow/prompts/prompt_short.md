@@ -1,31 +1,125 @@
-Read `Prompt.md` first and follow it as the controlling resume-writing and validation standard.
+# Short Instructions
 
-Then read the complete JD, Candidate Profile, DES, `Story.md`, and Project Bank before drafting.
+Read `prompt.md` first and follow it exactly. Use this profile only for Experience, Projects, and Skills.
 
-Use `Story.md` and DES as factual evidence sources. Use the other story files to find and organize evidence, but do not make a claim that conflicts with `Story.md` unless DES explicitly confirms it.
+## PASS 1
 
-Do not draft until you have mapped verified evidence to literal JD qualifications. Write Experience first, then Projects, then Skills.
+When RUN MODE is `PASS 1 - PLAN ONLY`:
 
-Experience rules:
+1. Select the active configured plan from the JD and configuration.
+2. Freeze JD signals from candidate-criteria sections only.
+3. Classify signals as PRIMARY, CORE, PREFERRED, or PROFILE FACT.
+4. Map Story.md and DES evidence to the correct Experience ID or Project ID.
+5. Show projected Experience coverage and closest-match projects.
+6. Show missing high-signal terms.
+7. Create a numbered `DES CANDIDATE BANK`.
+8. Stop. Do not write bullets, skills, or JSON.
 
-* Write the first bullet as a simple past-tense summary using 1–3 highest-priority JD qualification groups.
-* Write later bullets using 3–6 distinct, verified JD qualification groups.
-* Maximize truthful JD coverage across Experience before using Projects.
-* Do not repeat meaningful technologies, qualification groups, acronyms, or aliases within the same Experience entry.
-* Keep each entry specialized to its strongest verified role-relevant evidence.
+The projected Experience coverage target is 75% or higher for PRIMARY and CORE signals. Do not invent claims to reach it.
 
-Project rules:
+DES candidates must be ID-based and scoped:
 
-* Select only verified projects that add distinct JD qualification coverage not already proven well in Experience.
-* Each Project bullet must use 3–6 distinct, verified JD qualification groups.
-* Do not use Projects as feature lists, technology inventories, or replacements for missing professional evidence.
+```text
+DES 1 | scope: <Experience ID or Project ID> | keyword: <JD signal> | story match: <Story label and closest evidence> | short story: <candidate-confirmable story> | use when: <why it matters> | approve text: Approved: 1
+```
 
-For every Experience and Project bullet, strictly apply the rule from `Prompt.md`:
+The short story is not evidence yet. It is the exact kind of fact the user can confirm. If Story.md has no close match, say `No direct Story.md match; needs candidate confirmation`.
 
-What was done + how relevant JD terms were used + where/context + plain-language, nontechnical reason it mattered.
+The user can approve with `Approved: 1,2`, `Approved: DES 1 and DES 3`, `CONFIRM`, or `CONFIRM: <candidate-confirmed fact>`.
 
-Draft and validate one bullet at a time. Rewrite a bullet before moving on when it has a missing qualification element, unsupported claim, repeated meaningful term, keyword dump, vague outcome, buzzword, em dash, or unrelated hot-dog detail.
+## PASS 2
 
-Build Skills last from final bullet evidence, except permitted DES-confirmed minor JD tools with insufficient bullet context.
+When RUN MODE is `PASS 2 - WRITE APPROVED RESUME JSON`:
 
-Return only the concise ANALYSIS and valid JSON required by `Prompt.md`.
+1. Use the approved PASS 1 plan.
+2. If approval names DES IDs, use the matching PASS 1 DES candidate lines as current-run DES evidence for their named scopes only.
+3. Use approved free-form DES only when it clearly names the Experience ID or Project ID.
+4. Write Experience first, Projects second, Skills last.
+5. Return ANALYSIS, then one valid JSON object with only `type`, `experience`, `projects`, and `skills`.
+
+## Bullet Standard
+
+Every bullet must show:
+
+```text
+WHAT + HOW + WHERE + verified nontechnical WHY
+```
+
+Bullet 1 of each Standard Experience entry is the summary. It uses 1 to 3 highest-signal JD terms and explains the job in simple language.
+
+Bullets 2 and 3 prove different qualification slices. Use 3 to 6 meaningful JD terms only when natural. Never add terms just to reach three.
+
+Use past tense, one direct opening verb, one sentence, one period, and no more than three rendered lines.
+
+Length limits:
+
+```text
+Summary: 20-26 words, hard max 28 words / 190 characters.
+Other Experience bullets: 22-28 words, hard max 30 words / 215 characters.
+Teaching Assistant bullets: 18-26 words, hard max 28 words / 200 characters.
+Project bullets: 20-28 words, hard max 30 words / 215 characters.
+```
+
+## Hotdog Rule
+
+Audit one bullet before writing the next.
+
+Keep a phrase only when it:
+
+1. proves the assigned JD qualification;
+2. explains HOW;
+3. gives essential WHERE/context; or
+4. states a verified nontechnical WHY.
+
+Delete everything else.
+
+Remove tool lists, feature lists, raw technical benchmark dumps, vague endings, unsupported claims, and repeated meaningful terms.
+
+## Evidence Rules
+
+Configuration controls structure. JD controls relevance. Story.md and approved DES prove facts.
+
+Do not use an existing resume, job title, project name, or Skills list as proof.
+
+Safe capability translation is allowed only when true: Java or C++ may support object-oriented programming, and a verified language may support programming-language experience.
+
+Do not rename technologies or infer unsupported claims. Never move evidence between Experience entries or from Projects to Experience.
+
+## Output Reminder
+
+PASS 1 returns planning text only.
+
+PASS 2 returns ANALYSIS and strict JSON only. The JSON schema is:
+
+```json
+{
+  "type": "Backend | Fullstack | AIML",
+  "experience": [
+    {
+      "title": "<copied from active manifest>",
+      "company": "<copied from active manifest>",
+      "location": "<copied from active manifest>",
+      "dates": "<copied from active manifest>",
+      "bullets": [
+        "<summary bullet>",
+        "<qualification bullet>",
+        "<qualification bullet>"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "<approved selected project>",
+      "bullets": [
+        "<project bullet>",
+        "<project bullet>"
+      ]
+    }
+  ],
+  "skills": [
+    "<skill>"
+  ]
+}
+```
+
+The active manifest decides the real number of Experience and Project objects. AIML uses exactly 3 projects. Non-AIML uses the active plan's required project count.

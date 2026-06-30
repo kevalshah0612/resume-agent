@@ -786,6 +786,160 @@ def v1_type_label(value: Any) -> str:
     return {"backend": "Backend", "fullstack": "Fullstack", "aiml": "AIML"}[v1_config_type(value)]
 
 
+def experimental_role_label(value: Any) -> str:
+    return v1_type_label(value) if str(value or "").strip() else "Auto"
+
+
+def experimental_resume_configuration(inp: ResumeInput) -> str:
+    role_type = experimental_role_label(inp.mode)
+    explicit_override = role_type if role_type != "Auto" else "None"
+    allowed_projects = ", ".join(sorted(V1_PROJECT_URLS))
+    project_names = {
+        "bistro": "Bistro AI",
+        "evaltrace": "EvalTrace",
+        "filingquery": "FilingQuery",
+        "fraudsift": "FraudSift",
+        "jobfill": "JobFill AI Extension",
+        "jobpulse": "JobPulse",
+        "resume agent": "Resume Agent",
+        "reviewbot": "ReviewBot",
+    }
+    project_catalog = "\n".join(
+        f"- Project ID: {key}\n  Approved project name: {project_names.get(key, key)}\n  Allowed evidence labels: Story 27 through Story 34 when that story names this project"
+        for key in sorted(V1_PROJECT_URLS)
+    )
+    return f"""=== RESUME CONFIGURATION - IMMUTABLE ===
+
+CANDIDATE EXPERIENCE CATALOG
+- Experience ID: tcs_se_ii
+  Canonical title: Software Engineer II
+  Company: Tata Consultancy Services
+  Location:
+  Dates: Oct 2022 - Present
+  Allowed evidence labels: Story 01 through Story 12, Story 15 through Story 17, Story 35
+- Experience ID: tcs_se
+  Canonical title: Software Engineer
+  Company: Tata Consultancy Services
+  Location: Gandhinagar, India
+  Dates: Mar 2021 - Sep 2022
+  Allowed evidence labels: Story 01 through Story 17, Story 35
+- Experience ID: ghi_se
+  Canonical title: Software Engineer
+  Company: Global Health Impact
+  Location: New York, NY
+  Dates: Jun 2025 - Aug 2025
+  Allowed evidence labels: Story 21 through Story 25, Story 35
+
+PROJECT CATALOG
+{project_catalog}
+
+ROUTING PRIORITY
+- Requested role type: {role_type}
+- Plan selection order: AIML when the JD candidate criteria explicitly require AI, ML, LLM, model, inference, evaluation, or data science; otherwise Fullstack when the JD candidate criteria explicitly require frontend plus backend; otherwise Backend.
+- Fallback plan: Backend
+- AIML / ML / LLM trigger terms: AI, ML, machine learning, LLM, model, inference, evaluation, data science
+- Entry-level trigger terms: intern, internship, new grad, entry level
+- Any explicit override: {explicit_override}
+
+DISPLAY PLANS
+- Plan ID: Backend
+  Applies when: requested role type is Backend or fallback applies
+  Display entries, in exact output order:
+  - Display entry ID: tcs_se_ii
+    Source Experience IDs: tcs_se_ii
+    Output title: Software Engineer II
+    Output company: Tata Consultancy Services
+    Output location:
+    Output dates: Oct 2022 - Present
+    Maximum bullets: 3
+  - Display entry ID: tcs_se
+    Source Experience IDs: tcs_se
+    Output title: Software Engineer
+    Output company: Tata Consultancy Services
+    Output location: Gandhinagar, India
+    Output dates: Mar 2021 - Sep 2022
+    Maximum bullets: 3
+  - Display entry ID: ghi_se
+    Source Experience IDs: ghi_se
+    Output title: Software Engineer
+    Output company: Global Health Impact
+    Output location: New York, NY
+    Output dates: Jun 2025 - Aug 2025
+    Maximum bullets: 3
+  Project selection:
+    Required project count: 2
+    Allowed Project IDs: {allowed_projects}
+    Open-source project required: Yes
+    Required bullets per project: 2
+  Teaching Assistant rule: Do not include Teaching Assistant as an experience entry.
+- Plan ID: Fullstack
+  Applies when: requested role type is Fullstack, or JD candidate criteria require both frontend/client and backend/API qualifications
+  Display entries, in exact output order:
+  - Display entry ID: tcs_se_ii
+    Source Experience IDs: tcs_se_ii
+    Output title: Software Engineer II
+    Output company: Tata Consultancy Services
+    Output location:
+    Output dates: Oct 2022 - Present
+    Maximum bullets: 3
+  - Display entry ID: tcs_se
+    Source Experience IDs: tcs_se
+    Output title: Software Engineer
+    Output company: Tata Consultancy Services
+    Output location: Gandhinagar, India
+    Output dates: Mar 2021 - Sep 2022
+    Maximum bullets: 3
+  - Display entry ID: ghi_se
+    Source Experience IDs: ghi_se
+    Output title: Software Engineer
+    Output company: Global Health Impact
+    Output location: New York, NY
+    Output dates: Jun 2025 - Aug 2025
+    Maximum bullets: 3
+  Project selection:
+    Required project count: 2
+    Allowed Project IDs: {allowed_projects}
+    Open-source project required: Yes
+    Required bullets per project: 2
+  Teaching Assistant rule: Do not include Teaching Assistant as an experience entry.
+- Plan ID: AIML
+  Applies when: requested role type is AIML, or JD candidate criteria explicitly require AI, ML, LLM, model, inference, evaluation, or data science
+  Display entries, in exact output order:
+  - Display entry ID: ghi_se
+    Source Experience IDs: ghi_se
+    Output title: Software Engineer
+    Output company: Global Health Impact
+    Output location: New York, NY
+    Output dates: Jun 2025 - Aug 2025
+    Maximum bullets: 3
+  - Display entry ID: tcs_se_ii
+    Source Experience IDs: tcs_se_ii
+    Output title: Software Engineer II
+    Output company: Tata Consultancy Services
+    Output location:
+    Output dates: Oct 2022 - Present
+    Maximum bullets: 3
+  - Display entry ID: tcs_se
+    Source Experience IDs: tcs_se
+    Output title: Software Engineer
+    Output company: Tata Consultancy Services
+    Output location: Gandhinagar, India
+    Output dates: Mar 2021 - Sep 2022
+    Maximum bullets: 3
+  Project selection:
+    Required project count: 3
+    Allowed Project IDs: {allowed_projects}
+    Open-source project required: Yes
+    Required bullets per project: 2
+  Teaching Assistant rule: Do not include Teaching Assistant as an experience entry.
+
+SKILLS
+- Minimum skills: 8
+- Maximum skills: 14
+
+=== END RESUME CONFIGURATION ==="""
+
+
 def split_skill_terms(value: Any) -> list[str]:
     def explode(text: str) -> list[str]:
         expanded = re.sub(r"([A-Za-z0-9+#. /-]+)\(([^)]*)\)", r"\1, \2", text)
@@ -893,18 +1047,26 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
         })
 
+    config = {
+        "type": v1_config_type(compact.get("type") or compact.get("Type")),
+        "level": 3,
+        "layout_profile": "mid",
+        "output": "",
+        "bold_markers": False,
+        "ta_active": False,
+        "company": inp.company,
+        "role": inp.title or "Software Engineer",
+        "prompt_profile": normalize_prompt_profile(prompt_profile),
+    }
+    raw_experience_order = str(compact.get("experience_order") or compact.get("Experience_Order") or "").strip().lower()
+    normalized_order = raw_experience_order.replace("-", "_").replace(" ", "_")
+    if normalized_order in {"tcs", "tcs_first", "ghi", "ghi_first", "json", "json_order"}:
+        config["experience_order"] = {"tcs": "tcs_first", "ghi": "ghi_first", "json": "json_order"}.get(normalized_order, normalized_order)
+    elif normalize_prompt_profile(prompt_profile) == "v2":
+        config["experience_order"] = "json_order"
+
     return normalize_resume_json({
-        "config": {
-            "type": v1_config_type(compact.get("type") or compact.get("Type")),
-            "level": 3,
-            "layout_profile": "mid",
-            "output": "",
-            "bold_markers": False,
-            "ta_active": False,
-            "company": inp.company,
-            "role": inp.title or "Software Engineer",
-            "prompt_profile": normalize_prompt_profile(prompt_profile),
-        },
+        "config": config,
         "name": CANDIDATE_NAME,
         "contact": candidate_contact_line(),
         "location": v1_header_location(inp),
@@ -1316,13 +1478,20 @@ async def run_pass1(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     if is_experimental_prompt_profile(profile):
-        user_message = "\n\n".join([
-            read_prompt("prompt_short.md", profile),
+        parts = [read_prompt("prompt_short.md", profile)]
+        if profile == "v2":
+            parts += [
+                "RUN MODE:\nPASS 1 - PLAN ONLY",
+                experimental_resume_configuration(inp),
+            ]
+        parts += [
             f"JD:\n{inp.jd.strip()}",
+            f"ROLE TYPE:\n{experimental_role_label(inp.mode) if profile == 'v2' else v1_type_label(inp.mode)}",
             f"Company:\n{inp.company.strip()}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
-        ])
+        ]
+        user_message = "\n\n".join(parts)
     else:
         user_message = "\n\n".join([
             read_prompt("prompt_short.md", profile),
@@ -1335,8 +1504,8 @@ async def run_pass1(
         label=labeled_step(request_label, "PASS 1"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_pass1_response,
-        retry_instruction=(
+        output_validator=None if profile == "v2" else validate_pass1_response,
+        retry_instruction=None if profile == "v2" else (
             NVIDIA_RETRY_INSTRUCTION
             + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
         ),
@@ -1360,11 +1529,40 @@ async def run_pass2(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     normalized_approval = approval_text.strip() if is_experimental_prompt_profile(profile) else normalize_approval(approval_text)
-    if is_experimental_prompt_profile(profile):
+    if profile == "v2":
+        first_user = "\n\n".join([
+            read_prompt("prompt_short.md", profile),
+            "RUN MODE:\nPASS 1 - PLAN ONLY",
+            experimental_resume_configuration(inp),
+            f"JD:\n{inp.jd.strip()}",
+            f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
+            f"Company:\n{inp.company.strip()}",
+            f"Location:\n{inp.words.strip()}",
+            f"DES (optional):\n{inp.des.strip()}",
+        ])
+        second_user = "\n\n".join([
+            "RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON",
+            "APPROVAL / APPROVED DES:",
+            normalized_approval.strip() or "CONFIRM",
+            (
+                "Use the approved PASS 1 plan. If approval says Approved: 1,2 or names DES IDs, "
+                "use the matching PASS 1 DES CANDIDATE BANK lines as current-run DES evidence "
+                "only for their named scopes. If approval is CONFIRM, add no new evidence. "
+                "If approval includes free-form evidence, use it only when the Experience ID or "
+                "Project ID scope is clear. Then write ANALYSIS and the final JSON."
+            ),
+        ])
+        messages = [
+            {"role": "user", "content": first_user},
+            {"role": "assistant", "content": pass1_text.strip()},
+            {"role": "user", "content": second_user},
+        ]
+    elif is_experimental_prompt_profile(profile):
         messages = [{
             "role": "user",
             "content": "\n\n".join([
                 read_prompt("prompt_short.md", profile),
+                experimental_resume_configuration(inp),
                 f"JD:\n{inp.jd.strip()}",
                 f"ROLE TYPE:\n{v1_type_label(inp.mode)}",
                 f"Company:\n{inp.company.strip()}",
@@ -1389,7 +1587,7 @@ async def run_pass2(
         label=labeled_step(request_label, "PASS 2"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_compact_response if is_experimental_prompt_profile(profile) else validate_json_response,
+        output_validator=None if is_experimental_prompt_profile(profile) else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -1404,6 +1602,7 @@ async def run_recruiter_review(
     company: str = "",
     title: str = "",
     des: str = "",
+    inp: ResumeInput | None = None,
     resume2_json: dict[str, Any] | None = None,
     cost_cb=None,
     request_label: str = "",
@@ -1415,7 +1614,31 @@ async def run_recruiter_review(
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if is_experimental_prompt_profile(profile):
+    if profile == "v2":
+        resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
+        parts = [
+            experimental_resume_configuration(resume_input),
+            "",
+            "=== INPUT START ===",
+            "",
+            "JD:",
+            jd.strip(),
+            "",
+            "DES (optional):",
+            des.strip(),
+            "",
+            "STORY.md:",
+            read_prompt("Story.md", profile),
+            "",
+            "PROJECT BANK:",
+            "",
+            "",
+            "CURRENT RESUME JSON:",
+            json.dumps(v1_resume_json_to_compact(resume1_json), indent=2),
+            "",
+            "=== INPUT END ===",
+        ]
+    elif is_experimental_prompt_profile(profile):
         parts = [
             "JD:",
             jd.strip(),
@@ -1450,7 +1673,7 @@ async def run_recruiter_review(
         label=labeled_step(request_label, "FINAL CHECK" if is_experimental_prompt_profile(profile) else "RECRUITER REVIEW"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=validate_v1_compact_response if is_experimental_prompt_profile(profile) else validate_json_response,
+        output_validator=None if is_experimental_prompt_profile(profile) else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
