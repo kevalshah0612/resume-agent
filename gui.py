@@ -235,9 +235,11 @@ class JobTab(ttk.Frame):
         cell = ttk.Frame(parent)
         cell.grid(row=row, column=column, sticky="ew", padx=(0 if column == 0 else 6, 6 if column == 0 else 0))
         cell.columnconfigure(0, weight=1)
-        ttk.Label(cell, text=label).grid(row=0, column=0, sticky="w")
+        label_widget = ttk.Label(cell, text=label)
+        label_widget.grid(row=0, column=0, sticky="w")
         box = tk.Text(cell, wrap="word", undo=True, height=height, width=1)
         box.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+        box.field_label = label_widget
         self._bind_text_scroll(box)
         return box
 
@@ -302,6 +304,7 @@ class JobTab(ttk.Frame):
     def apply_prompt_profile_view(self) -> None:
         is_v1 = self.selected_prompt_profile() == "v1"
         if is_v1:
+            self.words.field_label.config(text="Location")
             self.pass1_btn.grid_remove()
             self.auto_btn.grid_remove()
             self.final_qa_btn.grid_remove()
@@ -311,6 +314,7 @@ class JobTab(ttk.Frame):
             self.approval.master.grid_remove()
             self.app_questions.master.grid_remove()
         else:
+            self.words.field_label.config(text="Words / Keywords")
             self.pass1_btn.grid()
             self.auto_btn.grid()
             self.final_qa_btn.grid()
@@ -650,7 +654,7 @@ class JobTab(ttk.Frame):
                 f"Request ID: {self.request_id}",
                 f"Company: {inp.company}",
                 f"Title: {inp.title}",
-                f"Words: {inp.words}",
+                f"{'Location' if prompt_profile == 'v1' else 'Words'}: {inp.words}",
                 f"DES: {inp.des}",
                 f"Prompt Profile: {prompt_profile}",
                 f"NVIDIA Model: {nvidia_model}",
@@ -1345,7 +1349,7 @@ class JobTab(ttk.Frame):
 
         replace(self.company, metadata.get("company", ""))
         replace(self.title_text, metadata.get("title", "") or "Software Engineer")
-        replace(self.words, metadata.get("words", ""))
+        replace(self.words, metadata.get("location", metadata.get("words", "")))
         replace(self.des, metadata.get("des", ""))
         saved_profile = metadata.get("prompt profile", "stable")
         self.prompt_selector.set(prompt_profile_label(saved_profile))

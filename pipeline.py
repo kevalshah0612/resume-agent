@@ -901,12 +901,17 @@ def v1_project_url(name: str) -> str:
     return ""
 
 
+def next_month_label(reference: datetime | None = None) -> str:
+    current = reference or datetime.now()
+    year = current.year + (1 if current.month == 12 else 0)
+    month = 1 if current.month == 12 else current.month + 1
+    return datetime(year, month, 1).strftime("%B %Y")
+
+
 def v1_header_location(inp: ResumeInput) -> str:
     target = str(inp.words or "").strip()
     if target and target.lower() != CURRENT_LOCATION.lower():
-        city = target.split(",", 1)[0].strip()
-        if city:
-            return f"{CURRENT_LOCATION} | Moving to {city} by July 2026; available to relocate earlier."
+        return f"{CURRENT_LOCATION} | Moving to {target} in {next_month_label()}; available to move sooner if needed."
     return CURRENT_LOCATION
 
 

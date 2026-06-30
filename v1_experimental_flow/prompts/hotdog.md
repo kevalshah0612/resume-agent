@@ -1,36 +1,55 @@
-# Blind Recruiter Review and JSON Repair
+# Blind Recruiter Review and JSON Repair Prompt
 
 ## Inputs
 
 ```text
 JD:
-<paste complete job description>
+<paste the complete job description>
 
 Current Resume JSON:
-<paste the generated JSON>
+<paste the generated resume JSON>
 ```
 
 Use only these two inputs.
 
-Do not use external knowledge, prior reasoning, Story files, DES, Skills as evidence, job titles as evidence, or assumptions about the candidate.
+Do not use Story files, DES, prior analysis, external knowledge, assumptions, job titles, project names, or Skills as evidence.
 
 The Current Resume JSON is the factual boundary.
 
-You may remove, shorten, reorder, or combine facts already stated in the same Experience entry or Project.
+You may use facts already stated within the same Experience entry or the same Project to improve a bullet, but only when the JSON clearly connects those facts to the same work.
 
-You must not add a technology, responsibility, result, metric, user, workflow, business outcome, or JD qualification that is not already explicitly supported by the Current Resume JSON.
+Do not add a technology, responsibility, result, metric, user, workflow, business outcome, qualification, or claim that is not explicitly present in the Current Resume JSON.
 
-Do not change titles, companies, locations, dates, project names, or JSON structure.
+Do not change:
+
+```text
+- top-level JSON structure;
+- title, company, location, dates, or project name;
+- number of Experience entries;
+- number of Projects;
+- number, order, or position of bullets inside any Experience entry or Project.
+```
 
 ---
 
 ## Goal
 
-Review the JSON as a recruiter reviewing a resume for this JD.
+Review the resume as a recruiter would review it for this JD.
 
-The goal is to maximize **clear, qualification-based ATS coverage**, mainly through Experience, while removing keyword dumps, repeated terms, vague claims, and unrelated “hot dogs.”
+The goal is to maximize clear, qualification-based ATS coverage, mainly through Experience, while repairing:
 
-A bullet is valid only when it clearly communicates:
+```text
+- hot dogs;
+- keyword dumps;
+- repeated meaningful technologies or qualifications;
+- vague wording;
+- missing context;
+- missing nontechnical reason;
+- weak recruiter readability;
+- bullets that do not clearly prove the JD qualification.
+```
+
+A valid Experience or Project bullet must communicate:
 
 ```text
 What was done
@@ -39,13 +58,38 @@ What was done
 + Why it mattered in plain-language, nontechnical terms
 ```
 
-The nontechnical reason is mandatory.
+The nontechnical reason should explain what improved for users, operations, stakeholders, security, compliance, customers, researchers, or delivery teams.
 
 ---
 
-## JD Extraction Rule
+## Blind Review Boundary
 
-Extract qualification groups only from explicit JD candidate-criteria sections, such as:
+This is a blind recruiter review.
+
+You do not know whether a claim is true outside the Current Resume JSON.
+
+Therefore:
+
+```text
+- Judge whether a claim is clear, relevant, specific, and qualification-based.
+- Do not judge whether a claim is factually true outside the JSON.
+- Do not add missing evidence.
+- Do not infer a capability from a similar tool, job title, project name, or nearby keyword.
+- Do not convert an implied capability into an explicit claim.
+- Do not use Skills as proof of a qualification.
+```
+
+You may remove, shorten, reorder, or rewrite facts already present in the same Experience entry or Project.
+
+You must preserve the factual meaning of the remaining content.
+
+---
+
+## JD Qualification Extraction
+
+Extract bullet qualification groups only from explicit JD candidate-criteria sections.
+
+Examples include sections that clearly introduce:
 
 ```text
 Requirements
@@ -57,59 +101,87 @@ Preferred Qualifications
 Must Have
 Need to Have
 What You Bring
-or equivalent candidate-criteria headings
+What You Need
+or equivalent candidate-criteria language
 ```
 
-Do not create qualification targets from:
+Do not create ATS qualification groups from:
 
 ```text
 Responsibilities
 Duties
 What You Will Do
+About the Role
 Company information
 Benefits
 Compensation
 Legal text
+Application instructions
 ```
 
 Responsibilities may help judge whether a bullet sounds role-relevant, but they do not count as ATS qualification groups.
 
+Classify JD items as:
+
+```text
+BULLET-PROVABLE:
+A skill, practice, system, tool, or capability that can be shown in Experience or Projects.
+
+PROFILE FACT:
+Degree, years, location, work authorization, relocation, compensation, or similar fact.
+Do not count it in bullet ATS coverage.
+
+NOT BULLET-PROVABLE:
+A requirement that cannot reasonably be proven through a resume bullet.
+```
+
 ---
 
-## Blind Recruiter Review
+## ATS Coverage Calculation
 
-For each literal, bullet-provable JD qualification group, classify it as:
+For every literal bullet-provable JD qualification group, classify it as:
 
 ```text
 EXPERIENCE-PROVEN:
-Clearly stated and qualified in an Experience bullet.
+Clearly proven in an Experience bullet through What, How, Context, and nontechnical Why.
 
 PROJECT-PROVEN:
-Clearly stated and qualified only in a Project bullet.
+Clearly proven only in a Project bullet.
 
 SKILLS-ONLY:
 Appears only in Skills. Does not count as qualification proof.
 
 NOT-PROVEN:
-Not clearly proven in the JSON.
+Not clearly proven in the Current Resume JSON.
 ```
 
 Calculate:
 
 ```text
 Experience ATS Coverage =
-number of literal JD qualification groups clearly proven in Experience bullets
+number of literal bullet-provable JD qualification groups proven in Experience
 /
-number of bullet-provable JD qualification groups
+number of literal bullet-provable JD qualification groups in the JD
 ```
 
-Do not count a keyword merely because it appears. It counts only when the bullet shows What, How, Context, and nontechnical Why.
+Do not count a keyword merely because it appears.
+
+A term counts only when the bullet clearly shows:
+
+```text
+What was done
+How the term was used
+Where or in what workflow it was used
+Why it mattered in plain language
+```
+
+Projects may add supplemental coverage, but Experience remains the primary source of proof.
 
 ---
 
 ## Hot-Dog Rule
 
-A “hot dog” is a detail that may be technically real but does not help:
+A hot dog is a technically real detail that does not help:
 
 ```text
 - prove a literal JD qualification;
@@ -118,116 +190,238 @@ A “hot dog” is a detail that may be technically real but does not help:
 - explain the plain-language, nontechnical reason it mattered.
 ```
 
-Remove hot dogs before adding or preserving secondary detail.
+A tool, framework, database, metric, benchmark, implementation detail, or adjacent accomplishment is a hot dog when it does not serve one of those four jobs.
 
-A technology list, benchmark, metric, framework, database, tool, or adjacent accomplishment is a hot dog when it does not serve one of those four jobs.
+Remove hot dogs at the phrase level.
+
+Never remove an entire bullet because it contains hot dogs.
+
+### Good and Bad Examples
+
+```text
+Bad:
+Built <tool A>, <tool B>, <tool C>, and <tool D> services.
+
+Why it fails:
+It is a technology list. It does not show the work context or why it mattered.
+
+Good:
+Built <JD capability> with <tool A> and <tool B> for <workflow>,
+allowing <user or team> to <plain-language outcome>.
+
+Why it works:
+It shows What, How, Context, and nontechnical Why.
+```
+
+```text
+Bad:
+Improved <technical metric> using <tool A>, <tool B>, and <tool C>.
+
+Why it fails:
+The reader cannot understand the work context or the real business reason.
+
+Good:
+Automated <JD workflow> with <tool A> in <verified context>,
+reducing manual <task> for <stakeholder group>.
+
+Why it works:
+The qualification, context, and plain-language value are clear.
+```
 
 ---
 
-## Entry Rules
+## Experience and Project Rules
 
-### Experience summaries
+### Experience Summary Bullet
 
 The first bullet in each Experience entry must:
 
 ```text
-- use 1 to 3 highest-priority JD qualification groups;
-- give a simple role-level summary;
+- use 1 to 3 highest-priority JD qualification groups when supported by the JSON;
+- summarize the candidate’s role-relevant work simply;
 - include What, How, Context, and nontechnical Why;
-- avoid a technology inventory.
+- avoid a technology inventory;
+- use past tense;
+- contain one sentence, no more than one period, and 25 words or fewer.
 ```
 
-### Later Experience and Project bullets
+### Later Experience Bullets
 
-Every later Experience bullet and every Project bullet must:
+Every later Experience bullet must:
 
 ```text
 - use 3 to 6 distinct, meaningful JD qualification groups when the JSON supports them;
-- prove a distinct work slice;
+- prove a different work slice;
 - include What, How, Context, and nontechnical Why;
+- use past tense;
+- contain one sentence, no more than one period, and 25 words or fewer;
 - avoid keyword dumping.
 ```
 
-### Repeat locks
+### Project Bullets
 
-Within the same Experience or Project entry, do not repeat meaningful terms already used in an earlier bullet:
+Every Project bullet must:
 
 ```text
-language
+- use 3 to 6 distinct, meaningful JD qualification groups when the JSON supports them;
+- prove a distinct project work slice;
+- include What, How, Context, and nontechnical Why;
+- use past tense;
+- contain one sentence, no more than one period, and 25 words or fewer;
+- avoid feature lists and technology inventories.
+```
+
+Do not invent terms merely to reach the preferred qualification-group range.
+
+---
+
+## Repeat Locks
+
+Within the same Experience entry or Project, do not repeat a meaningful group already used in an earlier bullet when a truthful alternative exists.
+
+Meaningful groups include:
+
+```text
+programming language
 framework
 database
 cloud provider
 queue or cache
 API type
-security/access term
+security or access term
 testing or delivery tool
 primary JD qualification group
 ```
 
-Treat acronyms, full names, aliases, and equivalent spellings as the same group.
+Treat acronyms, full names, aliases, alternate spellings, and equivalent names as one group.
 
-Normal words such as application, workflow, service, user, or team may repeat when necessary.
+Normal grammar words may repeat when needed:
+
+```text
+application
+service
+workflow
+user
+team
+data
+release
+request
+```
+
+Do not make writing unnatural merely to avoid normal words.
 
 ---
 
-## Repair Rules
+## Bullet Preservation Rule
 
-Review each bullet as `PASS`, `REPAIR`, or `REMOVE`.
+Preserve every bullet.
+
+```text
+- Never delete, blank, merge, move, or replace a bullet with a placeholder.
+- Never remove an Experience entry or Project.
+- Every input bullet must have one corrected output bullet in the same entry and position.
+- Preserve the exact bullet count and bullet order.
+- Remove hot-dog phrases only at phrase level.
+- Retain at least one substantive accomplishment from every original bullet.
+```
+
+When a bullet is weak:
+
+```text
+1. Keep its strongest verified accomplishment.
+2. Keep the highest-value JD qualification already present in the bullet.
+3. Remove unrelated hot-dog phrases, extra tools, decorative metrics, or vague language.
+4. Reorder the remaining facts to make What, How, Context, and Why clear.
+5. Use a factual operational outcome already stated in the same bullet or same entry only
+   when the JSON clearly connects it to the same work.
+6. Rewrite the bullet as a concise recruiter-readable qualification.
+```
+
+If the JSON does not contain enough information for a full nontechnical reason:
+
+```text
+- do not invent a user, business benefit, workflow, metric, or outcome;
+- retain and improve the bullet anyway;
+- use the closest supported operational value;
+- mark the limitation as CONSTRAINED in the review.
+```
+
+---
+
+## Repair Status
+
+Review every Experience and Project bullet using only these statuses:
 
 ```text
 PASS:
-The bullet clearly proves relevant qualifications and follows all rules.
+The bullet already meets the rules and remains unchanged.
 
 REPAIR:
-The bullet can be corrected using only facts already stated in the same Experience
-entry or Project.
-
-REMOVE:
-The bullet cannot be made qualification-based without adding a new unsupported fact.
+The bullet must be rewritten, shortened, reordered, or clarified using only facts
+already present in the same Experience entry or Project.
 ```
 
-Repair only bullets marked `REPAIR`.
+Do not use a `REMOVE` status.
 
-Keep passing bullets unchanged.
+Repair every bullet marked `REPAIR`.
 
-You may repair related bullets in the same entry only when necessary to remove repeated locked terms or restore distinct qualification coverage.
+Keep `PASS` bullets unchanged unless a minimal change is necessary to resolve a repeated meaningful term within that same entry.
+
+---
+
+## Repair Requirements
 
 A repaired bullet must:
 
 ```text
 - use only facts already present in the same Experience entry or Project;
 - preserve factual meaning;
-- remove hot dogs;
-- state What, How, Context, and nontechnical Why;
-- use exact JD terms only when they are already explicit in the JSON;
-- avoid repeating locked groups;
+- retain at least one substantive accomplishment from the original bullet;
+- remove hot dogs at phrase level;
+- state What clearly;
+- state How the relevant qualification was used;
+- state Where or in what system/workflow it happened;
+- state the strongest supported plain-language nontechnical Why;
+- use exact JD terms only when they already appear explicitly in the JSON;
+- avoid repeating locked meaningful groups when a truthful rewrite is possible;
 - use past tense;
-- contain one sentence, one period maximum, and 25 words or fewer;
-- use one direct action verb;
-- avoid stacked verbs, buzzwords, AI-sounding language, em dashes,
+- start with one direct action verb;
+- contain one sentence, no more than one period, and 25 words or fewer;
+- avoid stacked opening verbs;
+- avoid buzzwords, generic corporate filler, AI-sounding phrasing, em dashes,
   unexplained acronym chains, and vague endings.
 ```
 
-If a plain-language reason is not explicitly available in the JSON, do not invent one. Remove the bullet if it cannot be repaired honestly.
+Do not add an unproven JD term to increase ATS coverage.
 
-Do not add an unproven JD term to increase coverage.
+Do not add a new tool, outcome, system, user, responsibility, metric, or business reason.
 
 ---
 
 ## Skills Repair
 
-Rebuild Skills after repairing Experience and Projects.
+Rebuild Skills after Experience and Projects are repaired.
 
-Keep only terms that:
+Keep only Skills that:
 
 ```text
-- appear in a final Experience or Project bullet; and
-- are relevant to the JD.
+- appear directly in a final Experience or Project bullet; and
+- are relevant to the target JD.
 ```
 
 Do not use Skills to repair missing Experience evidence.
 
-Remove duplicates, aliases, unsupported terms, and unrelated technologies.
+Remove:
+
+```text
+duplicates
+aliases
+unsupported terms
+unrelated technologies
+terms that appear only in the original Skills list
+```
+
+Do not change the JSON schema.
 
 ---
 
@@ -244,41 +438,56 @@ ROLE TARGET:
 <target role>
 
 JD QUALIFICATION GROUPS:
-<comma-separated groups>
+<comma-separated bullet-provable qualification groups>
 
 EXPERIENCE ATS COVERAGE:
 <proven>/<total> | <percentage>
 
+PROJECT COVERAGE:
+<distinct groups proven only in Projects or None>
+
 BULLET REVIEW:
-<Experience or Project> | Bullet <number> | PASS / REPAIR / REMOVE
+<Experience or Project> | Bullet <number> | PASS / REPAIR
 - Missing element: <What / How / Context / Nontechnical Why / None>
-- Hot dog removed: <exact phrase or None>
-- Repeated group: <term or None>
+- Hot dog phrase removed: <exact phrase or None>
+- Repeated group corrected: <term or None>
 - JD qualification retained: <group or None>
+- Constraint: <None or "Nontechnical reason cannot be fully verified from JSON alone">
 
 GAPS:
-<JD qualification groups not proven in JSON, or None>
+<JD qualification groups not clearly proven in the JSON, or None>
 
 REPAIR SUMMARY:
-<bullets changed, removed, or unchanged>
+<bullets changed and concise reason>
 ```
 
 Do not reveal hidden reasoning.
 
 ### Part 2: CORRECTED JSON
 
-Return the corrected JSON with the exact same top-level schema as the input JSON.
+Return the corrected JSON using the exact same top-level schema as the input JSON.
 
-Before returning it, verify:
+---
+
+## Final Validation
+
+Before returning the corrected JSON, verify:
 
 ```text
-[ ] Experience remains the main source of ATS coverage.
-[ ] Every summary uses 1 to 3 primary JD groups.
-[ ] Every later Experience and Project bullet uses 3 to 6 groups when supported.
-[ ] Every final bullet contains What, How, Context, and nontechnical Why.
-[ ] No hot dogs remain.
-[ ] No new factual claim was added.
-[ ] No meaningful term repeats within an Experience or Project entry.
-[ ] Skills come only from final bullets.
+[ ] The exact number and order of Experience and Project bullets were preserved.
+[ ] No bullet, Experience entry, or Project was deleted, merged, blanked, moved,
+    or replaced with a placeholder.
 [ ] Titles, companies, locations, dates, project names, and JSON structure are unchanged.
+[ ] Experience remains the primary source of ATS coverage.
+[ ] Every summary uses 1 to 3 primary JD qualification groups when supported.
+[ ] Every later Experience and Project bullet uses 3 to 6 groups when supported.
+[ ] Every final bullet clearly includes What, How, and Context.
+[ ] Every final bullet uses the strongest supported plain-language nontechnical Why.
+[ ] Any missing nontechnical Why is marked CONSTRAINED rather than invented.
+[ ] Hot dogs were removed at phrase level without deleting bullets.
+[ ] No new factual claim was added.
+[ ] No meaningful term repeats within an Experience or Project entry when a truthful
+    repair was possible.
+[ ] Skills were rebuilt only from final Experience and Project evidence.
+[ ] ATS coverage was calculated from qualification proof, not keyword presence.
 ```

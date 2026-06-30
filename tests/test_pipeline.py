@@ -166,11 +166,19 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["config"]["prompt_profile"], "v1")
         self.assertEqual(mapped["config"]["company"], "Acme")
         self.assertIn("(518) 328-3697", mapped["contact"])
-        self.assertIn("Moving to Boston by July 2026", mapped["location"])
+        self.assertIn(f"Moving to Boston, MA in {pipeline.next_month_label()}; available to move sooner if needed", mapped["location"])
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Present")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
         self.assertTrue(any(label.startswith("Languages") for label in mapped["technical_skills"]))
         self.assertNotIn("PostgreSQL", json.dumps(mapped["technical_skills"]))
+
+    def test_v1_resume_location_defaults_to_current_location(self):
+        compact = pipeline.extract_json(valid_v1_compact_response())
+        mapped = pipeline.v1_compact_to_resume_json(
+            compact,
+            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+        )
+        self.assertEqual("New York, NY", mapped["location"])
 
     def test_v1_skills_are_pruned_to_final_bullet_evidence(self):
         compact = {
