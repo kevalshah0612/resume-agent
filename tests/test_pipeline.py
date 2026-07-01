@@ -1,10 +1,13 @@
 import asyncio
 import json
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import app_properties
 import pipeline
 
 
@@ -91,6 +94,9 @@ class LinkedinMessageTests(unittest.TestCase):
 
 
 class PromptProfileTests(unittest.TestCase):
+    def test_default_prompt_profile_is_v2(self):
+        self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "v2")
+
     def test_prompt_profile_options_resolve_to_stable_v1_and_v2(self):
         labels = pipeline.prompt_profile_options()
         self.assertEqual(
@@ -315,7 +321,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["config"]["company"], "Acme")
         self.assertIn("(518) 328-3697", mapped["contact"])
         self.assertIn(f"Moving to Boston, MA in {pipeline.next_month_label()}; available to move sooner if needed", mapped["location"])
-        self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Present")
+        self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Dec 2024")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
 
     def test_v1_resume_location_defaults_to_current_location(self):
@@ -325,6 +331,41 @@ class PromptProfileTests(unittest.TestCase):
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
         )
         self.assertEqual("New York, NY", mapped["location"])
+
+
+    def test_des_facts_file_replaces_existing_request_block(self):
+        inp = pipeline.ResumeInput(
+            company="Acme",
+            title="Backend Engineer",
+            jd="Build APIs",
+            words="Boston, MA",
+            des="I used Kafka in TCS SWE II.",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "global_des_facts.md"
+            pipeline.update_des_facts_file(
+                path,
+                request_id="Acme_Backend_20260630_120000",
+                inp=inp,
+                prompt_profile="v2",
+                pass1_text="DES 1 | keyword: Kafka | use when: event processing",
+                approval_text="Approved: 1",
+            )
+            pipeline.update_des_facts_file(
+                path,
+                request_id="Acme_Backend_20260630_120000",
+                inp=inp,
+                prompt_profile="v2",
+                pass1_text="DES 2 | keyword: AWS | use when: cloud deployment",
+                approval_text="CONFIRM",
+            )
+
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count("## Acme_Backend_20260630_120000"), 1)
+            self.assertIn("I used Kafka in TCS SWE II.", text)
+            self.assertIn("DES 2 | keyword: AWS", text)
+            self.assertIn("CONFIRM", text)
+            self.assertNotIn("DES 1 | keyword: Kafka", text)
 
 
 

@@ -129,7 +129,7 @@ Professional experience:
 
 2. Tata Consultancy Services
    - Software Engineer II
-   - Oct 2022 - Present
+   - Oct 2022 - Dec 2024
    - Resume visible location: blank
    - Resume employment note:
      On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization

@@ -324,6 +324,99 @@ Project control:
 
 ## Bullet Rules
 
+## SWE Ownership, Leadership, and Teamwork Signals
+
+For Software Engineer roles, do not make the resume sound like task execution only.
+
+When Story.md or approved DES supports it, show ownership, leadership, and teamwork as engineering proof:
+
+```text
+ownership = carried a scoped system, feature, release, defect, migration, or workflow to completion
+leadership = guided reviews, standards, release decisions, debugging direction, planning, or technical tradeoffs
+teamwork = worked across engineers, QA, operations, researchers, stakeholders, or users to finish verified work
+```
+
+Use these signals inside technical bullets, not as soft-skill claims.
+
+Good:
+
+```text
+Led code reviews for Java release changes, helping the team catch defects before production deployment.
+Coordinated backend release checks with QA and operations, helping approved changes reach users without manual follow-up.
+Owned debugging for payment update failures, giving support teams a clear path to restore blocked transactions.
+```
+
+Bad:
+
+```text
+Collaborated with cross-functional teams.
+Demonstrated ownership and leadership.
+Developed and maintained enterprise applications.
+```
+
+Rules:
+
+```text
+- At least one Experience bullet should show ownership, leadership, or teamwork when the evidence supports it.
+- Do not add leadership or ownership if Story.md or DES does not support the actual action.
+- Never use teamwork as filler. It must include what was coordinated, with whom, and why it mattered.
+- Never use ownership as a vague label. State the system, issue, release, review, or decision owned.
+```
+
+## Verb Quality
+
+Use strong, plain engineering verbs that describe the real action. Avoid weak responsibility language.
+
+Prefer verbs such as:
+
+```text
+Led, Owned, Designed, Built, Shipped, Delivered, Automated, Standardized, Integrated,
+Restored, Debugged, Reviewed, Coordinated, Guided, Migrated, Validated, Protected,
+Refactored, Released, Documented, Tested, Deployed, Implemented
+```
+
+Use `Implemented` only when the bullet explains the system, method, and reason. Do not use it as a tool-list opener.
+
+Avoid weak or AI-sounding openings:
+
+```text
+Developed and maintained
+Worked on
+Responsible for
+Helped with
+Assisted in
+Participated in
+Utilized
+Leveraged
+Enhanced
+Optimized
+Streamlined
+Spearheaded
+Pioneered
+Collaborated on
+```
+
+Avoid AI-generated resume words and vague adjectives:
+
+```text
+robust
+scalable
+seamless
+innovative
+cutting-edge
+dynamic
+mission-critical
+highly efficient
+end-to-end
+best-in-class
+impactful
+complex
+various
+multiple
+```
+
+You may use a normally banned word only when it is a literal JD term and the bullet gives concrete WHAT, HOW, WHERE, and WHY.
+
 ### Standard Experience Entries
 
 Bullet 1 is the summary bullet.
@@ -446,13 +539,15 @@ Hotdogs include:
 - a technical metric with no human or operational reason;
 - a vague claim of scale, reliability, security, performance, or ownership;
 - generic collaboration without a requirement, decision, or result;
+- weak responsibility wording such as `developed and maintained`, `worked on`, or `responsible for`;
+- AI-sounding filler such as `leveraged`, `utilized`, `enhanced`, `optimized`, or `streamlined`;
 - an implied capability stated as fact;
 - repeated proof from an earlier bullet in the same entry.
 ```
 
 Use numbers only when directly verified, understandable to a nontechnical reader, and useful for scale or value. Do not use percentages, latency, benchmark scores, model accuracy, or raw technical metrics by default.
 
-Do not use bold markers, Markdown formatting, em dashes, buzzwords, hype, passive voice, stacked opening verbs, dense acronym chains, or unresolved placeholders.
+Do not use bold markers, Markdown formatting, em dashes, buzzwords, hype, passive voice, stacked opening verbs, dense acronym chains, unresolved placeholders, or generic AI-generated phrasing.
 
 ## Skills
 

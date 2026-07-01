@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from app_properties import DEFAULT_PROMPT_PROFILE, REQUESTS_DIR, RESUME_STEM, WORD_DIR
+from app_properties import DES_FACTS_PATH, DEFAULT_PROMPT_PROFILE, REQUESTS_DIR, RESUME_STEM, WORD_DIR
 from pipeline import (
     CostEvent,
     FinalReviewResult,
@@ -46,6 +46,7 @@ from pipeline import (
     save_json,
     save_text,
     slug,
+    update_des_facts_file,
     v1_compact_to_resume_json,
 )
 
@@ -635,6 +636,27 @@ class JobTab(ttk.Frame):
             ]),
         )
 
+    def record_des_facts(
+        self,
+        *,
+        inp: ResumeInput,
+        prompt_profile: str,
+        request_dir: Path,
+        pass1_text: str = "",
+        approval_text: str = "",
+    ) -> None:
+        try:
+            update_des_facts_file(
+                DES_FACTS_PATH,
+                request_id=self.request_id,
+                inp=inp,
+                prompt_profile=prompt_profile,
+                pass1_text=pass1_text,
+                approval_text=approval_text,
+            )
+        except Exception as exc:
+            save_text(request_dir / "des_facts_log_error.txt", str(exc))
+
     def make_input(self) -> ResumeInput:
         company = self.text_value(self.company)
         if self.jd_showing_des:
@@ -804,6 +826,13 @@ class JobTab(ttk.Frame):
             self.pass1_raw = result
             self.show_des_in_jd(result)
             save_text(self.request_file("des", request_dir), result)
+            self.record_des_facts(
+                inp=inp,
+                prompt_profile=prompt_profile,
+                request_dir=request_dir,
+                pass1_text=result,
+                approval_text=self.text_value(self.approval),
+            )
             self.show_output("PASS 1", "PASS 1 complete. DES suggestions are pinned in the left panel.")
             self.add_cost_events(events)
 
@@ -832,6 +861,13 @@ class JobTab(ttk.Frame):
             return
 
         save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+        self.record_des_facts(
+            inp=inp,
+            prompt_profile=prompt_profile,
+            request_dir=request_dir,
+            pass1_text=pass1_text,
+            approval_text=approval_raw,
+        )
         self.set_busy(True, "Generating JSON...", cancellable=True)
 
         def task():
@@ -956,6 +992,13 @@ class JobTab(ttk.Frame):
             self.approval.insert("1.0", approval_raw)
             save_text(self.request_file("des", request_dir), pass1_raw)
             save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+            self.record_des_facts(
+                inp=inp,
+                prompt_profile=prompt_profile,
+                request_dir=request_dir,
+                pass1_text=pass1_raw,
+                approval_text=approval_raw,
+            )
             self.show_des_in_jd(pass1_raw)
             if not self.show_and_save_linkedin_outreach(request_dir, pass2_raw):
                 self.show_output("AUTO JSON Result", self.response_summary(pass2_raw) or "Final resume JSON is ready.")

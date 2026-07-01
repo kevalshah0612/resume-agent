@@ -39,7 +39,7 @@ def sample_resume() -> dict:
                 "company": "Tata Consultancy Services",
                 "title": "Software Engineer II",
                 "location": "",
-                "dates": "Oct 2022 - Present",
+                "dates": "Oct 2022 - Dec 2024",
                 "employment_note": "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization",
                 "bullets": ["Built Java services", "Supported production releases"],
             },

@@ -101,6 +101,10 @@ Hotdogs include:
 - vague endings such as for scalability, for reliability, for performance, or for operational excellence;
 - repeated tools or JD signals inside the same entry;
 - generic collaboration with no requirement, decision, or result;
+- vague ownership or leadership labels with no scoped system, decision, review, release, or issue;
+- weak responsibility wording such as developed and maintained, worked on, responsible for, or helped with;
+- AI-sounding verbs such as utilized, leveraged, enhanced, optimized, streamlined, spearheaded, or pioneered;
+- buzzword adjectives such as robust, scalable, seamless, innovative, cutting-edge, dynamic, mission-critical, end-to-end, or impactful;
 - implied production, scale, cloud, security, RAG, agents, ML, MLOps, ownership, user, or business-value claims.
 ```
 
@@ -117,8 +121,19 @@ For each bullet:
 5. Rewrite into one sentence with WHAT, HOW, WHERE, and WHY.
 6. Check repetition against earlier bullets in the same entry or Project.
 7. Check length, tense, one-period format, and readability.
+8. Replace weak openings with a stronger evidence-backed action verb when the facts support it.
 
 You may replace a weak generated bullet with a different directly supported work slice from the same Experience ID or Project ID when that is needed to preserve the configured bullet count.
+
+For SWE roles, preserve or add ownership, leadership, and teamwork only when the source proves the actual action:
+
+```text
+ownership = scoped system, feature, release, defect, migration, or workflow carried to completion
+leadership = reviews, standards, release decisions, debugging direction, planning, or technical tradeoffs
+teamwork = coordination with engineers, QA, operations, researchers, stakeholders, or users
+```
+
+If the bullet says `collaborated`, `led`, `owned`, or `guided`, it must also state what was coordinated or owned, with whom when relevant, and why it mattered.
 
 You may not:
 
@@ -140,7 +155,7 @@ You may not:
 - Exactly one ending period.
 - No bold markers or Markdown.
 - No em dash.
-- No buzzwords, hype, passive voice, stacked opening verbs, or dense acronym chains.
+- No buzzwords, hype, passive voice, stacked opening verbs, weak responsibility wording, AI-sounding verbs, or dense acronym chains.
 - No more than three rendered lines.
 ```
 

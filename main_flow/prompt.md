@@ -397,7 +397,7 @@ Story.md controls Keval's official titles, company names, dates, employment note
 For Tata Consultancy Services, Software Engineer II:
 
 * preserve title as `Software Engineer II`
-* preserve dates as `Oct 2022 - Present`
+* preserve dates as `Oct 2022 - Dec 2024`
 * set visible `location` to an empty string
 * preserve the academic-leave employment note exactly
 * write all bullets in past tense
@@ -1305,7 +1305,7 @@ Final JSON must follow this structure exactly:
       "company": "Tata Consultancy Services",
       "title": "Software Engineer II",
       "location": "",
-      "dates": "Oct 2022 - Present",
+      "dates": "Oct 2022 - Dec 2024",
       "employment_note": "On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization",
       "bullets": [
         "[Bullet 1: closest JD-core system proof, 18 to 28 words, no period]",

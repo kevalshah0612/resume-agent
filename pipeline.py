@@ -815,7 +815,7 @@ CANDIDATE EXPERIENCE CATALOG
   Canonical title: Software Engineer II
   Company: Tata Consultancy Services
   Location:
-  Dates: Oct 2022 - Present
+  Dates: Oct 2022 - Dec 2024
   Allowed evidence labels: Story 01 through Story 12, Story 15 through Story 17, Story 35
 - Experience ID: tcs_se
   Canonical title: Software Engineer
@@ -850,7 +850,7 @@ DISPLAY PLANS
     Output title: Software Engineer II
     Output company: Tata Consultancy Services
     Output location:
-    Output dates: Oct 2022 - Present
+    Output dates: Oct 2022 - Dec 2024
     Maximum bullets: 3
   - Display entry ID: tcs_se
     Source Experience IDs: tcs_se
@@ -880,7 +880,7 @@ DISPLAY PLANS
     Output title: Software Engineer II
     Output company: Tata Consultancy Services
     Output location:
-    Output dates: Oct 2022 - Present
+    Output dates: Oct 2022 - Dec 2024
     Maximum bullets: 3
   - Display entry ID: tcs_se
     Source Experience IDs: tcs_se
@@ -917,7 +917,7 @@ DISPLAY PLANS
     Output title: Software Engineer II
     Output company: Tata Consultancy Services
     Output location:
-    Output dates: Oct 2022 - Present
+    Output dates: Oct 2022 - Dec 2024
     Maximum bullets: 3
   - Display entry ID: tcs_se
     Source Experience IDs: tcs_se
@@ -981,7 +981,7 @@ def v1_experience_lock(company: str, title: str) -> dict[str, str]:
     if "global health impact" in company_key:
         return {"location": "New York, NY", "dates": "Jun 2025 - Aug 2025", "employment_note": GHI_EMPLOYMENT_NOTE}
     if "tata consultancy services" in company_key and "ii" in title_key:
-        return {"location": "", "dates": "Oct 2022 - Present", "employment_note": TCS_II_EMPLOYMENT_NOTE}
+        return {"location": "", "dates": "Oct 2022 - Dec 2024", "employment_note": TCS_II_EMPLOYMENT_NOTE}
     if "tata consultancy services" in company_key:
         return {"location": "Gandhinagar, India", "dates": "Mar 2021 - Sep 2022", "employment_note": ""}
     return {"location": "", "dates": "", "employment_note": ""}
@@ -1886,6 +1886,81 @@ def slug(value: str) -> str:
 
 def timestamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M")
+
+
+def _facts_section(title: str, value: str) -> str:
+    text = (value or "").strip()
+    body = text if text else "(none)"
+    return f"### {title}\n\n```text\n{body}\n```"
+
+
+def format_des_facts_entry(
+    *,
+    request_id: str,
+    inp: ResumeInput,
+    prompt_profile: str,
+    pass1_text: str = "",
+    approval_text: str = "",
+) -> str:
+    recorded_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        f"## {request_id}",
+        "",
+        f"- Recorded: {recorded_at}",
+        f"- Prompt profile: {normalize_prompt_profile(prompt_profile)}",
+        f"- Company: {inp.company}",
+        f"- Title: {inp.title}",
+        f"- Location: {inp.words.strip() or CURRENT_LOCATION}",
+        "",
+        _facts_section("Candidate DES input / confirmed facts", inp.des),
+        "",
+        _facts_section("PASS 1 model suggestions to review", pass1_text),
+        "",
+        _facts_section("Approval / extra evidence", approval_text),
+        "",
+        "Review this block before moving anything into Story.md.",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def update_des_facts_file(
+    path: Path,
+    *,
+    request_id: str,
+    inp: ResumeInput,
+    prompt_profile: str,
+    pass1_text: str = "",
+    approval_text: str = "",
+) -> None:
+    safe_request_id = slug(request_id)
+    start = f"<!-- DES_FACTS_START:{safe_request_id} -->"
+    end = f"<!-- DES_FACTS_END:{safe_request_id} -->"
+    entry = "\n".join([
+        start,
+        format_des_facts_entry(
+            request_id=request_id,
+            inp=inp,
+            prompt_profile=prompt_profile,
+            pass1_text=pass1_text,
+            approval_text=approval_text,
+        ).rstrip(),
+        end,
+        "",
+    ])
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+    else:
+        text = (
+            "# DES Facts\n\n"
+            "Collected from DES inputs, PASS 1 suggestions, and approval text. "
+            "Treat PASS 1 suggestions as review items until you confirm them.\n\n"
+        )
+    pattern = re.compile(re.escape(start) + r".*?" + re.escape(end) + r"\n?", flags=re.DOTALL)
+    if pattern.search(text):
+        updated = pattern.sub(entry, text)
+    else:
+        updated = text.rstrip() + "\n\n" + entry
+    save_text(path, updated)
 
 
 def save_text(path: Path, text: str) -> None:

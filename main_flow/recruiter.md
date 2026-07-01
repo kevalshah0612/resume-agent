@@ -509,7 +509,7 @@ Employment identity preservation:
 
 * Do not remove, shorten, move, or rewrite an approved `employment_note`
 * Preserve Tata Consultancy Services | Software Engineer II
-* Preserve dates as `Oct 2022 - Present`
+* Preserve dates as `Oct 2022 - Dec 2024`
 * Preserve location as an empty string
 * Preserve this employment note exactly:
   `On approved academic leave in Binghamton, NY for M.S. in Computer Science, AI Specialization`

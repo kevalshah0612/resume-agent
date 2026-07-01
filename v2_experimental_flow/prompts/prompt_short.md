@@ -51,6 +51,42 @@ Bullets 2 and 3 prove different qualification slices. Use 3 to 6 meaningful JD t
 
 Use past tense, one direct opening verb, one sentence, one period, and no more than three rendered lines.
 
+For SWE roles, include ownership, leadership, or teamwork when Story.md or approved DES supports it. This must be technical proof, not soft-skill filler:
+
+```text
+Led code reviews...
+Owned release debugging...
+Coordinated backend checks with QA and operations...
+Guided implementation decisions...
+```
+
+Do not write vague soft-skill bullets such as `Collaborated with cross-functional teams` or `Demonstrated ownership`.
+
+Use strong plain verbs such as Led, Owned, Designed, Built, Shipped, Delivered, Automated, Standardized, Integrated, Restored, Debugged, Reviewed, Coordinated, Guided, Migrated, Validated, Protected, Tested, and Deployed.
+
+Avoid weak or AI-sounding wording:
+
+```text
+Developed and maintained
+Worked on
+Responsible for
+Helped with
+Utilized
+Leveraged
+Enhanced
+Optimized
+Streamlined
+Spearheaded
+robust
+scalable
+seamless
+innovative
+cutting-edge
+dynamic
+mission-critical
+end-to-end
+```
+
 Length limits:
 
 ```text
@@ -74,6 +110,8 @@ Keep a phrase only when it:
 Delete everything else.
 
 Remove tool lists, feature lists, raw technical benchmark dumps, vague endings, unsupported claims, and repeated meaningful terms.
+
+Also remove weak responsibility phrasing, AI-sounding verbs, buzzwords, vague ownership claims, and generic teamwork claims that do not state what was coordinated, with whom, and why it mattered.
 
 ## Evidence Rules
 
