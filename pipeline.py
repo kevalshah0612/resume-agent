@@ -601,6 +601,13 @@ def read_prompt(name: str, prompt_profile: str | None = None) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def read_prompt_with_fallback(name: str, prompt_profile: str | None = None) -> str:
+    try:
+        return read_prompt(name, prompt_profile)
+    except FileNotFoundError:
+        return read_prompt(name, "stable")
+
+
 def read_final_qa_prompt(name: str) -> str:
     path = FINAL_QA_PROMPT_DIR / name
     if not path.exists():
@@ -1821,10 +1828,14 @@ async def run_application_answers(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
+    prompt_profile: str = "stable",
 ) -> str:
-    system_blocks = [cached_text_block(read_prompt("questions.md"))]
+    profile = normalize_prompt_profile(prompt_profile)
+    system_blocks = [cached_text_block(read_prompt_with_fallback("questions.md", profile))]
     user_message = "\n".join([
         HUMAN_TEXT_STYLE_RULE.strip(),
+        "",
+        f"Prompt Profile: {profile}",
         "",
         "Candidate Resume JSON:",
         json.dumps(resume_json, indent=2),

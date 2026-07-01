@@ -492,6 +492,53 @@ Projects are closest-match supplemental proof. They are not feature dumps and do
 - If a rendered bullet reaches four lines, it fails even if word count passes.
 ```
 
+### DOCX Layout Self-Correction
+
+Use the final DOCX renderer as the layout target while writing bullets:
+
+```text
+- Font: Arial, approximately 10.5 pt body text.
+- Left margin: 1.0 inch.
+- Right margin: 1.0 inch.
+- Bullet indent: approximately 0.5 inch.
+- Line spacing: 1.5.
+- A bullet must fit within three rendered lines.
+```
+
+Before accepting each bullet, silently calculate:
+
+```text
+- word count;
+- visible character count, including spaces and punctuation;
+- whether long technology names, slash terms, parentheticals, or comma chains make the bullet likely to render to four lines.
+```
+
+Do not print this audit. If the bullet may reach four rendered lines, rewrite it before moving on.
+
+When compressing, preserve:
+
+```text
+WHAT was done
+HOW it was done
+WHERE/context
+WHY it mattered in nontechnical language
+the highest JD signal
+```
+
+Remove in this order:
+
+```text
+1. repeated tools already used in the same entry;
+2. extra database, framework, cloud, library, or platform names;
+3. filler adjectives and AI-sounding verbs;
+4. duplicate context words;
+5. secondary metrics or scope details;
+6. vague result phrases;
+7. the least important JD term.
+```
+
+Output only the final compressed bullet in the JSON.
+
 ## Repetition Rules
 
 Within the same Experience entry or Project, do not repeat meaningful terms after they pass in an earlier bullet.
@@ -562,12 +609,42 @@ Build Skills last.
 - Prefer minimal skills over long lists.
 ```
 
+## LinkedIn Outreach
+
+After PASS 2 approval, include LinkedIn outreach outside the JSON.
+
+Return it after `ANALYSIS` and before the final JSON:
+
+```text
+LINKEDIN OUTREACH
+Recruiter LinkedIn Message:
+<300 characters or fewer>
+
+Hiring Manager LinkedIn Message:
+<300 characters or fewer>
+
+Recruiter/HM Search Strings:
+<4 search strings>
+```
+
+Rules:
+
+```text
+- Use only proof from the final JSON, JD, company, and title.
+- Each LinkedIn message must be under 300 characters including spaces.
+- Keep messages direct, specific, and human.
+- Do not use em dashes, buzzwords, flattery, desperation, generic praise, or technology lists.
+- Search strings must help find recruiters and hiring managers for the company and target role.
+- Do not place LinkedIn text inside JSON.
+```
+
 ## PASS 2 Output
 
 Return exactly:
 
 1. `ANALYSIS`
-2. One valid JSON object
+2. `LINKEDIN OUTREACH`
+3. One valid JSON object
 
 Do not wrap the JSON in Markdown fences. Do not write anything after the JSON.
 

@@ -232,6 +232,41 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Location:\nBoston, MA", user_text)
         self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
+    def test_v2_questions_use_v2_prompt_with_jd_questions_and_final_json(self):
+        resume_json = {
+            "config": {"prompt_profile": "v2"},
+            "professional_experience": [
+                {
+                    "title": "Software Engineer II",
+                    "company": "Tata Consultancy Services",
+                    "bullets": ["Led Java API work for payment workflows."],
+                }
+            ],
+            "projects": [],
+            "technical_skills": {"Skills": "Java, Spring Boot"},
+        }
+        with patch("pipeline.call_model", new=AsyncMock(return_value="1. Why this role?\nThis role matches my Java API experience.")) as call_mock:
+            asyncio.run(
+                pipeline.run_application_answers(
+                    company="Acme",
+                    title="Backend Engineer",
+                    jd="Build Java APIs",
+                    questions="Why this role?",
+                    resume_json=resume_json,
+                    prompt_profile="v2",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("V2 Application Questions Prompt", system_text)
+        self.assertIn("Prompt Profile: v2", user_text)
+        self.assertIn("Candidate Resume JSON:", user_text)
+        self.assertIn('"professional_experience"', user_text)
+        self.assertIn("Job Description:\nBuild Java APIs", user_text)
+        self.assertIn("Company: Acme", user_text)
+        self.assertIn("Title: Backend Engineer", user_text)
+        self.assertIn("Application Questions:\nWhy this role?", user_text)
+
     def test_v2_compact_to_resume_json_marks_v2_profile(self):
         compact = pipeline.extract_json(valid_v1_compact_response())
         mapped = pipeline.v1_compact_to_resume_json(

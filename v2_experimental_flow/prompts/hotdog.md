@@ -168,6 +168,29 @@ Teaching Assistant bullets: 18-26 words, hard max 28 words / 200 characters.
 Project bullets: 20-28 words, hard max 30 words / 215 characters.
 ```
 
+DOCX layout target:
+
+```text
+- Font: Arial, approximately 10.5 pt body text.
+- Left margin: 1.0 inch.
+- Right margin: 1.0 inch.
+- Bullet indent: approximately 0.5 inch.
+- Line spacing: 1.5.
+- A bullet must fit within three rendered lines.
+```
+
+Before accepting each repaired bullet, silently calculate:
+
+```text
+- word count;
+- visible character count, including spaces and punctuation;
+- whether long technology names, slash terms, parentheticals, or comma chains make the bullet likely to render to four lines.
+```
+
+Do not print this audit. If the bullet may reach four rendered lines, rewrite it before returning JSON.
+
+When compressing, preserve WHAT, HOW, WHERE, WHY, and the highest JD signal. Remove repeated tools, extra database/framework/cloud/library/platform names, filler adjectives, AI-sounding verbs, duplicate context, secondary metrics, vague result phrases, and then the least important JD term.
+
 Use numbers only when verified and useful to a nontechnical reader. Avoid raw percentages, latency, model accuracy, and benchmark values unless the JD and evidence make them necessary.
 
 ## Repetition Rules
@@ -188,6 +211,34 @@ Rebuild skills after bullets are final.
 - Skills do not increase Experience coverage.
 - Remove aliases, soft skills, buzzwords, broad inventories, duplicates, and discarded tools.
 - Obey the active configuration's skills minimum and maximum.
+```
+
+## LinkedIn Outreach
+
+Return LinkedIn outreach outside the corrected JSON.
+
+Place it after `ANALYSIS` and before the final JSON:
+
+```text
+LINKEDIN OUTREACH
+Recruiter LinkedIn Message:
+<300 characters or fewer>
+
+Hiring Manager LinkedIn Message:
+<300 characters or fewer>
+
+Recruiter/HM Search Strings:
+<4 search strings>
+```
+
+Rules:
+
+```text
+- Use only proof from the corrected final JSON, JD, company, and title.
+- Each message must be under 300 characters including spaces.
+- Keep messages short, direct, and specific.
+- Do not use em dashes, buzzwords, generic praise, desperation, or technology lists.
+- Do not put LinkedIn text inside JSON.
 ```
 
 ## ANALYSIS Shape
@@ -225,7 +276,7 @@ READY
 
 ## Final JSON Shape
 
-Return the corrected JSON immediately after ANALYSIS:
+Return the corrected JSON immediately after `LINKEDIN OUTREACH`:
 
 ```json
 {

@@ -325,14 +325,14 @@ class JobTab(ttk.Frame):
             self.pass1_btn.grid()
             self.auto_btn.grid_remove()
             self.final_qa_btn.grid_remove()
-            self.questions_btn.grid_remove()
+            self.questions_btn.grid()
             self.json_btn.config(text="Prompt")
             self.recruiter_btn.config(text="Hotdog")
             self.approval.master.grid()
             if self.text_value(self.approval).lower() in {"approved:", "approved"}:
                 self.approval.delete("1.0", "end")
                 self.approval.insert("1.0", "CONFIRM")
-            self.app_questions.master.grid_remove()
+            self.app_questions.master.grid()
         else:
             self.words.field_label.config(text="Words / Keywords")
             self.pass1_btn.grid()
@@ -909,7 +909,8 @@ class JobTab(ttk.Frame):
                 return
             raw, data, events, parse_error = result
             if is_experimental_profile(prompt_profile):
-                self.show_output(f"{prompt_profile.upper()} Prompt", self.response_summary(raw) or f"{prompt_profile.upper()} prompt JSON is ready.")
+                if not self.show_and_save_linkedin_outreach(request_dir, raw):
+                    self.show_output(f"{prompt_profile.upper()} Prompt", self.response_summary(raw) or f"{prompt_profile.upper()} prompt JSON is ready.")
             elif not self.show_and_save_linkedin_outreach(request_dir, raw):
                 self.show_output("PASS 2 Result", self.response_summary(raw) or "Final resume JSON is ready.")
             self.add_cost_events(events)
@@ -1090,7 +1091,8 @@ class JobTab(ttk.Frame):
                 return
             raw, data, events, parse_error = result
             if is_experimental_profile(prompt_profile):
-                self.show_output("Hotdog", self.response_summary(raw) or "Hotdog JSON is ready.")
+                if not self.show_and_save_linkedin_outreach(request_dir, raw):
+                    self.show_output("Hotdog", self.response_summary(raw) or "Hotdog JSON is ready.")
             elif not self.show_and_save_linkedin_outreach(request_dir, raw):
                 title = "Final Check" if is_experimental_profile(prompt_profile) else "Recruiter Review"
                 fallback = "Final check JSON is ready." if is_experimental_profile(prompt_profile) else "Recruiter JSON is ready."
@@ -1276,6 +1278,7 @@ class JobTab(ttk.Frame):
                 )
             resume_json = normalize_resume_json(json.loads(json_path.read_text(encoding="utf-8")))
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            prompt_profile = self.selected_prompt_profile()
         except Exception as exc:
             messagebox.showerror("Application answers need input", str(exc), parent=self)
             return
@@ -1296,6 +1299,7 @@ class JobTab(ttk.Frame):
                 cancel_event=self.cancel_event,
                 nvidia_model=nvidia_model,
                 nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
             ))
             return answers, events, json_path
 

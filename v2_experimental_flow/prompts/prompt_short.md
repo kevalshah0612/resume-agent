@@ -96,6 +96,14 @@ Teaching Assistant bullets: 18-26 words, hard max 28 words / 200 characters.
 Project bullets: 20-28 words, hard max 30 words / 215 characters.
 ```
 
+DOCX layout target: Arial 10.5 pt, 1.0 inch left margin, 1.0 inch right margin, 0.5 inch bullet indent, and 1.5 line spacing. A bullet must fit within three rendered lines.
+
+Before accepting each bullet, silently calculate word count, visible character count including spaces and punctuation, and whether long technology names or comma chains may wrap to four lines.
+
+Do not print this audit. If a bullet may reach four rendered lines, rewrite it before continuing.
+
+When compressing, preserve WHAT, HOW, WHERE, WHY, and the highest JD signal. Remove repeated tools, extra tool names, filler adjectives, AI-sounding verbs, duplicate context, secondary metrics, vague result phrases, and then the least important JD term.
+
 ## Hotdog Rule
 
 Audit one bullet before writing the next.
@@ -127,7 +135,23 @@ Do not rename technologies or infer unsupported claims. Never move evidence betw
 
 PASS 1 returns planning text only.
 
-PASS 2 returns ANALYSIS and strict JSON only. The JSON schema is:
+PASS 2 returns ANALYSIS, LinkedIn outreach, and strict JSON. Put LinkedIn outreach after ANALYSIS and before JSON:
+
+```text
+LINKEDIN OUTREACH
+Recruiter LinkedIn Message:
+<300 characters or fewer>
+
+Hiring Manager LinkedIn Message:
+<300 characters or fewer>
+
+Recruiter/HM Search Strings:
+<4 search strings>
+```
+
+Use only final JSON, JD, company, and title. Keep messages direct and specific. Do not use em dashes, buzzwords, generic praise, desperation, or technology lists. Do not put LinkedIn text inside JSON.
+
+The JSON schema is:
 
 ```json
 {
