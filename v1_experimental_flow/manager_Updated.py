@@ -819,7 +819,7 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
     cfg = config(data)
     render_ta = level in {2, 4} and bool_value(cfg.get("ta_active"), default=False)
 
-    section_heading(doc, "Education & Certificates")
+    section_heading(doc, "Education")
 
     for i, edu in enumerate(education):
         p = bullet_paragraph(doc, num_id=1)
@@ -836,7 +836,7 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
         display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
         if display_grad:
             if not display_grad.lower().startswith("status"):
-                display_grad = f"Status - {display_grad}"
+                display_grad = f"{display_grad}"
             tab = p.add_run("\t")
             rf(tab, sz=SUB_PT)
             r3 = p.add_run(display_grad)

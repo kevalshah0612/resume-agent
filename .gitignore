@@ -4,6 +4,7 @@ __pycache__/
 # Local secrets
 .env
 pipeline_config.json
+global_des_facts.md
 
 # Generated application data
 requests/
@@ -14,6 +15,7 @@ Resume-word/
 Resume-pdf/
 *.docx
 *.pdf
+Local/
 
 # Local/editor files
 .idea/

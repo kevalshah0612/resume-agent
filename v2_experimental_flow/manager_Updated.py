@@ -325,6 +325,14 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
     jobs = get_jobs(data)
     ghi = [j for j in jobs if "global health impact" in clean(j.get("company", "")).lower()]
     others = [j for j in jobs if "global health impact" not in clean(j.get("company", "")).lower()]
+    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+
+    if order in {"json", "json_order"}:
+        return jobs
+    if order in {"ghi", "ghi_first", "internship_first"}:
+        return ghi + others
+    if order in {"tcs", "tcs_first", "professional_first"}:
+        return others + ghi
 
     if layout_profile in TCS_FIRST_LAYOUTS:
         return others + ghi
@@ -332,6 +340,22 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
         return ghi + others
 
     return others + ghi if level == 3 else ghi + others
+
+
+def experience_order_label(data: dict, level: int, layout_profile: str = "") -> str:
+    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+
+    if order in {"json", "json_order"}:
+        return "JSON order"
+    if order in {"ghi", "ghi_first", "internship_first"}:
+        return "GHI first"
+    if order in {"tcs", "tcs_first", "professional_first"}:
+        return "TCS first"
+    if layout_profile in TCS_FIRST_LAYOUTS:
+        return "TCS first"
+    if layout_profile in GHI_FIRST_LAYOUTS:
+        return "Internship/GHI first"
+    return "TCS first" if level == 3 else "Internship/GHI first"
 
 
 def bool_value(value: Any, default: bool = False) -> bool:
@@ -416,7 +440,7 @@ def build_render_profile(data: dict) -> dict[str, Any]:
             and clean(education[0].get("ta_bullet", ""))
         ),
         "renderer_constraints": {
-            "experience_order_is_calculated_from_layout": True,
+            "experience_order_is_calculated_from_layout": not bool(clean(cfg.get("experience_order", ""))),
             "empty_sections_are_skipped": True,
             "titles_render_exactly_from_json": True,
             "bullet_counts_must_remain_unchanged_during_final_review": True,
@@ -819,7 +843,7 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
     cfg = config(data)
     render_ta = level in {2, 4} and bool_value(cfg.get("ta_active"), default=False)
 
-    section_heading(doc, "Education & Certificates")
+    section_heading(doc, "Education")
 
     for i, edu in enumerate(education):
         p = bullet_paragraph(doc, num_id=1)
@@ -836,7 +860,7 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
         display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
         if display_grad:
             if not display_grad.lower().startswith("status"):
-                display_grad = f"Status - {display_grad}"
+                display_grad = f"{display_grad}"
             tab = p.add_run("\t")
             rf(tab, sz=SUB_PT)
             r3 = p.add_run(display_grad)
@@ -1047,7 +1071,7 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
     print(f"Layout profile: {layout_profile}")
     print(f"Section gap  : {section_gap}pt")
     print(f"Sub-section gap: {sub_gap}pt")
-    print(f"Experience order: {'TCS first' if layout_profile in TCS_FIRST_LAYOUTS else 'Internship/GHI first'}")
+    print(f"Experience order: {experience_order_label(data, level, layout_profile)}")
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

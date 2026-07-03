@@ -567,29 +567,3 @@ I integrated Anthropic Claude for order interpretation, added cache layers to re
 **Story:** Across personal projects and research work, I used Cursor, Codex, Claude Code, and GIT to accelerate implementation, debugging, testing, documentation, and iteration. I used AI tooling as development support while retaining responsibility for architecture, integration behavior, validation, review of generated code, test outcomes, and final technical decisions.
 
 **Outcome:** The workflow improved development speed while keeping engineering judgment, verification, and accountability with the developer.
-
-## Positioning Summary by Role Family
-
-### Backend Engineer — Java
-Strongest stories: 01, 02, 03, 04, 05, 06, 07, 15, 16, 17. Lead with distributed systems, production API ownership, data consistency, Kafka event-driven design, testing discipline, and release maturity. Target: Amazon, Apple, JPMorgan, Walmart, Oracle, Bloomberg, Capital One.
-
-### Backend Engineer — Python
-Strongest stories: 08, 09, 10, 21, 22, 25, 28, 29. Lead with API ownership, orchestration, data pipelines, validation, async workflows, and cloud delivery. Target: Google, OpenAI, Databricks, Bloomberg, Capital One, NVIDIA, healthcare analytics.
-
-### Backend Engineer — C#/.NET
-Strongest stories: 11, 12. Lead with Microsoft stack, enterprise portal delivery, OAuth, Azure Key Vault, RBAC, and SQL Server. Target: Microsoft, JPMorgan, Capital One, Deloitte, Accenture.
-
-### Full-Stack Engineer
-Strongest stories: 01, 08, 13, 14, 15, 23, 27, 28, 32. Lead with end-to-end feature ownership, API-connected UI, auth, testing, and deployment. Target: Amazon, Meta, Adobe, Salesforce, DoorDash, Intuit.
-
-### Frontend Engineer
-Strongest stories: 13, 14, 23. Lead with React/TypeScript production dashboards, component architecture, async API integration, RBAC, and workflow visibility. Target: Meta, Adobe, Intuit, DoorDash, Uber.
-
-### AI Engineer
-Strongest stories: 27, 29, 30, 31, 32, 33, 24. Lead with RAG, vector search, embeddings, LLM integration, structured outputs, evaluation harnesses, and AI agent workflows. Target: OpenAI, Microsoft AI, Google, Databricks, Salesforce, Palantir, Adobe.
-
-### ML Engineer
-Strongest stories: 24, 28, 21, 22. Lead with model training, evaluation, inference integration, data pipelines, and dashboard-connected prediction delivery. Target: Google, Microsoft, Databricks, Snowflake, Bloomberg, JPMorgan AI teams.
-
-### Forward Deployed Engineer
-Strongest stories: 08, 25, 01, 27, 32. Lead with stakeholder translation, customer-facing delivery, integrations, debugging, and production-ready deployment. Target: Palantir, OpenAI, Databricks, Salesforce, Deloitte, EY.
