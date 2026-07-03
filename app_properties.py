@@ -24,7 +24,7 @@ GUJARAT_GRADUATION = "Graduated Sep 2020"
 TCS_II_EMPLOYMENT_NOTE = ""
 GHI_EMPLOYMENT_NOTE = ""
 
-V1_PROJECT_URLS = {
+PROJECT_URLS = {
     "jobpulse": "https://github.com/kevalshah0612/jobpulse",
     "fraudsift": "https://github.com/kevalshah0612/fraudsift",
     "reviewbot": "https://github.com/kevalshah0612/reviewbot",
@@ -48,7 +48,6 @@ DES_FACTS_PATH = ROOT / DES_FACTS_FILE_NAME
 
 PROMPT_PROFILE_LABELS = {
     "stable": "Stable",
-    "v1": "V1",
     "v2": "V2",
     "v3": "V3",
 }

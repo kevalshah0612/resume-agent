@@ -40,7 +40,7 @@ from app_properties import (
     LINKEDIN_URL,
     PROMPT_PROFILE_LABELS,
     TCS_II_EMPLOYMENT_NOTE,
-    V1_PROJECT_URLS,
+    PROJECT_URLS,
     candidate_contact_line,
 )
 from manager import build_render_profile
@@ -48,7 +48,6 @@ from manager import build_render_profile
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
-PROMPT_V1_DIR = ROOT / "v1_experimental_flow"
 PROMPT_V2_DIR = ROOT / "v2_experimental_flow"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
@@ -508,8 +507,6 @@ def get_default_nvidia_model_option() -> str:
 
 def normalize_prompt_profile(value: str | None) -> str:
     raw = (value or "").strip().lower()
-    if raw in {"v1", "prompt_v1", "v1_experimental_flow", "experimental", "v1 experimental"}:
-        return "v1"
     if raw in {"v2", "prompt_v2", "v2_experimental_flow", "v2 experimental"}:
         return "v2"
     if raw in {"v3", "prompt_v3", "v3_experimental_flow", "v3 experimental"}:
@@ -518,7 +515,7 @@ def normalize_prompt_profile(value: str | None) -> str:
 
 
 def is_experimental_prompt_profile(value: str | None) -> bool:
-    return normalize_prompt_profile(value) in {"v1", "v2", "v3"}
+    return normalize_prompt_profile(value) in {"v2", "v3"}
 
 
 def prompt_profile_label(profile: str) -> str:
@@ -663,8 +660,6 @@ def call_nvidia_sync(
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v1":
-        return PROMPT_V1_DIR / "prompts"
     if profile == "v2":
         return PROMPT_V2_DIR / "prompts"
     if profile == "v3":
@@ -842,14 +837,14 @@ def validate_json_response(text: str) -> str | None:
     return None
 
 
-def validate_v1_compact_response(text: str) -> str | None:
+def validate_compact_resume_response(text: str) -> str | None:
     json_error = validate_json_response(text)
     if json_error:
         return json_error
     data = extract_json(text)
     lower_keys = {str(key).lower() for key in data}
     if "experience" not in lower_keys and "professional_experience" not in lower_keys:
-        return "V1 JSON must include experience"
+        return "Compact JSON must include experience"
 
     def first_present(*keys: str) -> Any:
         for key in keys:
@@ -859,17 +854,17 @@ def validate_v1_compact_response(text: str) -> str | None:
 
     experience = first_present("experience", "Experience", "professional_experience", "Professional_Experience")
     if not isinstance(experience, list):
-        return "V1 JSON experience must be a list"
+        return "Compact JSON experience must be a list"
     projects = first_present("projects", "Projects")
     if projects is not None and not isinstance(projects, list):
-        return "V1 JSON projects must be a list when present"
+        return "Compact JSON projects must be a list when present"
     skills = first_present("skills", "Skills", "technical_skills", "Technical_Skills")
     if skills is not None and not isinstance(skills, (list, dict, str)):
-        return "V1 JSON skills must be a list, object, or string when present"
+        return "Compact JSON skills must be a list, object, or string when present"
     return None
 
 
-def v1_config_type(value: Any) -> str:
+def compact_config_type(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if raw == "aiml":
         return "aiml"
@@ -878,18 +873,18 @@ def v1_config_type(value: Any) -> str:
     return "backend"
 
 
-def v1_type_label(value: Any) -> str:
-    return {"backend": "Backend", "fullstack": "Fullstack", "aiml": "AIML"}[v1_config_type(value)]
+def compact_type_label(value: Any) -> str:
+    return {"backend": "Backend", "fullstack": "Fullstack", "aiml": "AIML"}[compact_config_type(value)]
 
 
 def experimental_role_label(value: Any) -> str:
-    return v1_type_label(value) if str(value or "").strip() else "Auto"
+    return compact_type_label(value) if str(value or "").strip() else "Auto"
 
 
 def experimental_resume_configuration(inp: ResumeInput) -> str:
     role_type = experimental_role_label(inp.mode)
     explicit_override = role_type if role_type != "Auto" else "None"
-    allowed_projects = ", ".join(sorted(V1_PROJECT_URLS))
+    allowed_projects = ", ".join(sorted(PROJECT_URLS))
     project_names = {
         "bistro": "Bistro AI",
         "evaltrace": "EvalTrace",
@@ -902,7 +897,7 @@ def experimental_resume_configuration(inp: ResumeInput) -> str:
     }
     project_catalog = "\n".join(
         f"- Project ID: {key}\n  Approved project name: {project_names.get(key, key)}\n  Allowed evidence labels: Story 27 through Story 34 when that story names this project"
-        for key in sorted(V1_PROJECT_URLS)
+        for key in sorted(PROJECT_URLS)
     )
     return f"""=== RESUME CONFIGURATION - IMMUTABLE ===
 
@@ -1062,7 +1057,7 @@ def split_skill_terms(value: Any) -> list[str]:
     return terms
 
 
-def v1_model_skills_to_technical_skills(skills: Any) -> dict[str, str]:
+def compact_model_skills_to_technical_skills(skills: Any) -> dict[str, str]:
     if isinstance(skills, list):
         terms = [re.sub(r"\s+", " ", str(item or "")).strip() for item in skills]
         terms = [term for term in terms if term]
@@ -1071,7 +1066,7 @@ def v1_model_skills_to_technical_skills(skills: Any) -> dict[str, str]:
     return {"Skills": ", ".join(terms)} if terms else {}
 
 
-def v1_experience_lock(company: str, title: str) -> dict[str, str]:
+def compact_experience_lock(company: str, title: str) -> dict[str, str]:
     company_key = company.strip().lower()
     title_key = title.strip().lower()
     if "global health impact" in company_key:
@@ -1083,26 +1078,12 @@ def v1_experience_lock(company: str, title: str) -> dict[str, str]:
     return {"location": "", "dates": "", "employment_note": ""}
 
 
-def v1_project_url(name: str) -> str:
+def compact_project_url(name: str) -> str:
     lower = name.lower()
-    for key, url in V1_PROJECT_URLS.items():
+    for key, url in PROJECT_URLS.items():
         if key in lower:
             return url
     return ""
-
-
-def next_month_label(reference: datetime | None = None) -> str:
-    current = reference or datetime.now()
-    year = current.year + (1 if current.month == 12 else 0)
-    month = 1 if current.month == 12 else current.month + 1
-    return datetime(year, month, 1).strftime("%B %Y")
-
-
-def v1_header_location(inp: ResumeInput) -> str:
-    target = str(inp.words or "").strip()
-    if target and target.lower() != CURRENT_LOCATION.lower():
-        return f"{CURRENT_LOCATION} | Moving to {target} in {next_month_label()}; available to move sooner if needed."
-    return CURRENT_LOCATION
 
 
 def v2_header_location(inp: ResumeInput) -> str:
@@ -1112,7 +1093,7 @@ def v2_header_location(inp: ResumeInput) -> str:
     return CURRENT_LOCATION
 
 
-def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v1") -> dict[str, Any]:
+def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v3") -> dict[str, Any]:
     profile = normalize_prompt_profile(prompt_profile)
     jobs: list[dict[str, Any]] = []
     source_experience = (
@@ -1127,7 +1108,7 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
             continue
         title = str(item.get("title") or item.get("Title") or "").strip()
         company = str(item.get("company") or item.get("Company") or "").strip()
-        lock = v1_experience_lock(company, title)
+        lock = compact_experience_lock(company, title)
         jobs.append({
             "title": title,
             "company": company,
@@ -1147,12 +1128,12 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
             "name": name,
             "location": "",
             "dates": "",
-            "github_url": v1_project_url(name),
+            "github_url": compact_project_url(name),
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
         })
 
     config = {
-        "type": v1_config_type(compact.get("type") or compact.get("Type")),
+        "type": compact_config_type(compact.get("type") or compact.get("Type")),
         "level": 3,
         "layout_profile": "mid",
         "output": "",
@@ -1169,27 +1150,11 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
     elif profile in {"v2", "v3"}:
         config["experience_order"] = "json_order"
 
-    header_location = v2_header_location(inp) if profile in {"v2", "v3"} else v1_header_location(inp)
-    binghamton_degree = (
-        "Master of Science, Computer Science, AI Specialization"
-        if profile in {"v2", "v3"}
-        else "M.S. Computer Science, AI Specialization"
-    )
-    gujarat_degree = (
-        "Bachelor of Engineering, Computer Engineering"
-        if profile in {"v2", "v3"}
-        else "B.E. Computer Engineering"
-    )
-    binghamton_university = (
-        "Binghamton University, State University of New York (SUNY)"
-        if profile in {"v2", "v3"}
-        else "Binghamton University, State University of New York"
-    )
-    gujarat_university = (
-        "Gujarat Technological University (GTU)"
-        if profile in {"v2", "v3"}
-        else "Gujarat Technological University"
-    )
+    header_location = v2_header_location(inp)
+    binghamton_degree = "Master of Science, Computer Science, AI Specialization"
+    gujarat_degree = "Bachelor of Engineering, Computer Engineering"
+    binghamton_university = "Binghamton University, State University of New York (SUNY)"
+    gujarat_university = "Gujarat Technological University (GTU)"
 
     return normalize_resume_json({
         "config": config,
@@ -1215,7 +1180,7 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
         ],
         "professional_experience": jobs,
         "projects": projects,
-        "technical_skills": v1_model_skills_to_technical_skills(
+        "technical_skills": compact_model_skills_to_technical_skills(
             compact.get("skills")
             or compact.get("Skills")
             or compact.get("technical_skills")
@@ -1224,11 +1189,11 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
     })
 
 
-def v1_resume_json_to_compact(data: dict[str, Any]) -> dict[str, Any]:
+def resume_json_to_compact(data: dict[str, Any]) -> dict[str, Any]:
     if all(key in data for key in ("type", "experience", "projects", "skills")):
         return data
     return {
-        "type": v1_type_label((data.get("config") or {}).get("type") or data.get("type")),
+        "type": compact_type_label((data.get("config") or {}).get("type") or data.get("type")),
         "experience": [
             {
                 "title": item.get("title", ""),
@@ -1604,16 +1569,15 @@ async def run_pass1(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     if is_experimental_prompt_profile(profile):
-        parts = [read_prompt("prompt_short.md", profile)]
-        if profile in {"v2", "v3"}:
-            parts += [
-                V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
-                "RUN MODE:\nPASS 1 - PLAN ONLY",
-                experimental_resume_configuration(inp),
-            ]
+        parts = [
+            read_prompt("prompt_short.md", profile),
+            V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
+            "RUN MODE:\nPASS 1 - PLAN ONLY",
+            experimental_resume_configuration(inp),
+        ]
         parts += [
             f"JD:\n{inp.jd.strip()}",
-            f"ROLE TYPE:\n{experimental_role_label(inp.mode) if profile in {'v2', 'v3'} else v1_type_label(inp.mode)}",
+            f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
             f"Company:\n{inp.company.strip()}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
@@ -1692,19 +1656,6 @@ async def run_pass2(
             {"role": "assistant", "content": pass1_text.strip()},
             {"role": "user", "content": second_user},
         ]
-    elif is_experimental_prompt_profile(profile):
-        messages = [{
-            "role": "user",
-            "content": "\n\n".join([
-                read_prompt("prompt_short.md", profile),
-                experimental_resume_configuration(inp),
-                f"JD:\n{inp.jd.strip()}",
-                f"ROLE TYPE:\n{v1_type_label(inp.mode)}",
-                f"Company:\n{inp.company.strip()}",
-                f"Location:\n{inp.words.strip()}",
-                "DES (optional):\n" + "\n".join(part for part in (inp.des.strip(), normalized_approval.strip()) if part),
-            ]),
-        }]
     else:
         first_user = "\n\n".join([
             read_prompt("prompt_short.md", profile),
@@ -1782,17 +1733,9 @@ async def run_recruiter_review(
             "",
             "",
             "CURRENT RESUME JSON:",
-            json.dumps(v1_resume_json_to_compact(resume1_json), indent=2),
+            json.dumps(resume_json_to_compact(resume1_json), indent=2),
             "",
             "=== INPUT END ===",
-        ]
-    elif is_experimental_prompt_profile(profile):
-        parts = [
-            "JD:",
-            jd.strip(),
-            "",
-            "Current Resume JSON:",
-            json.dumps(v1_resume_json_to_compact(resume1_json), indent=2),
         ]
     else:
         parts = [

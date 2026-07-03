@@ -48,7 +48,7 @@ from pipeline import (
     save_text,
     slug,
     update_des_facts_file,
-    v1_compact_to_resume_json,
+    compact_to_resume_json,
 )
 
 
@@ -56,8 +56,6 @@ ROOT = Path(__file__).parent
 
 
 def manager_script_for_profile(prompt_profile: str) -> Path:
-    if prompt_profile == "v1":
-        return ROOT / "v1_experimental_flow" / "manager_Updated.py"
     if prompt_profile == "v2":
         return ROOT / "v2_experimental_flow" / "manager_Updated.py"
     if prompt_profile == "v3":
@@ -66,7 +64,7 @@ def manager_script_for_profile(prompt_profile: str) -> Path:
 
 
 def is_experimental_profile(prompt_profile: str) -> bool:
-    return prompt_profile in {"v1", "v2", "v3"}
+    return prompt_profile in {"v2", "v3"}
 
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
@@ -315,17 +313,7 @@ class JobTab(ttk.Frame):
 
     def apply_prompt_profile_view(self) -> None:
         prompt_profile = self.selected_prompt_profile()
-        if prompt_profile == "v1":
-            self.words.field_label.config(text="Location")
-            self.pass1_btn.grid_remove()
-            self.auto_btn.grid_remove()
-            self.final_qa_btn.grid_remove()
-            self.questions_btn.grid_remove()
-            self.json_btn.config(text="Prompt")
-            self.recruiter_btn.config(text="Hotdog")
-            self.approval.master.grid_remove()
-            self.app_questions.master.grid_remove()
-        elif prompt_profile in {"v2", "v3"}:
+        if prompt_profile in {"v2", "v3"}:
             self.words.field_label.config(text="Location")
             self.pass1_btn.grid()
             self.auto_btn.grid_remove()
@@ -850,12 +838,10 @@ class JobTab(ttk.Frame):
             request_dir = self.ensure_request_dir(inp)
             prompt_profile = self.selected_prompt_profile()
             pass1_text = self.pass1_raw or self.text_value(self.output)
-            if prompt_profile != "v1" and not pass1_text:
+            if not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
-            if prompt_profile == "v1":
-                approval = ""
-            elif prompt_profile in {"v2", "v3"}:
+            if prompt_profile in {"v2", "v3"}:
                 approval = approval_raw.strip()
             else:
                 approval = normalize_approval(approval_raw)
@@ -898,7 +884,7 @@ class JobTab(ttk.Frame):
             try:
                 data = extract_json(raw)
                 if is_experimental_profile(prompt_profile):
-                    data = v1_compact_to_resume_json(data, inp, prompt_profile)
+                    data = compact_to_resume_json(data, inp, prompt_profile)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "04_resume_generation_error.txt", str(exc))
@@ -1084,7 +1070,7 @@ class JobTab(ttk.Frame):
             try:
                 data = extract_json(raw)
                 if is_experimental_profile(prompt_profile):
-                    data = v1_compact_to_resume_json(data, inp, prompt_profile)
+                    data = compact_to_resume_json(data, inp, prompt_profile)
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "06_recruiter_review_error.txt", str(exc))

@@ -33,7 +33,7 @@ def valid_resume_response(
     )
 
 
-def valid_v1_compact_response() -> str:
+def valid_compact_response() -> str:
     return (
         "FINAL JSON:\n"
         "```json\n"
@@ -97,70 +97,21 @@ class PromptProfileTests(unittest.TestCase):
     def test_default_prompt_profile_is_v3(self):
         self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "v3")
 
-    def test_prompt_profile_options_resolve_to_stable_v1_v2_and_v3(self):
+    def test_prompt_profile_options_resolve_to_stable_v2_and_v3(self):
         labels = pipeline.prompt_profile_options()
         self.assertEqual(
             {pipeline.resolve_prompt_profile_label(label) for label in labels},
-            {"stable", "v1", "v2", "v3"},
+            {"stable", "v2", "v3"},
         )
         self.assertIn("Stable", labels)
-        self.assertIn("V1", labels)
         self.assertIn("V2", labels)
         self.assertIn("V3", labels)
-        self.assertEqual(pipeline.resolve_prompt_profile_label("v1_experimental_flow"), "v1")
         self.assertEqual(pipeline.resolve_prompt_profile_label("v2_experimental_flow"), "v2")
         self.assertEqual(pipeline.resolve_prompt_profile_label("v3_experimental_flow"), "v3")
         self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
 
-    def test_v1_prompt_uses_prompt_story_and_direct_inputs(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
-            asyncio.run(
-                pipeline.run_pass2(
-                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
-                    pass1_text="",
-                    approval_text="",
-                    prompt_profile="v1",
-                )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("Resume Bullet Writer", system_text)
-        self.assertIn("Career Story Bank", system_text)
-        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
-        self.assertIn("JD:\nBuild APIs", user_text)
-        self.assertIn("ROLE TYPE:\nBackend", user_text)
-        self.assertIn("Company:\nAcme", user_text)
-        self.assertIn("Location:\nBoston, MA", user_text)
-        self.assertIn("DES (optional):\nUse API work", user_text)
-        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
-
-    def test_v1_hotdog_routes_to_hotdog_prompt_with_compact_json(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
-            asyncio.run(
-                pipeline.run_recruiter_review(
-                    jd="Build APIs",
-                    resume1_json={
-                        "config": {"type": "backend"},
-                        "professional_experience": [{"title": "Software Engineer II", "company": "Tata Consultancy Services", "bullets": ["Built Java APIs."]}],
-                        "projects": [],
-                        "technical_skills": {"Backend": "Java, Spring Boot"},
-                    },
-                    company="Acme",
-                    title="Backend Engineer",
-                    prompt_profile="v1",
-                )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("Blind Recruiter Review", system_text)
-        self.assertIn("Current Resume JSON:", user_text)
-        self.assertIn('"experience"', user_text)
-        self.assertNotIn("professional_experience", user_text)
-        self.assertIn("FINAL CHECK", call_mock.await_args.kwargs["label"])
-        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
-
     def test_v2_hotdog_includes_configuration_story_and_current_json(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
             asyncio.run(
                 pipeline.run_recruiter_review(
                     jd="Build APIs",
@@ -214,7 +165,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v2_prompt_uses_v2_prompt_story_and_direct_inputs(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
             asyncio.run(
                 pipeline.run_pass2(
                     pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
@@ -277,8 +228,8 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Application Questions:\nWhy this role?", user_text)
 
     def test_v2_compact_to_resume_json_marks_v2_profile(self):
-        compact = pipeline.extract_json(valid_v1_compact_response())
-        mapped = pipeline.v1_compact_to_resume_json(
+        compact = pipeline.extract_json(valid_compact_response())
+        mapped = pipeline.compact_to_resume_json(
             compact,
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
             "v2",
@@ -291,7 +242,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["education"][1]["degree"], "Bachelor of Engineering, Computer Engineering")
 
     def test_v3_prompt_uses_v3_prompt_story_and_approved_plan_flow(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
             asyncio.run(
                 pipeline.run_pass2(
                     pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
@@ -317,7 +268,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v3_hotdog_uses_v3_story_rules_and_current_json(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
             asyncio.run(
                 pipeline.run_recruiter_review(
                     jd="Build APIs",
@@ -377,8 +328,8 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Job Description:\nBuild Java APIs", user_text)
 
     def test_v3_compact_to_resume_json_marks_v3_profile(self):
-        compact = pipeline.extract_json(valid_v1_compact_response())
-        mapped = pipeline.v1_compact_to_resume_json(
+        compact = pipeline.extract_json(valid_compact_response())
+        mapped = pipeline.compact_to_resume_json(
             compact,
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
             "v3",
@@ -408,7 +359,7 @@ class PromptProfileTests(unittest.TestCase):
             "projects": [],
             "skills": ["Python", "Java"],
         }
-        mapped = pipeline.v1_compact_to_resume_json(
+        mapped = pipeline.compact_to_resume_json(
             compact,
             pipeline.ResumeInput(company="Acme", title="AI Engineer", jd="Build ML systems"),
             "v2",
@@ -417,32 +368,32 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["config"]["experience_order"], "json_order")
         self.assertEqual(mapped["professional_experience"][0]["company"], "Global Health Impact")
 
-    def test_v1_validator_rejects_missing_experience(self):
+    def test_compact_validator_rejects_missing_experience(self):
         bad_response = (
             "```json\n"
             "{\"technical_skills\": {\"row1\": [\"React\", \"TypeScript\"], \"row2\": [\"Java\"]}}\n"
             "```"
         )
-        error = pipeline.validate_v1_compact_response(bad_response)
+        error = pipeline.validate_compact_resume_response(bad_response)
         self.assertIn("include experience", error or "")
 
-    def test_v1_validator_accepts_compact_schema(self):
-        self.assertIsNone(pipeline.validate_v1_compact_response(valid_v1_compact_response()))
+    def test_compact_validator_accepts_compact_schema(self):
+        self.assertIsNone(pipeline.validate_compact_resume_response(valid_compact_response()))
 
-    def test_v1_validator_accepts_compact_schema_without_type(self):
-        response = valid_v1_compact_response().replace("\"type\": \"Backend\", ", "")
-        self.assertIsNone(pipeline.validate_v1_compact_response(response))
+    def test_compact_validator_accepts_compact_schema_without_type(self):
+        response = valid_compact_response().replace("\"type\": \"Backend\", ", "")
+        self.assertIsNone(pipeline.validate_compact_resume_response(response))
 
-    def test_v1_validator_accepts_extra_metadata_and_optional_skills(self):
+    def test_compact_validator_accepts_extra_metadata_and_optional_skills(self):
         response = (
             "```json\n"
             "{\"analysis\": \"ok\", \"experience\": [], \"projects\": [], \"notes\": \"diagnostic\"}\n"
             "```"
         )
-        self.assertIsNone(pipeline.validate_v1_compact_response(response))
+        self.assertIsNone(pipeline.validate_compact_resume_response(response))
 
-    def test_v1_mapper_accepts_professional_experience_shape(self):
-        mapped = pipeline.v1_compact_to_resume_json(
+    def test_compact_mapper_accepts_professional_experience_shape(self):
+        mapped = pipeline.compact_to_resume_json(
             {
                 "professional_experience": [
                     {
@@ -459,22 +410,22 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["professional_experience"][0]["title"], "Software Engineer II")
         self.assertEqual(mapped["technical_skills"], {"Skills": "Java, Spring Boot"})
 
-    def test_v1_compact_to_resume_json_adds_locked_resume_fields(self):
-        compact = pipeline.extract_json(valid_v1_compact_response())
-        mapped = pipeline.v1_compact_to_resume_json(
+    def test_compact_to_resume_json_adds_locked_resume_fields(self):
+        compact = pipeline.extract_json(valid_compact_response())
+        mapped = pipeline.compact_to_resume_json(
             compact,
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA"),
         )
-        self.assertEqual(mapped["config"]["prompt_profile"], "v1")
+        self.assertEqual(mapped["config"]["prompt_profile"], "v3")
         self.assertEqual(mapped["config"]["company"], "Acme")
         self.assertIn("(518) 328-3697", mapped["contact"])
-        self.assertIn(f"Moving to Boston, MA in {pipeline.next_month_label()}; available to move sooner if needed", mapped["location"])
+        self.assertEqual(mapped["location"], "New York, NY | Moving to Boston, MA")
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Dec 2024")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
 
-    def test_v1_resume_location_defaults_to_current_location(self):
-        compact = pipeline.extract_json(valid_v1_compact_response())
-        mapped = pipeline.v1_compact_to_resume_json(
+    def test_compact_resume_location_defaults_to_current_location(self):
+        compact = pipeline.extract_json(valid_compact_response())
+        mapped = pipeline.compact_to_resume_json(
             compact,
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
         )

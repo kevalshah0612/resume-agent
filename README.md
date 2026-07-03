@@ -68,10 +68,9 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 The prompt dropdown is per tab:
 
 - `Stable` uses `main_flow/`; `V3` is the default selected flow.
-- `V1` uses `v1_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
 - `V2` uses `v2_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
 - `V3` uses `v3_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
-- In V1/V2/V3, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
+- In V2/V3, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
 
 LinkedIn outreach is role-specific rather than generic:
 
