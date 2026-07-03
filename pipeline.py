@@ -50,6 +50,7 @@ ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
 PROMPT_V1_DIR = ROOT / "v1_experimental_flow"
 PROMPT_V2_DIR = ROOT / "v2_experimental_flow"
+PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
@@ -87,6 +88,83 @@ Rules:
 - Do not output tables.
 - Do not output final JSON.
 - End with: APPROVAL: Reply Approved: DES 1 to 3, or Approved: 1,2,3, or Confirm with no DES.
+"""
+
+V2_PASS1_COMPACT_INSTRUCTION = """
+V2 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
+Return a compact keyword plan only. Do not print long audits, tables, scratch work, scoring signals, draft bullets, or JSON.
+
+Output exactly these sections:
+
+COVERAGE SNAPSHOT:
+- Plan: <plan id> | <Backend / Fullstack / AIML> | <Entry / Mid / Intern>
+- Minimum in Experience: <X/Y>, <NN%>
+- First-half-page target: <keywords that must appear in Skills plus first Experience Summary/Bullet 2/Bullet 3>
+- Project-only minimums: <comma-separated list or None>
+- Risk: LOW | MEDIUM | HIGH
+
+ORDERED EXPERIENCE TARGETS:
+<Experience ID>:
+Summary: <3 to 6 highest-priority JD keywords or capability terms, highest to lowest>
+Bullet 2: <3 to 6 next JD keywords or capability terms, highest to lowest>
+Bullet 3: <3 to 6 next JD keywords or capability terms, highest to lowest>
+
+PROJECT TARGETS - SUPPLEMENTAL ONLY:
+<canonical Project name>: Bullet 1: <preferred/supplemental proof slice>; Bullet 2: <different proof slice>
+
+DES CANDIDATE BANK:
+DES 1 | scope: <Experience ID or Project ID> | keyword: <exact JD keyword> | story match: <closest evidence or no direct match> | short story: <candidate-confirmable fact, 18 words or fewer> | use when: <why it matters> | approve text: 1
+
+Rules:
+- Keep PASS 1 compact enough to read quickly.
+- Usually create 3 to 8 DES candidates, only for high-value gaps.
+- For both TCS entries, rank each entry's Summary, Bullet 2, and Bullet 3 from strongest JD minimum cluster to lower-priority proof.
+- If a first-page or first-experience keyword needs user confirmation, mark it FIRST EXPERIENCE DES NEEDED.
+- End with: APPROVAL: Reply 1,2 or 1 to 4, optional explanation.
+"""
+
+V3_PASS1_COMPACT_INSTRUCTION = """
+V3 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
+Return a compact keyword plan only. Do not print long audits, tables, scratch work, scoring signals, draft bullets, or JSON.
+
+Output exactly these sections:
+
+TECH KEYWORD LINE:
+- <JD.docx-style comma-separated tech line using current JD terms only>
+
+KEYWORD MAP:
+- <exact JD keyword> | priority: PRIMARY / SECONDARY / SUPPLEMENTAL | status: experience-supported / project-supported / partial / missing | best scope: <Experience ID or Project ID or None> | placement: <Summary/Bullet slot/Skills/Gap> | reason: <why this proves qualification>
+
+MISSING KEYWORD MAP:
+- <exact JD keyword> | status: missing / partial / project-only / lower-experience-only / DES-needed | closest story: <Story ID or None> | safest action: <ask DES / use project / use capability wording / omit> | reason: <why not placed directly in Experience>
+
+COVERAGE SNAPSHOT:
+- Plan: <plan id> | <Backend / Fullstack / AIML> | <Entry / Mid / Intern>
+- Minimum in Experience: <X/Y>, <NN%>
+- First-half-page target: <supported JD keywords planned for Skills plus first Experience Summary/Bullet 1/Bullet 2>
+- Project-only minimums: <comma-separated list or None>
+- Risk: LOW | MEDIUM | HIGH
+
+ORDERED EXPERIENCE TARGETS:
+<Experience ID>:
+Summary: <smallest useful JD terms, usually 2 to 4>
+Bullet 1: <smallest useful JD terms, usually 2 to 4>
+Bullet 2: <smallest useful JD terms, usually 2 to 4>
+
+PROJECT TARGETS - SUPPLEMENTAL ONLY:
+<canonical Project name>: Bullet 1: <preferred/supplemental proof slice>; Bullet 2: <different proof slice>
+
+DES CANDIDATE BANK:
+DES 1 | scope: <Experience ID or Project ID> | keyword: <exact JD keyword> | story match: <closest evidence or no direct match> | short story: <candidate-confirmable fact, 18 words or fewer> | use when: <why it matters> | approve text: 1
+
+Rules:
+- KEYWORD MAP must include every important extracted JD tech keyword, not only placed terms.
+- MISSING KEYWORD MAP must include every important missing, partial, lower-experience-only, or project-only term.
+- Keep PASS 1 compact enough to read quickly.
+- Usually create 3 to 8 DES candidates, only for high-value gaps.
+- For each Experience entry, rank Summary, Bullet 1, and Bullet 2 from strongest JD minimum cluster to lower-priority proof.
+- If a first-page or first-experience keyword needs user confirmation, mark it FIRST EXPERIENCE DES NEEDED in MISSING KEYWORD MAP.
+- End with: APPROVAL: Reply 1,2 or 1 to 8, optional explanation.
 """
 
 PASS2_COMPACT_INSTRUCTION = """
@@ -434,11 +512,13 @@ def normalize_prompt_profile(value: str | None) -> str:
         return "v1"
     if raw in {"v2", "prompt_v2", "v2_experimental_flow", "v2 experimental"}:
         return "v2"
+    if raw in {"v3", "prompt_v3", "v3_experimental_flow", "v3 experimental"}:
+        return "v3"
     return "stable"
 
 
 def is_experimental_prompt_profile(value: str | None) -> bool:
-    return normalize_prompt_profile(value) in {"v1", "v2"}
+    return normalize_prompt_profile(value) in {"v1", "v2", "v3"}
 
 
 def prompt_profile_label(profile: str) -> str:
@@ -587,6 +667,8 @@ def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
         return PROMPT_V1_DIR / "prompts"
     if profile == "v2":
         return PROMPT_V2_DIR / "prompts"
+    if profile == "v3":
+        return PROMPT_V3_DIR / "prompts"
     return PROMPT_DIR
 
 
@@ -606,6 +688,13 @@ def read_prompt_with_fallback(name: str, prompt_profile: str | None = None) -> s
         return read_prompt(name, prompt_profile)
     except FileNotFoundError:
         return read_prompt(name, "stable")
+
+
+def read_resume_rules() -> str:
+    path = ROOT / "rules" / "Rules.md"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
 
 
 def read_final_qa_prompt(name: str) -> str:
@@ -1016,7 +1105,15 @@ def v1_header_location(inp: ResumeInput) -> str:
     return CURRENT_LOCATION
 
 
+def v2_header_location(inp: ResumeInput) -> str:
+    target = str(inp.words or "").strip()
+    if target and target.lower() != CURRENT_LOCATION.lower():
+        return f"{CURRENT_LOCATION} | Moving to {target}"
+    return CURRENT_LOCATION
+
+
 def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v1") -> dict[str, Any]:
+    profile = normalize_prompt_profile(prompt_profile)
     jobs: list[dict[str, Any]] = []
     source_experience = (
         compact.get("experience")
@@ -1063,33 +1160,55 @@ def v1_compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_
         "ta_active": False,
         "company": inp.company,
         "role": inp.title or "Software Engineer",
-        "prompt_profile": normalize_prompt_profile(prompt_profile),
+        "prompt_profile": profile,
     }
     raw_experience_order = str(compact.get("experience_order") or compact.get("Experience_Order") or "").strip().lower()
     normalized_order = raw_experience_order.replace("-", "_").replace(" ", "_")
     if normalized_order in {"tcs", "tcs_first", "ghi", "ghi_first", "json", "json_order"}:
         config["experience_order"] = {"tcs": "tcs_first", "ghi": "ghi_first", "json": "json_order"}.get(normalized_order, normalized_order)
-    elif normalize_prompt_profile(prompt_profile) == "v2":
+    elif profile in {"v2", "v3"}:
         config["experience_order"] = "json_order"
+
+    header_location = v2_header_location(inp) if profile in {"v2", "v3"} else v1_header_location(inp)
+    binghamton_degree = (
+        "Master of Science, Computer Science, AI Specialization"
+        if profile in {"v2", "v3"}
+        else "M.S. Computer Science, AI Specialization"
+    )
+    gujarat_degree = (
+        "Bachelor of Engineering, Computer Engineering"
+        if profile in {"v2", "v3"}
+        else "B.E. Computer Engineering"
+    )
+    binghamton_university = (
+        "Binghamton University, State University of New York (SUNY)"
+        if profile in {"v2", "v3"}
+        else "Binghamton University, State University of New York"
+    )
+    gujarat_university = (
+        "Gujarat Technological University (GTU)"
+        if profile in {"v2", "v3"}
+        else "Gujarat Technological University"
+    )
 
     return normalize_resume_json({
         "config": config,
         "name": CANDIDATE_NAME,
         "contact": candidate_contact_line(),
-        "location": v1_header_location(inp),
+        "location": header_location,
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
         "summary": "",
         "education": [
             {
-                "university": "Binghamton University, State University of New York",
-                "degree": "M.S. Computer Science, AI Specialization",
+                "university": binghamton_university,
+                "degree": binghamton_degree,
                 "location": "Binghamton, NY",
                 "graduation": DEFAULT_BINGHAMTON_GRADUATION,
             },
             {
-                "university": "Gujarat Technological University",
-                "degree": "B.E. Computer Engineering",
+                "university": gujarat_university,
+                "degree": gujarat_degree,
                 "location": "Ahmedabad, India",
                 "graduation": GUJARAT_GRADUATION,
             },
@@ -1486,14 +1605,15 @@ async def run_pass1(
     profile = normalize_prompt_profile(prompt_profile)
     if is_experimental_prompt_profile(profile):
         parts = [read_prompt("prompt_short.md", profile)]
-        if profile == "v2":
+        if profile in {"v2", "v3"}:
             parts += [
+                V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
                 "RUN MODE:\nPASS 1 - PLAN ONLY",
                 experimental_resume_configuration(inp),
             ]
         parts += [
             f"JD:\n{inp.jd.strip()}",
-            f"ROLE TYPE:\n{experimental_role_label(inp.mode) if profile == 'v2' else v1_type_label(inp.mode)}",
+            f"ROLE TYPE:\n{experimental_role_label(inp.mode) if profile in {'v2', 'v3'} else v1_type_label(inp.mode)}",
             f"Company:\n{inp.company.strip()}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
@@ -1511,8 +1631,8 @@ async def run_pass1(
         label=labeled_step(request_label, "PASS 1"),
         max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=None if profile == "v2" else validate_pass1_response,
-        retry_instruction=None if profile == "v2" else (
+        output_validator=None if profile in {"v2", "v3"} else validate_pass1_response,
+        retry_instruction=None if profile in {"v2", "v3"} else (
             NVIDIA_RETRY_INSTRUCTION
             + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
         ),
@@ -1536,9 +1656,10 @@ async def run_pass2(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     normalized_approval = approval_text.strip() if is_experimental_prompt_profile(profile) else normalize_approval(approval_text)
-    if profile == "v2":
+    if profile in {"v2", "v3"}:
         first_user = "\n\n".join([
             read_prompt("prompt_short.md", profile),
+            V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
             "RUN MODE:\nPASS 1 - PLAN ONLY",
             experimental_resume_configuration(inp),
             f"JD:\n{inp.jd.strip()}",
@@ -1546,17 +1667,24 @@ async def run_pass2(
             f"Company:\n{inp.company.strip()}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
+            f"RESUME RULES FROM rules/Rules.md:\n{read_resume_rules()}",
         ])
         second_user = "\n\n".join([
             "RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON",
             "APPROVAL / APPROVED DES:",
-            normalized_approval.strip() or "CONFIRM",
+            normalized_approval.strip() or "Use current evidence only. No DES IDs approved.",
             (
-                "Use the approved PASS 1 plan. If approval says Approved: 1,2 or names DES IDs, "
+                "Use the approved PASS 1 plan. If approval says 1 to 4, 1,2,3, or names DES IDs, "
                 "use the matching PASS 1 DES CANDIDATE BANK lines as current-run DES evidence "
-                "only for their named scopes. If approval is CONFIRM, add no new evidence. "
-                "If approval includes free-form evidence, use it only when the Experience ID or "
-                "Project ID scope is clear. Then write ANALYSIS and the final JSON."
+                "only for their named scopes. If approval includes explanation after the IDs, "
+                "use it as current-run evidence only when it is tied to the approved DES scope "
+                "or a clear Experience ID or Project ID. If no IDs are approved, add no new DES evidence. "
+                "Approved scoped DES should be preserved by hotdog and final repair when it is JD-relevant; "
+                "do not discard it only because it was not originally in Story.md. "
+                "In ANALYSIS, include a compact HOTDOG HANDOFF section that maps each Experience and Project "
+                "bullet slot to its kept JD keywords, source scope, and any safe capability translation used "
+                "from Story.md or approved DES. Keep the handoff concise and do not include draft bullets, "
+                "word counts, or hidden audit math. Then write ANALYSIS and the final JSON."
             ),
         ])
         messages = [
@@ -1618,10 +1746,11 @@ async def run_recruiter_review(
     nvidia_thinking: bool | None = None,
     prompt_profile: str = "stable",
     pass1_audit: str = "",
+    resume_generation_process: str = "",
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v2":
+    if profile in {"v2", "v3"}:
         resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
         parts = [
             experimental_resume_configuration(resume_input),
@@ -1631,8 +1760,20 @@ async def run_recruiter_review(
             "JD:",
             jd.strip(),
             "",
-            "DES (optional):",
+            "CANDIDATE DES INPUT:",
+            resume_input.des.strip(),
+            "",
+            "APPROVAL / APPROVED DES:",
             des.strip(),
+            "",
+            "PASS 1 TARGETS / DES CANDIDATE BANK:",
+            pass1_audit.strip() or "Not provided.",
+            "",
+            "RESUME GENERATION PROCESS / HOTDOG HANDOFF:",
+            resume_generation_process.strip() or "Not provided.",
+            "",
+            "RESUME RULES FROM rules/Rules.md:",
+            read_resume_rules(),
             "",
             "STORY.md:",
             read_prompt("Story.md", profile),

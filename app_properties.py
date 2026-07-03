@@ -50,8 +50,9 @@ PROMPT_PROFILE_LABELS = {
     "stable": "Stable",
     "v1": "V1",
     "v2": "V2",
+    "v3": "V3",
 }
-DEFAULT_PROMPT_PROFILE = "v2"
+DEFAULT_PROMPT_PROFILE = "v3"
 
 
 def candidate_contact_line() -> str:

@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from datetime import datetime
@@ -59,11 +60,13 @@ def manager_script_for_profile(prompt_profile: str) -> Path:
         return ROOT / "v1_experimental_flow" / "manager_Updated.py"
     if prompt_profile == "v2":
         return ROOT / "v2_experimental_flow" / "manager_Updated.py"
+    if prompt_profile == "v3":
+        return ROOT / "v3_experimental_flow" / "manager_Updated.py"
     return ROOT / "manager.py"
 
 
 def is_experimental_profile(prompt_profile: str) -> bool:
-    return prompt_profile in {"v1", "v2"}
+    return prompt_profile in {"v1", "v2", "v3"}
 
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
@@ -83,6 +86,7 @@ REQUEST_FILE_ALIASES = {
     "final_qa_process": ("11_final_qa_process.txt",),
     "final_qa_json": ("12_final_qa_output.json", "18_final_qa_resume.json"),
     "docx_log": ("13_docx_build_log.txt", "06_docx_build.txt"),
+    "docx_ghi_log": ("13_docx_ghi_build_log.txt",),
     "pdf_log": ("14_pdf_archive_log.txt", "07_pdf_archive.txt"),
 }
 
@@ -138,7 +142,7 @@ class JobTab(ttk.Frame):
 
         toolbar = ttk.Frame(self)
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        toolbar.columnconfigure(12, weight=1)
+        toolbar.columnconfigure(13, weight=1)
 
         self.pass1_btn = ttk.Button(toolbar, text="PASS 1", command=self.on_pass1)
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
@@ -154,17 +158,19 @@ class JobTab(ttk.Frame):
         self.questions_btn.grid(row=0, column=5, padx=(0, 6))
         self.docx_btn = ttk.Button(toolbar, text="DOCX", command=self.on_build_docx)
         self.docx_btn.grid(row=0, column=6, padx=(0, 6))
+        self.docx_ghi_btn = ttk.Button(toolbar, text="DOCX+GHI", command=lambda: self.on_build_docx(ghi_first=True))
+        self.docx_ghi_btn.grid(row=0, column=7, padx=(0, 6))
         self.pdf_btn = ttk.Button(toolbar, text="PDF", command=self.on_pdf_archive)
-        self.pdf_btn.grid(row=0, column=7, padx=(0, 6))
+        self.pdf_btn.grid(row=0, column=8, padx=(0, 6))
         self.stop_btn = ttk.Button(toolbar, text="Stop", command=self.on_stop_ai, state="disabled")
-        self.stop_btn.grid(row=0, column=8, padx=(0, 6))
-        ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=9, padx=(0, 6))
-        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=10, padx=(0, 6))
-        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=11, padx=(0, 6))
+        self.stop_btn.grid(row=0, column=9, padx=(0, 6))
+        ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=10, padx=(0, 6))
+        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=11, padx=(0, 6))
+        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=12, padx=(0, 6))
         self.cost_label = ttk.Label(toolbar, text="$0.0000")
-        self.cost_label.grid(row=0, column=13, sticky="e", padx=(8, 8))
+        self.cost_label.grid(row=0, column=14, sticky="e", padx=(8, 8))
         self.status = ttk.Label(toolbar, text="Ready", width=28, anchor="e")
-        self.status.grid(row=0, column=14, sticky="e")
+        self.status.grid(row=0, column=15, sticky="e")
 
         left = ttk.Frame(self)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
@@ -185,12 +191,11 @@ class JobTab(ttk.Frame):
         self.des = self._field_cell(quick_fields, "DES / Existing Evidence", 1, 0, height=2)
         self.approval = self._field_cell(
             quick_fields,
-            "DES Approval: 1 to 6 | 1,2,3 | Confirm",
+            "DES Approval: 1 to 4, optional explanation",
             1,
             1,
             height=2,
         )
-        self.approval.insert("1.0", "Approved: ")
         self.app_questions = self._field_cell(quick_fields, "Application Questions", 1, 2, height=2)
 
         self.jd_title = tk.StringVar(value="Job Description")
@@ -320,7 +325,7 @@ class JobTab(ttk.Frame):
             self.recruiter_btn.config(text="Hotdog")
             self.approval.master.grid_remove()
             self.app_questions.master.grid_remove()
-        elif prompt_profile == "v2":
+        elif prompt_profile in {"v2", "v3"}:
             self.words.field_label.config(text="Location")
             self.pass1_btn.grid()
             self.auto_btn.grid_remove()
@@ -329,9 +334,8 @@ class JobTab(ttk.Frame):
             self.json_btn.config(text="Prompt")
             self.recruiter_btn.config(text="Hotdog")
             self.approval.master.grid()
-            if self.text_value(self.approval).lower() in {"approved:", "approved"}:
+            if self.text_value(self.approval).lower() in {"approved:", "approved", "confirm", "confirm:"}:
                 self.approval.delete("1.0", "end")
-                self.approval.insert("1.0", "CONFIRM")
             self.app_questions.master.grid()
         else:
             self.words.field_label.config(text="Words / Keywords")
@@ -409,6 +413,7 @@ class JobTab(ttk.Frame):
             ("Model Process | Final QA", "final_qa_process"),
             ("Output | Final QA JSON", "final_qa_json"),
             ("Log | DOCX Build", "docx_log"),
+            ("Log | DOCX+GHI Build", "docx_ghi_log"),
             ("Log | PDF Archive", "pdf_log"),
         ]
         choices: list[tuple[str, list[Path]]] = []
@@ -733,6 +738,7 @@ class JobTab(ttk.Frame):
             self.recruiter_btn,
             self.final_qa_btn,
             self.docx_btn,
+            self.docx_ghi_btn,
             self.pdf_btn,
             self.questions_btn,
         ):
@@ -849,10 +855,8 @@ class JobTab(ttk.Frame):
             approval_raw = self.text_value(self.approval)
             if prompt_profile == "v1":
                 approval = ""
-            elif prompt_profile == "v2":
+            elif prompt_profile in {"v2", "v3"}:
                 approval = approval_raw.strip()
-                if not approval:
-                    raise ValueError("Add CONFIRM or approved DES before running Prompt.")
             else:
                 approval = normalize_approval(approval_raw)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
@@ -933,8 +937,8 @@ class JobTab(ttk.Frame):
             numbers = [int(n) for n in re.findall(r"\bDES\s*-?\s*(\d+)\b", pass1_text, flags=re.IGNORECASE)]
         unique = sorted(set(numbers))
         if not unique:
-            return "Confirm"
-        return "Approved: " + ",".join(str(n) for n in unique)
+            return ""
+        return ",".join(str(n) for n in unique)
 
     def on_auto_json(self) -> None:
         try:
@@ -960,7 +964,7 @@ class JobTab(ttk.Frame):
                 prompt_profile=prompt_profile,
             ))
             approval_raw = self.approve_all_des_text(pass1_raw)
-            approval = normalize_approval(approval_raw)
+            approval = approval_raw if prompt_profile in {"v2", "v3"} else normalize_approval(approval_raw)
             pass2_raw = asyncio.run(run_pass2(
                 inp,
                 pass1_raw,
@@ -1047,6 +1051,12 @@ class JobTab(ttk.Frame):
 
         def task():
             events: list[CostEvent] = []
+            resume_process_path = self.existing_request_file("resume_process", request_dir)
+            resume_generation_process = (
+                resume_process_path.read_text(encoding="utf-8")
+                if resume_process_path and resume_process_path.exists()
+                else ""
+            )
             raw = asyncio.run(run_recruiter_review(
                 jd=inp.jd,
                 resume1_json=resume_json,
@@ -1061,6 +1071,7 @@ class JobTab(ttk.Frame):
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
                 pass1_audit=self.pass1_raw,
+                resume_generation_process=resume_generation_process,
                 rejected_response_cb=lambda attempt, text, reason: self.save_rejected_ai_response(
                     request_dir,
                     "06_recruiter_review",
@@ -1323,7 +1334,23 @@ class JobTab(ttk.Frame):
 
         run_bg(self.app, task, done)
 
-    def on_build_docx(self) -> None:
+    def ghi_first_json_copy(self, source_path: Path, temp_dir: Path) -> Path:
+        data = json.loads(source_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("Resume JSON must be a JSON object.")
+
+        cfg = data.get("config")
+        cfg = dict(cfg) if isinstance(cfg, dict) else {}
+        if not cfg.get("type") and data.get("type"):
+            cfg["type"] = data.get("type")
+        cfg["experience_order"] = "ghi_first"
+        data["config"] = cfg
+
+        temp_path = temp_dir / f"{source_path.stem}_ghi_first.json"
+        save_json(temp_path, data)
+        return temp_path
+
+    def on_build_docx(self, ghi_first: bool = False) -> None:
         if not self.final_json_path or not self.final_json_path.exists():
             path = filedialog.askopenfilename(
                 title="Choose final resume JSON",
@@ -1340,17 +1367,22 @@ class JobTab(ttk.Frame):
         if not manager_script.exists():
             messagebox.showerror("Build DOCX failed", f"Renderer not found: {manager_script}", parent=self)
             return
-        self.set_busy(True, "Building DOCX...")
+        self.set_busy(True, "Building DOCX+GHI..." if ghi_first else "Building DOCX...")
 
         def task():
-            result = subprocess.run(
-                [sys.executable, str(manager_script), str(self.final_json_path), company],
-                cwd=str(ROOT),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
+            with tempfile.TemporaryDirectory(prefix="resume_docx_") as tmp:
+                json_path = self.final_json_path
+                if ghi_first:
+                    json_path = self.ghi_first_json_copy(self.final_json_path, Path(tmp))
+
+                result = subprocess.run(
+                    [sys.executable, str(manager_script), str(json_path), company],
+                    cwd=str(ROOT),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                )
             if result.returncode != 0:
                 raise RuntimeError(result.stderr or result.stdout)
             docx_path = WORD_DIR / f"{RESUME_STEM}_{slug(company)}_Resume.docx"
@@ -1362,15 +1394,16 @@ class JobTab(ttk.Frame):
             return result.stdout, docx_path
 
         def done(result, err):
-            self.set_busy(False, "DOCX ready" if not err else "DOCX failed")
+            label = "DOCX+GHI" if ghi_first else "DOCX"
+            self.set_busy(False, f"{label} ready" if not err else f"{label} failed")
             if err:
                 messagebox.showerror("Build DOCX failed", str(err), parent=self)
                 return
             stdout, path = result
             self.docx_path = path
             if self.request_dir:
-                save_text(self.request_file("docx_log"), stdout)
-            self.show_output("DOCX Build", stdout)
+                save_text(self.request_file("docx_ghi_log" if ghi_first else "docx_log"), stdout)
+            self.show_output(f"{label} Build", stdout)
             open_path(path)
 
         run_bg(self.app, task, done)
@@ -1470,7 +1503,7 @@ class JobTab(ttk.Frame):
         self.mode_value = ""
 
         approval_path = self.existing_request_file("approval", request_dir)
-        approval = "Approved: "
+        approval = ""
         if approval_path:
             approval = approval_path.read_text(encoding="utf-8").split("\n\nNormalized:", 1)[0].strip()
         replace(self.approval, approval)
@@ -1541,7 +1574,6 @@ class JobTab(ttk.Frame):
         self.title_text.delete("1.0", "end")
         self.title_text.insert("1.0", "Software Engineer")
         self.mode_value = ""
-        self.approval.insert("1.0", "Approved: ")
         self.request_dir = None
         self.final_json_path = None
         self.recruiter_json_path = None

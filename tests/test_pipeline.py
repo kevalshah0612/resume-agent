@@ -94,20 +94,22 @@ class LinkedinMessageTests(unittest.TestCase):
 
 
 class PromptProfileTests(unittest.TestCase):
-    def test_default_prompt_profile_is_v2(self):
-        self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "v2")
+    def test_default_prompt_profile_is_v3(self):
+        self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "v3")
 
-    def test_prompt_profile_options_resolve_to_stable_v1_and_v2(self):
+    def test_prompt_profile_options_resolve_to_stable_v1_v2_and_v3(self):
         labels = pipeline.prompt_profile_options()
         self.assertEqual(
             {pipeline.resolve_prompt_profile_label(label) for label in labels},
-            {"stable", "v1", "v2"},
+            {"stable", "v1", "v2", "v3"},
         )
         self.assertIn("Stable", labels)
         self.assertIn("V1", labels)
         self.assertIn("V2", labels)
+        self.assertIn("V3", labels)
         self.assertEqual(pipeline.resolve_prompt_profile_label("v1_experimental_flow"), "v1")
         self.assertEqual(pipeline.resolve_prompt_profile_label("v2_experimental_flow"), "v2")
+        self.assertEqual(pipeline.resolve_prompt_profile_label("v3_experimental_flow"), "v3")
         self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
 
     def test_v1_prompt_uses_prompt_story_and_direct_inputs(self):
@@ -173,6 +175,8 @@ class PromptProfileTests(unittest.TestCase):
                     des="Use API work",
                     inp=pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
                     prompt_profile="v2",
+                    pass1_audit="ORDERED EXPERIENCE TARGETS:\ntcs_se_ii:\nSummary: backend APIs",
+                    resume_generation_process="HOTDOG HANDOFF:\n- tcs_se_ii B1: keywords=backend APIs; source=Story 01; translation=None",
                 )
             )
         system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
@@ -181,7 +185,12 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
         self.assertIn("=== INPUT START ===", user_text)
         self.assertIn("JD:\nBuild APIs", user_text)
-        self.assertIn("DES (optional):\nUse API work", user_text)
+        self.assertIn("CANDIDATE DES INPUT:\nUse API work", user_text)
+        self.assertIn("APPROVAL / APPROVED DES:\nUse API work", user_text)
+        self.assertIn("PASS 1 TARGETS / DES CANDIDATE BANK:", user_text)
+        self.assertIn("ORDERED EXPERIENCE TARGETS", user_text)
+        self.assertIn("RESUME GENERATION PROCESS / HOTDOG HANDOFF:", user_text)
+        self.assertIn("keywords=backend APIs", user_text)
         self.assertIn("STORY.md:\n# Story.md", user_text)
         self.assertIn("PROJECT BANK:", user_text)
         self.assertIn("CURRENT RESUME JSON:", user_text)
@@ -224,7 +233,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON", messages[2]["content"])
         self.assertIn("CONFIRM", messages[2]["content"])
         self.assertIn("DES CANDIDATE BANK", messages[2]["content"])
-        self.assertIn("Approved: 1,2", messages[2]["content"])
+        self.assertIn("HOTDOG HANDOFF", messages[2]["content"])
         self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
         self.assertIn("JD:\nBuild APIs", user_text)
         self.assertIn("ROLE TYPE:\nAuto", user_text)
@@ -276,6 +285,110 @@ class PromptProfileTests(unittest.TestCase):
         )
         self.assertEqual(mapped["config"]["prompt_profile"], "v2")
         self.assertEqual(mapped["config"]["experience_order"], "json_order")
+        self.assertEqual(mapped["education"][0]["university"], "Binghamton University, State University of New York (SUNY)")
+        self.assertEqual(mapped["education"][0]["degree"], "Master of Science, Computer Science, AI Specialization")
+        self.assertEqual(mapped["education"][1]["university"], "Gujarat Technological University (GTU)")
+        self.assertEqual(mapped["education"][1]["degree"], "Bachelor of Engineering, Computer Engineering")
+
+    def test_v3_prompt_uses_v3_prompt_story_and_approved_plan_flow(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_pass2(
+                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
+                    pass1_text="COVERAGE SNAPSHOT\n- Plan: Backend",
+                    approval_text="1,2",
+                    prompt_profile="v3",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        messages = call_mock.await_args.kwargs["messages"]
+        user_text = messages[0]["content"]
+        self.assertIn("V3 Resume Qualification System", system_text)
+        self.assertIn("V3 Story.md - Compact Evidence Bank", system_text)
+        self.assertIn("V3 PASS 1 OUTPUT OVERRIDE", user_text)
+        self.assertIn("KEYWORD MAP:", user_text)
+        self.assertIn("MISSING KEYWORD MAP:", user_text)
+        self.assertIn("RUN MODE:\nPASS 1 - PLAN ONLY", user_text)
+        self.assertEqual(messages[1]["role"], "assistant")
+        self.assertIn("COVERAGE SNAPSHOT", messages[1]["content"])
+        self.assertIn("RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON", messages[2]["content"])
+        self.assertIn("1,2", messages[2]["content"])
+        self.assertIn("HOTDOG HANDOFF", messages[2]["content"])
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
+    def test_v3_hotdog_uses_v3_story_rules_and_current_json(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_v1_compact_response())) as call_mock:
+            asyncio.run(
+                pipeline.run_recruiter_review(
+                    jd="Build APIs",
+                    resume1_json={
+                        "config": {"type": "backend", "prompt_profile": "v3"},
+                        "professional_experience": [{"title": "Software Engineer II", "company": "Tata Consultancy Services", "bullets": ["Designed Java APIs."]}],
+                        "projects": [],
+                        "technical_skills": {"Backend": "Java, Spring Boot"},
+                    },
+                    company="Acme",
+                    title="Backend Engineer",
+                    des="1,2",
+                    inp=pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
+                    prompt_profile="v3",
+                    pass1_audit="ORDERED EXPERIENCE TARGETS:\nTCS-BACKEND-DATA-WORKFLOW:\nSummary: Java, APIs",
+                    resume_generation_process="HOTDOG HANDOFF:\n- TCS B1: keywords=Java, APIs; source=TCS-BACKEND-DATA-WORKFLOW",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("V3 Hotdog Review and Repair", system_text)
+        self.assertIn("STORY.md:\n# V3 Story.md - Compact Evidence Bank", user_text)
+        self.assertIn("RESUME RULES FROM rules/Rules.md:", user_text)
+        self.assertIn("CURRENT RESUME JSON:", user_text)
+        self.assertIn('"experience"', user_text)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
+    def test_v3_questions_use_v3_prompt_with_jd_questions_and_final_json(self):
+        resume_json = {
+            "config": {"prompt_profile": "v3"},
+            "professional_experience": [
+                {
+                    "title": "Software Engineer II",
+                    "company": "Tata Consultancy Services",
+                    "bullets": ["Designed Java API workflows for stakeholders."],
+                }
+            ],
+            "projects": [],
+            "technical_skills": {"Skills": "Java, Spring Boot"},
+        }
+        with patch("pipeline.call_model", new=AsyncMock(return_value="1. Why this role?\nThis role matches my Java API experience.")) as call_mock:
+            asyncio.run(
+                pipeline.run_application_answers(
+                    company="Acme",
+                    title="Backend Engineer",
+                    jd="Build Java APIs",
+                    questions="Why this role?",
+                    resume_json=resume_json,
+                    prompt_profile="v3",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("V3 Application Questions Prompt", system_text)
+        self.assertIn("Prompt Profile: v3", user_text)
+        self.assertIn("Candidate Resume JSON:", user_text)
+        self.assertIn("Job Description:\nBuild Java APIs", user_text)
+
+    def test_v3_compact_to_resume_json_marks_v3_profile(self):
+        compact = pipeline.extract_json(valid_v1_compact_response())
+        mapped = pipeline.v1_compact_to_resume_json(
+            compact,
+            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
+            "v3",
+        )
+        self.assertEqual(mapped["config"]["prompt_profile"], "v3")
+        self.assertEqual(mapped["config"]["experience_order"], "json_order")
+        self.assertEqual(mapped["education"][0]["university"], "Binghamton University, State University of New York (SUNY)")
+        self.assertEqual(mapped["education"][0]["degree"], "Master of Science, Computer Science, AI Specialization")
+        self.assertEqual(mapped["education"][1]["university"], "Gujarat Technological University (GTU)")
+        self.assertEqual(mapped["education"][1]["degree"], "Bachelor of Engineering, Computer Engineering")
 
     def test_v2_compact_to_resume_json_preserves_ghi_first_for_docx(self):
         compact = {
