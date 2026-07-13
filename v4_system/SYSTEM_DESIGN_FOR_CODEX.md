@@ -57,6 +57,18 @@ This is four stages and five prompt files because Experience and Project writing
 The Mapper is the only DES gate. Validator/Repair returns only `valid` or
 `repaired` and never creates a late user pause.
 
+## Auxiliary prompts
+
+Auxiliary actions are separate from the four-stage resume-generation contract:
+
+- `linkedin.md` generates the recruiter message, hiring-manager message, and
+  four LinkedIn search strings from the current JD and final V4 resume JSON.
+- `questions.md` answers application questions using the final resume JSON as
+  the factual boundary. It is an exact copy of the V3 questions contract.
+
+These prompts start fresh calls and are never loaded into JD Analyzer, Mapper,
+Writer, or Validator context.
+
 ## DOCX and PDF rendering
 
 Document rendering is a deterministic post-processing step and does not add a model call.

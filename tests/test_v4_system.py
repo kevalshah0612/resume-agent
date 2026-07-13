@@ -121,6 +121,7 @@ class V4CanonicalSystemTests(unittest.TestCase):
             "story.md",
             "approved_des_evidence.json",
             *config["prompt_paths"].values(),
+            *config["auxiliary_prompt_paths"].values(),
             *config["output_schema_paths"].values(),
         ]
         for relative in required:
@@ -129,6 +130,50 @@ class V4CanonicalSystemTests(unittest.TestCase):
         design = (runtime.V4_ROOT / "SYSTEM_DESIGN_FOR_CODEX.md").read_text(encoding="utf-8")
         self.assertIn("prompts/01_JD_Analyzer.md", design)
         self.assertIn("legacy one-step V4 file", design)
+
+    def test_v4_questions_are_exact_v3_copy_and_linkedin_is_separate(self):
+        v3_questions = (
+            runtime.V4_ROOT.parent / "v3_experimental_flow" / "prompts" / "questions.md"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(
+            v3_questions,
+            (runtime.V4_ROOT / "questions.md").read_text(encoding="utf-8"),
+        )
+        linkedin = (runtime.V4_ROOT / "linkedin.md").read_text(encoding="utf-8")
+        self.assertIn("RECRUITER LINKEDIN MESSAGE", linkedin)
+        self.assertIn("HIRING MANAGER LINKEDIN MESSAGE", linkedin)
+        self.assertIn("RECRUITER/HM SEARCH STRINGS", linkedin)
+
+    def test_v4_recruiter_action_uses_standalone_linkedin_prompt(self):
+        captured = {}
+
+        async def fake_call_model(**kwargs):
+            captured.update(kwargs)
+            return "RECRUITER LINKEDIN MESSAGE\nReady"
+
+        resume_input = pipeline.ResumeInput(
+            company="Acme",
+            title="Software Engineer",
+            jd="Build React.js applications.",
+            words="New York, NY",
+        )
+        with patch("pipeline.call_model", new=fake_call_model):
+            result = asyncio.run(pipeline.run_recruiter_review(
+                jd=resume_input.jd,
+                resume1_json={"summary": "Built React.js applications."},
+                company=resume_input.company,
+                title=resume_input.title,
+                inp=resume_input,
+                prompt_profile="v4",
+            ))
+
+        self.assertEqual("RECRUITER LINKEDIN MESSAGE\nReady", result)
+        self.assertIn("V4 LinkedIn Outreach", captured["system_blocks"][0]["text"])
+        user_text = captured["messages"][0]["content"]
+        self.assertIn("Acme", user_text)
+        self.assertIn("Software Engineer", user_text)
+        self.assertIn("Build React.js applications.", user_text)
+        self.assertIsNone(captured["output_validator"])
 
     def test_all_five_schemas_are_valid_and_jd_has_bucket_two_without_error_branch(self):
         config = runtime.read_json(runtime.V4_ROOT / "system_config.json")

@@ -8,6 +8,10 @@
     "project_writer": "prompts/04_Project_Writer.md",
     "validator_repair": "prompts/05_Validator_Repair.md"
   },
+  "auxiliary_prompt_paths": {
+    "linkedin_outreach": "linkedin.md",
+    "application_questions": "questions.md"
+  },
   "output_schema_paths": {
     "jd_analyzer": "schemas/01_jd_analyzer.schema.json",
     "story_mapper": "schemas/02_story_mapper.schema.json",

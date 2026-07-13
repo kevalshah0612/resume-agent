@@ -48,6 +48,14 @@
       "source": "candidate_des_approval",
       "note": "",
       "approved_at": "2026-07-13T17:02:24.568023+00:00"
+    },
+    {
+      "keyword": "Go",
+      "story_id": "TCS-II-05",
+      "confidence": 1.0,
+      "source": "candidate_des_approval",
+      "note": "not used",
+      "approved_at": "2026-07-13T17:38:57.587833+00:00"
     }
   ]
 }

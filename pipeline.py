@@ -2216,6 +2216,8 @@ def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
 
 def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v4":
+        return [cached_text_block(read_prompt("linkedin.md", profile))]
     if profile == "v3":
         return [
             cached_text_block(read_prompt("prompt.md", profile)),
@@ -2536,7 +2538,25 @@ async def run_recruiter_review(
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v3":
+    if profile == "v4":
+        resume_input = inp or ResumeInput(company=company, title=title, jd=jd)
+        parts = [
+            "TARGET COMPANY:",
+            (resume_input.company or company).strip(),
+            "",
+            "EXACT TARGET TITLE:",
+            (resume_input.title or title).strip(),
+            "",
+            "TARGET LOCATION:",
+            resume_input.words.strip() or "Not provided.",
+            "",
+            "JOB DESCRIPTION:",
+            (resume_input.jd or jd).strip(),
+            "",
+            "FINAL V4 RESUME JSON:",
+            json.dumps(resume1_json, ensure_ascii=False, indent=2),
+        ]
+    elif profile == "v3":
         resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
         if not resume_input.company.strip():
             resume_input.company = company
@@ -2625,9 +2645,14 @@ async def run_recruiter_review(
     return await call_model(
         system_blocks=recruiter_system(profile),
         messages=[{"role": "user", "content": "\n".join(parts)}],
-        label=labeled_step(request_label, "FINAL CHECK" if is_experimental_prompt_profile(profile) else "RECRUITER REVIEW"),
+        label=labeled_step(
+            request_label,
+            "LINKEDIN OUTREACH" if profile == "v4"
+            else "FINAL CHECK" if is_experimental_prompt_profile(profile)
+            else "RECRUITER REVIEW",
+        ),
         cost_cb=cost_cb,
-        output_validator=None if profile in {"v2", "v3"} else validate_json_response,
+        output_validator=None if profile in {"v2", "v3", "v4"} else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,

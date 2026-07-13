@@ -1412,6 +1412,8 @@ class JobTab(ttk.Frame):
             ))
             save_text(self.request_file("recruiter_process", request_dir), raw)
             self.refresh_combined_02_to_07(request_dir)
+            if prompt_profile == "v4":
+                return raw, None, events, ""
             try:
                 data = extract_json(raw)
                 if is_experimental_profile(prompt_profile):
@@ -1425,7 +1427,11 @@ class JobTab(ttk.Frame):
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            ready_message = "Final check JSON ready" if is_experimental_profile(prompt_profile) else "Recruiter JSON ready"
+            ready_message = (
+                "LinkedIn outreach ready" if prompt_profile == "v4"
+                else "Final check JSON ready" if is_experimental_profile(prompt_profile)
+                else "Recruiter JSON ready"
+            )
             failed_message = "Final check failed" if is_experimental_profile(prompt_profile) else "Recruiter call failed"
             self.set_busy(False, ready_message if not err else failed_message)
             if err:
@@ -1441,6 +1447,9 @@ class JobTab(ttk.Frame):
                 fallback = "Final check JSON is ready." if is_experimental_profile(prompt_profile) else "Recruiter JSON is ready."
                 self.show_output(title, self.response_summary(raw) or fallback)
             self.add_cost_events(events)
+            if prompt_profile == "v4":
+                self.set_stage("V4 LinkedIn outreach ready")
+                return
             if parse_error:
                 self.set_stage("Final check raw response saved; JSON not extracted" if is_experimental_profile(prompt_profile) else "Recruiter raw response saved; JSON not extracted")
                 return
