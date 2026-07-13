@@ -1,0 +1,86 @@
+{
+  "schema_version": "candidate_profile_v1",
+  "candidate": {
+    "name": "Keval Shah",
+    "location": "New York, NY",
+    "phone": "(518) 328-3697",
+    "email": "keval.shah098@gmail.com",
+    "contact_line": "(518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612",
+    "linkedin_url": "https://www.linkedin.com/in/keval-shah0612",
+    "github_url": "https://github.com/kevalshah0612"
+  },
+  "experience": [
+    {
+      "role_id": "TA",
+      "resume_output_id": "TA",
+      "title": "Teaching Assistant",
+      "company": "Binghamton University",
+      "location": "Binghamton, NY",
+      "dates": "Aug 2025 - Present",
+      "current": true,
+      "employment_note": ""
+    },
+    {
+      "role_id": "GHI",
+      "resume_output_id": "GHI",
+      "title": "Software Engineering Intern",
+      "company": "Global Health Impact",
+      "location": "New York, NY",
+      "dates": "May 2025 - Jun 2025",
+      "current": false,
+      "employment_note": ""
+    },
+    {
+      "role_id": "TCS_SWE_II",
+      "resume_output_id": "TCS-SWE-II",
+      "title": "Software Engineer II",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Oct 2022 - Dec 2024",
+      "current": false,
+      "employment_note": ""
+    },
+    {
+      "role_id": "TCS_SWE_I",
+      "resume_output_id": "TCS-SWE",
+      "title": "Software Engineer I",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Mar 2021 - Sep 2022",
+      "current": false,
+      "employment_note": ""
+    },
+    {
+      "role_id": "TCS_COMBINED",
+      "resume_output_id": "TCS-COMBINED",
+      "source_role_ids": ["TCS_SWE_I", "TCS_SWE_II"],
+      "title": "Software Engineer II",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Mar 2021 - Dec 2024",
+      "current": false,
+      "employment_note": ""
+    }
+  ],
+  "education": [
+    {
+      "university": "Binghamton University, State University of New York (SUNY)",
+      "degree": "Master of Science, Computer Science, AI Specialization",
+      "location": "Binghamton, NY",
+      "graduation": "Expected Aug 2026"
+    },
+    {
+      "university": "Gujarat Technological University (GTU)",
+      "degree": "Bachelor of Engineering, Computer Engineering",
+      "location": "Ahmedabad, India",
+      "graduation": "Graduated Sep 2020"
+    }
+  ],
+  "locked_rules": {
+    "do_not_name_confidential_client": true,
+    "allowed_generic_client_description": "U.S.-based client",
+    "do_not_infer_resignation": true,
+    "do_not_show_sabbatical_note_unless_requested": true,
+    "do_not_change_dates_titles_companies_or_locations": true
+  }
+}

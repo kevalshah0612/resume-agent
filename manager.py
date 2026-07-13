@@ -290,6 +290,7 @@ def get_projects(data: dict) -> list:
 
 
 def get_skills_rows(data: dict) -> list[tuple[str, str]]:
+    """Return compact skill rows for either grouped or flat JSON schemas."""
     if isinstance(data.get("skills"), dict):
         rows = []
         s = data["skills"]
@@ -304,7 +305,50 @@ def get_skills_rows(data: dict) -> list[tuple[str, str]]:
         return rows
 
     skills = data.get("technical_skills") or {}
-    return [(clean(k), clean(v)) for k, v in skills.items() if clean(k) and clean(v)]
+    if isinstance(skills, list):
+        rows = []
+        flat_terms = []
+        for item in skills:
+            if isinstance(item, dict):
+                label = clean(item.get("category") or item.get("label") or item.get("name") or item.get("title") or "")
+                terms = item.get("skills") or item.get("terms") or item.get("items") or []
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                label = clean(item[0])
+                terms = item[1]
+            else:
+                flat_terms.append(clean(item))
+                continue
+
+            if isinstance(terms, list):
+                terms = ", ".join(clean(term) for term in terms if clean(term))
+            terms = clean(terms)
+            if label and terms:
+                rows.append((label, terms))
+        if rows:
+            return rows
+        terms = ", ".join(term for term in flat_terms if term)
+        return [("", terms)] if terms else []
+
+    if isinstance(skills, dict):
+        flat_skills = skills.get("skills")
+        if isinstance(flat_skills, list):
+            terms = ", ".join(clean(item) for item in flat_skills if clean(item))
+            return [("", terms)] if terms else []
+        if isinstance(flat_skills, str):
+            terms = clean(flat_skills)
+            return [("", terms)] if terms else []
+
+        rows = []
+        for label, terms in skills.items():
+            if isinstance(terms, list):
+                terms = ", ".join(clean(item) for item in terms if clean(item))
+            label = clean(label)
+            terms = clean(terms)
+            if label and terms:
+                rows.append((label, terms))
+        return rows
+
+    return []
 
 
 def get_project_tech(project: dict) -> str:
@@ -314,9 +358,46 @@ def get_project_tech(project: dict) -> str:
     return clean(tech)
 
 
+def experience_identity(job: dict) -> str:
+    job_id = clean(job.get("id") or job.get("ID"))
+    title = clean(job.get("title") or job.get("Title")).lower()
+    company = clean(job.get("company") or job.get("Company")).lower()
+    if job_id:
+        return job_id
+    if "binghamton university" in company or "teaching assistant" in title:
+        return "TA"
+    if "global health impact" in company:
+        return "GHI"
+    if "tata consultancy services" in company and "ii" in title:
+        return "TCS-SWE-II"
+    if "tata consultancy services" in company:
+        return "TCS-SWE"
+    return ""
+
+
+def normalize_experience_order_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [clean(item) for item in value if clean(item)]
+
+
 def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list:
     jobs = get_jobs(data)
-    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+    order_value = data.get("experience_order") or config(data).get("experience_order")
+    explicit_order = normalize_experience_order_list(order_value)
+    if explicit_order:
+        aliases = {
+            re.sub(r"[^a-z0-9]+", "", item.lower()): index
+            for index, item in enumerate(explicit_order)
+        }
+        return sorted(
+            jobs,
+            key=lambda job: aliases.get(
+                re.sub(r"[^a-z0-9]+", "", experience_identity(job).lower()),
+                len(aliases),
+            ),
+        )
+    order = clean(order_value or "").lower().replace("-", "_").replace(" ", "_")
     if order == "json":
         order = "json_order"
     if order == "tcs":
@@ -345,7 +426,10 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
 
 
 def experience_order_label(data: dict, level: int, layout_profile: str = "") -> str:
-    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+    order_value = data.get("experience_order") or config(data).get("experience_order")
+    if normalize_experience_order_list(order_value):
+        return "JSON order"
+    order = clean(order_value or "").lower().replace("-", "_").replace(" ", "_")
     if order in {"json", "json_order"}:
         return "JSON order"
     if order in {"ghi", "ghi_first"}:
@@ -372,6 +456,27 @@ def bool_value(value: Any, default: bool = False) -> bool:
     return default
 
 
+def normalize_section_order(value: Any) -> list[str]:
+    aliases = {
+        "summary": "summary",
+        "technicalskills": "skills",
+        "skills": "skills",
+        "education": "education",
+        "projects": "projects",
+        "project": "projects",
+        "professionalexperience": "experience",
+        "experience": "experience",
+    }
+    raw_items = value if isinstance(value, list) else clean(value).split(",")
+    order: list[str] = []
+    for item in raw_items:
+        key = re.sub(r"[^a-z0-9]+", "", clean(item).lower())
+        canonical = aliases.get(key)
+        if canonical and canonical not in order:
+            order.append(canonical)
+    return order
+
+
 def build_render_profile(data: dict) -> dict[str, Any]:
     """Describe the exact content order the DOCX renderer will use."""
     cfg = config(data)
@@ -379,7 +484,7 @@ def build_render_profile(data: dict) -> dict[str, Any]:
     level = normalize_level(cfg.get("level", 3))
     layout_profile = normalize_layout_profile(cfg.get("layout_profile", ""), rtype, level)
     conf = CONFIGS[(rtype, level)]
-    configured_sections = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+    configured_sections = normalize_section_order(cfg.get("section_order") or data.get("section_order")) or LAYOUT_ORDERS.get(layout_profile, conf["order"])
 
     present = {
         "summary": bool(clean(data.get("summary", ""))),
@@ -935,7 +1040,7 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
         fail(f"Unsupported type/level: {rtype}, {level}")
 
     conf = CONFIGS[(rtype, level)]
-    section_order = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+    section_order = normalize_section_order(cfg.get("section_order") or data.get("section_order")) or LAYOUT_ORDERS.get(layout_profile, conf["order"])
     company = company_override or clean(cfg.get("company", ""))
 
     if company_override:

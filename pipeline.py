@@ -50,6 +50,7 @@ ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
 PROMPT_V2_DIR = ROOT / "v2_experimental_flow"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
+PROMPT_V4_DIR = ROOT / "v4_system"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
@@ -58,9 +59,18 @@ ENV_FILE = ROOT / ".env"
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 DEFAULT_NVIDIA_MAX_ATTEMPTS = 5
-DEFAULT_NVIDIA_REASONING_BUDGET = 49152
+DEFAULT_NVIDIA_MAX_CONCURRENT_REQUESTS = 2
+DEFAULT_NVIDIA_TEMPERATURE = 1.0
+DEFAULT_NVIDIA_TOP_P = 0.95
+DEFAULT_NVIDIA_SEED = 42
+DEFAULT_NVIDIA_VALIDATOR_SEED = 43
+DEFAULT_NVIDIA_REASONING_BUDGET = 32768
+DEFAULT_RESPONSE_MAX_TOKENS = 65536
 
 _log_cb = None
+_nvidia_gate_lock = threading.Lock()
+_nvidia_gate: threading.BoundedSemaphore | None = None
+_nvidia_gate_limit: int | None = None
 
 PROMPT_PROFILES = dict(PROMPT_PROFILE_LABELS)
 
@@ -120,50 +130,6 @@ Rules:
 - For both TCS entries, rank each entry's Summary, Bullet 2, and Bullet 3 from strongest JD minimum cluster to lower-priority proof.
 - If a first-page or first-experience keyword needs user confirmation, mark it FIRST EXPERIENCE DES NEEDED.
 - End with: APPROVAL: Reply 1,2 or 1 to 4, optional explanation.
-"""
-
-V3_PASS1_COMPACT_INSTRUCTION = """
-V3 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
-Return a compact keyword plan only. Do not print long audits, tables, scratch work, scoring signals, draft bullets, or JSON.
-
-Output exactly these sections:
-
-TECH KEYWORD LINE:
-- <JD.docx-style comma-separated tech line using current JD terms only>
-
-KEYWORD MAP:
-- <exact JD keyword> | priority: PRIMARY / SECONDARY / SUPPLEMENTAL | status: experience-supported / project-supported / partial / missing | best scope: <Experience ID or Project ID or None> | placement: <Summary/Bullet slot/Skills/Gap> | reason: <why this proves qualification>
-
-MISSING KEYWORD MAP:
-- <exact JD keyword> | status: missing / partial / project-only / lower-experience-only / DES-needed | closest story: <Story ID or None> | safest action: <ask DES / use project / use capability wording / omit> | reason: <why not placed directly in Experience>
-
-COVERAGE SNAPSHOT:
-- Plan: <plan id> | <Backend / Fullstack / AIML> | <Entry / Mid / Intern>
-- Minimum in Experience: <X/Y>, <NN%>
-- First-half-page target: <supported JD keywords planned for Skills plus first Experience Summary/Bullet 1/Bullet 2>
-- Project-only minimums: <comma-separated list or None>
-- Risk: LOW | MEDIUM | HIGH
-
-ORDERED EXPERIENCE TARGETS:
-<Experience ID>:
-Summary: <smallest useful JD terms, usually 2 to 4>
-Bullet 1: <smallest useful JD terms, usually 2 to 4>
-Bullet 2: <smallest useful JD terms, usually 2 to 4>
-
-PROJECT TARGETS - SUPPLEMENTAL ONLY:
-<canonical Project name>: Bullet 1: <preferred/supplemental proof slice>; Bullet 2: <different proof slice>
-
-DES CANDIDATE BANK:
-DES 1 | scope: <Experience ID or Project ID> | keyword: <exact JD keyword> | story match: <closest evidence or no direct match> | short story: <candidate-confirmable fact, 18 words or fewer> | use when: <why it matters> | approve text: 1
-
-Rules:
-- KEYWORD MAP must include every important extracted JD tech keyword, not only placed terms.
-- MISSING KEYWORD MAP must include every important missing, partial, lower-experience-only, or project-only term.
-- Keep PASS 1 compact enough to read quickly.
-- Usually create 3 to 8 DES candidates, only for high-value gaps.
-- For each Experience entry, rank Summary, Bullet 1, and Bullet 2 from strongest JD minimum cluster to lower-priority proof.
-- If a first-page or first-experience keyword needs user confirmation, mark it FIRST EXPERIENCE DES NEEDED in MISSING KEYWORD MAP.
-- End with: APPROVAL: Reply 1,2 or 1 to 8, optional explanation.
 """
 
 PASS2_COMPACT_INSTRUCTION = """
@@ -297,8 +263,11 @@ class NvidiaResponse:
 class NvidiaModelSpec:
     display_name: str
     model_id: str
-    thinking_key: str
+    thinking_key: str | None
     stream: bool
+
+    def thinking_options(self) -> tuple[bool, ...]:
+        return (True, False) if self.thinking_key else (False,)
 
 
 NVIDIA_MODEL_SPECS = (
@@ -312,6 +281,12 @@ NVIDIA_MODEL_SPECS = (
         display_name="DS",
         model_id="deepseek-ai/deepseek-v4-pro",
         thinking_key="thinking",
+        stream=False,
+    ),
+    NvidiaModelSpec(
+        display_name="Minimax",
+        model_id="minimaxai/minimax-m3",
+        thinking_key=None,
         stream=False,
     ),
 )
@@ -349,6 +324,7 @@ MODEL_PRICING_PER_MTOK = {
     "claude-haiku-4-5": {"input": 1.0, "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
     "nvidia/nemotron-3-ultra-550b-a55b": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
     "deepseek-ai/deepseek-v4-pro": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
+    "minimaxai/minimax-m3": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
 }
 
 
@@ -380,9 +356,19 @@ def load_config() -> dict[str, Any]:
         "NVIDIA_API_KEY": "nvidia_api_key",
         "NVIDIA_MODEL": "model_nvidia",
         "NVIDIA_THINKING": "nvidia_thinking",
+        "NVIDIA_MEDIUM_EFFORT": "nvidia_medium_effort",
+        "NVIDIA_TEMPERATURE": "nvidia_temperature",
+        "NVIDIA_TOP_P": "nvidia_top_p",
+        "NVIDIA_SEED": "nvidia_seed",
+        "NVIDIA_STREAM": "nvidia_stream",
+        "NVIDIA_REASONING_BUDGET": "nvidia_reasoning_budget",
         "NVIDIA_BASE_URL": "nvidia_base_url",
         "NVIDIA_MAX_ATTEMPTS": "nvidia_max_attempts",
-        "NVIDIA_REASONING_BUDGET": "nvidia_reasoning_budget",
+        "NVIDIA_MAX_CONCURRENT_REQUESTS": "nvidia_max_concurrent_requests",
+        "NVIDIA_GUIDED_JSON": "nvidia_guided_json",
+        "NVIDIA_VALIDATION_PASS": "nvidia_validation_pass",
+        "NVIDIA_VALIDATOR_SEED": "nvidia_validator_seed",
+        "RESPONSE_MAX_TOKENS": "response_max_tokens",
         "FALLBACK_TO_ANTHROPIC": "fallback_to_anthropic",
         "ANTHROPIC_API_KEY": "anthropic_api_key",
     }
@@ -408,24 +394,92 @@ def config_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(parsed, maximum))
 
 
+def config_positive_int(value: Any, default: int, minimum: int = 1) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, parsed)
+
+
+def config_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
+
+
 def get_nvidia_max_attempts() -> int:
     cfg = load_config()
     return config_int(cfg.get("nvidia_max_attempts"), DEFAULT_NVIDIA_MAX_ATTEMPTS, 1, 10)
 
 
-def get_nvidia_reasoning_budget() -> int:
+def get_nvidia_max_concurrent_requests() -> int:
     cfg = load_config()
-    configured = config_int(
-        cfg.get("nvidia_reasoning_budget"),
-        DEFAULT_NVIDIA_REASONING_BUDGET,
-        0,
-        49152,
+    return config_int(
+        cfg.get("nvidia_max_concurrent_requests"),
+        DEFAULT_NVIDIA_MAX_CONCURRENT_REQUESTS,
+        1,
+        32,
     )
-    return configured
+
+
+def nvidia_request_gate() -> threading.BoundedSemaphore:
+    global _nvidia_gate, _nvidia_gate_limit
+    limit = get_nvidia_max_concurrent_requests()
+    with _nvidia_gate_lock:
+        if _nvidia_gate is None or _nvidia_gate_limit != limit:
+            _nvidia_gate = threading.BoundedSemaphore(limit)
+            _nvidia_gate_limit = limit
+        return _nvidia_gate
+
+
+def get_response_max_tokens() -> int:
+    return config_positive_int(
+        load_config().get("response_max_tokens"),
+        DEFAULT_RESPONSE_MAX_TOKENS,
+    )
 
 
 def get_nvidia_thinking() -> bool:
     return config_bool(load_config().get("nvidia_thinking"), True)
+
+
+def get_nvidia_medium_effort() -> bool:
+    return config_bool(load_config().get("nvidia_medium_effort"), False)
+
+
+def get_nvidia_temperature() -> float:
+    return config_float(load_config().get("nvidia_temperature"), DEFAULT_NVIDIA_TEMPERATURE, 0.0, 1.0)
+
+
+def get_nvidia_top_p() -> float:
+    return config_float(load_config().get("nvidia_top_p"), DEFAULT_NVIDIA_TOP_P, 0.0, 1.0)
+
+
+def get_nvidia_seed() -> int:
+    return config_int(load_config().get("nvidia_seed"), DEFAULT_NVIDIA_SEED, 0, 2_147_483_647)
+
+
+def get_nvidia_validator_seed() -> int:
+    return config_int(load_config().get("nvidia_validator_seed"), DEFAULT_NVIDIA_VALIDATOR_SEED, 0, 2_147_483_647)
+
+
+def get_nvidia_stream() -> bool:
+    return config_bool(load_config().get("nvidia_stream"), False)
+
+
+def get_nvidia_reasoning_budget() -> int:
+    return config_int(load_config().get("nvidia_reasoning_budget"), DEFAULT_NVIDIA_REASONING_BUDGET, 0, 32768)
+
+
+def get_nvidia_guided_json() -> bool:
+    return config_bool(load_config().get("nvidia_guided_json"), True)
+
+
+def get_nvidia_validation_pass() -> bool:
+    return config_bool(load_config().get("nvidia_validation_pass"), True)
 
 
 def get_client() -> anthropic.AsyncAnthropic:
@@ -479,6 +533,8 @@ def get_nvidia_model_spec(model: str) -> NvidiaModelSpec:
 
 def nvidia_model_option_label(model: str, thinking: bool) -> str:
     spec = get_nvidia_model_spec(model)
+    if not spec.thinking_key:
+        return spec.display_name
     return f"{spec.display_name}-{'on' if thinking else 'off'}"
 
 
@@ -486,13 +542,13 @@ def nvidia_model_options() -> list[str]:
     return [
         nvidia_model_option_label(spec.model_id, thinking)
         for spec in NVIDIA_MODEL_SPECS
-        for thinking in (True, False)
+        for thinking in spec.thinking_options()
     ]
 
 
 def resolve_nvidia_model_option(label: str) -> tuple[str, bool]:
     for spec in NVIDIA_MODEL_SPECS:
-        for thinking in (True, False):
+        for thinking in spec.thinking_options():
             if label == nvidia_model_option_label(spec.model_id, thinking):
                 return spec.model_id, thinking
     return get_nvidia_model(), get_nvidia_thinking()
@@ -511,6 +567,8 @@ def normalize_prompt_profile(value: str | None) -> str:
         return "v2"
     if raw in {"v3", "prompt_v3", "v3_experimental_flow", "v3 experimental"}:
         return "v3"
+    if raw in {"v4", "prompt_v4", "v4_system", "v4 system"}:
+        return "v4"
     return "stable"
 
 
@@ -581,6 +639,67 @@ def openai_messages(system_blocks: list[dict[str, Any]], messages: list[dict[str
     return result
 
 
+def build_nvidia_request_payload(
+    *,
+    system_blocks: list[dict[str, Any]],
+    messages: list[dict[str, str]],
+    model: str,
+    thinking: bool,
+    max_tokens: int,
+    seed_override: int | None = None,
+    guided_json_schema: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    spec = get_nvidia_model_spec(model)
+    extra_body: dict[str, Any] = {}
+    if spec.thinking_key:
+        extra_body["chat_template_kwargs"] = {spec.thinking_key: thinking}
+    if model == DEFAULT_NVIDIA_MODEL:
+        if get_nvidia_medium_effort():
+            extra_body.setdefault("chat_template_kwargs", {})["medium_effort"] = True
+        if thinking:
+            budget = min(get_nvidia_reasoning_budget(), max(0, max_tokens - 1))
+            if budget:
+                extra_body["reasoning_budget"] = budget
+    if guided_json_schema:
+        extra_body["nvext"] = {"guided_json": guided_json_schema}
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": openai_messages(system_blocks, messages),
+        "temperature": get_nvidia_temperature(),
+        "top_p": get_nvidia_top_p(),
+        "seed": get_nvidia_seed() if seed_override is None else seed_override,
+        "max_tokens": max_tokens,
+        "stream": get_nvidia_stream(),
+    }
+    if extra_body:
+        payload["extra_body"] = extra_body
+    return payload
+
+
+def sanitize_nvidia_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    sanitized = copy.deepcopy(payload)
+    sanitized["messages"] = [
+        {
+            "role": message.get("role", ""),
+            "content": f"<omitted {len(str(message.get('content', '')))} characters>",
+        }
+        for message in payload.get("messages", [])
+    ]
+    return sanitized
+
+
+def is_retryable_nvidia_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code in {408, 409, 425, 429} or (isinstance(status_code, int) and status_code >= 500):
+        return True
+    name = type(exc).__name__.lower()
+    module = type(exc).__module__.lower()
+    retryable_names = ("timeout", "connection", "ratelimit", "apierror", "internalserver")
+    return any(token in name for token in retryable_names) or (
+        module.startswith("openai") and "error" in name and status_code not in {400, 401, 403, 404, 422}
+    )
+
+
 def call_nvidia_sync(
     *,
     system_blocks: list[dict[str, Any]],
@@ -588,74 +707,90 @@ def call_nvidia_sync(
     model: str,
     thinking: bool,
     max_tokens: int,
+    seed_override: int | None = None,
+    guided_json_schema: dict[str, Any] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> NvidiaResponse:
     raise_if_cancelled(cancel_event)
     client = get_nvidia_client()
-    spec = get_nvidia_model_spec(model)
-    extra_body: dict[str, Any] = {
-        "chat_template_kwargs": {spec.thinking_key: thinking},
-    }
-    if thinking and spec.model_id == "nvidia/nemotron-3-ultra-550b-a55b":
-        extra_body["reasoning_budget"] = get_nvidia_reasoning_budget()
-    completion = client.chat.completions.create(
+    payload = build_nvidia_request_payload(
+        system_blocks=system_blocks,
+        messages=messages,
         model=model,
-        messages=openai_messages(system_blocks, messages),
-        temperature=1,
-        top_p=0.95,
+        thinking=thinking,
         max_tokens=max_tokens,
-        extra_body=extra_body,
-        stream=spec.stream,
+        seed_override=seed_override,
+        guided_json_schema=guided_json_schema,
     )
+    stream = bool(payload["stream"])
+    gate = nvidia_request_gate()
+    while not gate.acquire(timeout=0.25):
+        raise_if_cancelled(cancel_event)
+    try:
+        completion = client.chat.completions.create(**payload)
+    except Exception:
+        gate.release()
+        raise
     usage_data = {
         "input_tokens": 0,
         "output_tokens": 0,
         "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0,
+        "reasoning_tokens": 0,
     }
 
-    if not spec.stream:
-        raise_if_cancelled(cancel_event)
-        usage = getattr(completion, "usage", None)
-        if usage is not None:
-            usage_data["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
-            usage_data["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
-        choice = completion.choices[0]
-        return NvidiaResponse(
-            text=(getattr(choice.message, "content", None) or "").strip(),
-            usage=usage_data,
-            finish_reason=str(getattr(choice, "finish_reason", "") or ""),
-        )
+    if not stream:
+        try:
+            raise_if_cancelled(cancel_event)
+            usage = getattr(completion, "usage", None)
+            if usage is not None:
+                usage_data["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+                usage_data["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+                details = getattr(usage, "completion_tokens_details", None)
+                usage_data["reasoning_tokens"] = int(getattr(details, "reasoning_tokens", 0) or 0)
+            choice = completion.choices[0]
+            return NvidiaResponse(
+                text=(getattr(choice.message, "content", None) or "").strip(),
+                usage=usage_data,
+                finish_reason=str(getattr(choice, "finish_reason", "") or ""),
+            )
+        finally:
+            gate.release()
 
     parts: list[str] = []
     finish_reason = ""
-    for chunk in completion:
-        if cancel_event and cancel_event.is_set():
-            close_stream = getattr(completion, "close", None)
-            if callable(close_stream):
-                try:
-                    close_stream()
-                except Exception:
-                    pass
-            raise OperationCancelled("Operation stopped by user.")
-        usage = getattr(chunk, "usage", None)
-        if usage is not None:
-            usage_data["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
-            usage_data["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
-        if not chunk.choices:
-            continue
-        choice = chunk.choices[0]
-        chunk_finish_reason = getattr(choice, "finish_reason", None)
-        if chunk_finish_reason:
-            finish_reason = str(chunk_finish_reason)
-        content = getattr(choice.delta, "content", None)
-        if content is not None:
-            parts.append(content)
-    return NvidiaResponse(
-        text="".join(parts).strip(),
-        usage=usage_data,
-        finish_reason=finish_reason,
-    )
+    try:
+        for chunk in completion:
+            if cancel_event and cancel_event.is_set():
+                close_stream = getattr(completion, "close", None)
+                if callable(close_stream):
+                    try:
+                        close_stream()
+                    except Exception:
+                        pass
+                raise OperationCancelled("Operation stopped by user.")
+            usage = getattr(chunk, "usage", None)
+            if usage is not None:
+                usage_data["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+                usage_data["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+                details = getattr(usage, "completion_tokens_details", None)
+                usage_data["reasoning_tokens"] = int(getattr(details, "reasoning_tokens", 0) or 0)
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            chunk_finish_reason = getattr(choice, "finish_reason", None)
+            if chunk_finish_reason:
+                finish_reason = str(chunk_finish_reason)
+            content = getattr(choice.delta, "content", None)
+            if content is not None:
+                parts.append(content)
+        return NvidiaResponse(
+            text="".join(parts).strip(),
+            usage=usage_data,
+            finish_reason=finish_reason,
+        )
+    finally:
+        gate.release()
 
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
@@ -664,6 +799,8 @@ def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
         return PROMPT_V2_DIR / "prompts"
     if profile == "v3":
         return PROMPT_V3_DIR / "prompts"
+    if profile == "v4":
+        return PROMPT_V4_DIR
     return PROMPT_DIR
 
 
@@ -686,10 +823,10 @@ def read_prompt_with_fallback(name: str, prompt_profile: str | None = None) -> s
 
 
 def read_resume_rules() -> str:
-    path = ROOT / "rules" / "Rules.md"
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
+    for path in (ROOT / "local" / "rules" / "Rules.md", ROOT / "rules" / "Rules.md"):
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return ""
 
 
 def read_final_qa_prompt(name: str) -> str:
@@ -877,13 +1014,148 @@ def compact_type_label(value: Any) -> str:
     return {"backend": "Backend", "fullstack": "Fullstack", "aiml": "AIML"}[compact_config_type(value)]
 
 
+def compact_level_config(value: Any) -> tuple[int, str]:
+    raw = str(value or "").strip().lower()
+    if raw in {"newgrad", "new grad", "new-grad", "campus", "campus-hire", "campushire", "student"}:
+        return 2, "student_entry"
+    if raw in {"entry", "entry-level", "intern", "internship", "2", "4"}:
+        return 2, "professional_entry"
+    return 3, "mid"
+
+
+def compact_strategy_type(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"newgrad", "new grad", "new-grad", "campus", "campus-hire", "campushire", "student"}:
+        return "NewGrad"
+    if raw in {"mid", "production-first", "production_first", "tcs-first", "tcs_first"}:
+        return "Mid"
+    return "Entry"
+
+
+def compact_strategy_level(value: Any) -> tuple[int, str]:
+    return compact_level_config(compact_strategy_type(value))
+
+
+def normalize_experience_order_value(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    if "," in raw:
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    normalized = raw.lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"tcs", "tcs_first", "professional_first", "mid", "production_first"}:
+        return ["TCS-SWE-II", "TCS-SWE", "GHI", "TA"]
+    if normalized in {"ghi", "ghi_first", "internship_first", "entry", "chronological"}:
+        return ["TA", "GHI", "TCS-SWE-II", "TCS-SWE"]
+    return []
+
+
+def experience_order_rank(order: list[str]) -> dict[str, int]:
+    aliases: dict[str, str] = {
+        "ta": "TA",
+        "teachingassistant": "TA",
+        "binghamtonuniversity": "TA",
+        "ghi": "GHI",
+        "globalhealthimpact": "GHI",
+        "tcssweii": "TCS-SWE-II",
+        "softwareengineerii": "TCS-SWE-II",
+        "tcsii": "TCS-SWE-II",
+        "tcsswe": "TCS-SWE",
+        "softwareengineer": "TCS-SWE",
+        "tcs": "TCS-SWE",
+    }
+    rank: dict[str, int] = {}
+    for index, item in enumerate(order):
+        key = re.sub(r"[^a-z0-9]+", "", item.lower())
+        canonical = aliases.get(key, item)
+        rank[canonical] = index
+    return rank
+
+
+def experience_identity(job: dict[str, Any]) -> str:
+    job_id = str(job.get("id") or job.get("ID") or "").strip()
+    title = str(job.get("title") or job.get("Title") or "").strip().lower()
+    company = str(job.get("company") or job.get("Company") or "").strip().lower()
+    if job_id:
+        return job_id
+    if "binghamton university" in company or "teaching assistant" in title:
+        return "TA"
+    if "global health impact" in company:
+        return "GHI"
+    if "tata consultancy services" in company and "ii" in title:
+        return "TCS-SWE-II"
+    if "tata consultancy services" in company:
+        return "TCS-SWE"
+    return ""
+
+
+def strategy_from_order(order: list[str], fallback: Any = "") -> str:
+    explicit = compact_strategy_type(fallback)
+    if explicit == "NewGrad":
+        return explicit
+    normalized = [re.sub(r"[^a-z0-9]+", "", item.lower()) for item in order]
+    if normalized[:4] == ["tcssweii", "tcsswe", "ghi", "ta"]:
+        return "Mid"
+    if normalized[:4] == ["ta", "ghi", "tcssweii", "tcsswe"]:
+        return "Entry"
+    return explicit
+
+
+def canonical_strategy_section_order(strategy_type: str) -> list[str]:
+    if strategy_type == "NewGrad":
+        return ["summary", "technical_skills", "education", "projects", "professional_experience"]
+    if strategy_type == "Mid":
+        return ["summary", "technical_skills", "professional_experience", "projects", "education"]
+    return ["summary", "technical_skills", "professional_experience", "education", "projects"]
+
+
+def canonical_strategy_experience_order(strategy_type: str) -> list[str]:
+    if strategy_type == "Mid":
+        return ["TCS-SWE-II", "TCS-SWE", "GHI", "TA"]
+    return ["TA", "GHI", "TCS-SWE-II", "TCS-SWE"]
+
+
+def normalize_section_order_value(value: Any) -> list[str]:
+    aliases = {
+        "summary": "summary",
+        "technicalskills": "technical_skills",
+        "skills": "technical_skills",
+        "education": "education",
+        "projects": "projects",
+        "project": "projects",
+        "professionalexperience": "professional_experience",
+        "experience": "professional_experience",
+    }
+    raw_items = value if isinstance(value, list) else str(value or "").split(",")
+    order: list[str] = []
+    for item in raw_items:
+        key = re.sub(r"[^a-z0-9]+", "", str(item).lower())
+        canonical = aliases.get(key)
+        if canonical and canonical not in order:
+            order.append(canonical)
+    return order
+
+
 def experimental_role_label(value: Any) -> str:
     return compact_type_label(value) if str(value or "").strip() else "Auto"
 
 
-def experimental_resume_configuration(inp: ResumeInput) -> str:
+def experimental_level_label(inp: ResumeInput) -> str:
+    jd_title = f"{inp.title}\n{inp.jd}".lower()
+    if re.search(r"\b(mid|senior|sr\.?|staff|lead|principal)\b", jd_title):
+        return "mid"
+    if re.search(r"\b(intern|internship|co-op|coop|new grad|entry[- ]level|university grad|early career)\b", jd_title):
+        return "entry"
+    return "auto"
+
+
+def experimental_resume_configuration(inp: ResumeInput, prompt_profile: str | None = None) -> str:
+    profile = normalize_prompt_profile(prompt_profile)
     role_type = experimental_role_label(inp.mode)
     explicit_override = role_type if role_type != "Auto" else "None"
+    level = experimental_level_label(inp)
     allowed_projects = ", ".join(sorted(PROJECT_URLS))
     project_names = {
         "bistro": "Bistro AI",
@@ -899,6 +1171,149 @@ def experimental_resume_configuration(inp: ResumeInput) -> str:
         f"- Project ID: {key}\n  Approved project name: {project_names.get(key, key)}\n  Allowed evidence labels: Story 27 through Story 34 when that story names this project"
         for key in sorted(PROJECT_URLS)
     )
+    if profile == "v3":
+        return f"""=== RESUME CONFIGURATION - IMMUTABLE ===
+
+RESUME_STRUCTURE:
+{{
+  "type_allowed": ["Backend", "Fullstack", "AIML"],
+  "level_allowed": ["entry", "mid"],
+  "requested_type": "{role_type}",
+  "requested_level": "{level}",
+  "summary_policy": {{
+    "entry": "omit unless configured",
+    "mid": "include 25-35 words"
+  }},
+  "experience": [
+    {{
+      "id": "TA",
+      "include": true,
+      "required": true,
+      "title": "Teaching Assistant",
+      "company": "Binghamton University",
+      "location": "Binghamton, NY",
+      "dates": "Aug 2025 - Present",
+      "bullet_count": 2,
+      "allowed_evidence_labels": ["EDU-TA-CODE-REVIEW"]
+    }},
+    {{
+      "id": "GHI",
+      "include": true,
+      "title": "Software Engineering Intern",
+      "company": "Global Health Impact",
+      "location": "New York, NY",
+      "dates": "Jun 2025 - Aug 2025",
+      "bullet_count": 3,
+      "allowed_evidence_labels": ["GHI-*"]
+    }},
+    {{
+      "id": "TCS",
+      "include": true,
+      "title": "Software Engineer II",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Mar 2021 - Dec 2024",
+      "bullet_count": 5,
+      "allowed_evidence_labels": ["TCS*"]
+    }}
+  ],
+  "projects": {{
+    "count": 2,
+    "bullet_count_each": 1,
+    "allowed_project_ids": [{", ".join(json.dumps(key) for key in sorted(PROJECT_URLS))}],
+    "selection_rule": "Select the two configured projects that best cover JD gaps or strongest role evidence."
+  }},
+  "technical_skills": {{
+    "format": "grouped category rows",
+    "json_shape": "[[\"Category\", [\"skill\", \"skill\"]]]",
+    "max_categories": 5,
+    "max_skills_per_category": 6,
+    "source_rule": "JD-relevant and traceable to Story.md, final bullets, or approved DES"
+  }}
+}}
+
+FINAL_RESUME_JSON_TEMPLATE:
+{{
+  "type": "<Backend | Fullstack | AIML>",
+  "level": "<entry | mid>",
+  "summary": "<include only when level is mid or configuration requires it>",
+  "experience": [
+    {{
+      "id": "TA",
+      "title": "Teaching Assistant",
+      "company": "Binghamton University",
+      "location": "Binghamton, NY",
+      "dates": "Aug 2025 - Present",
+      "bullets": ["<bullet 1>", "<bullet 2>"]
+    }},
+    {{
+      "id": "GHI",
+      "title": "Software Engineering Intern",
+      "company": "Global Health Impact",
+      "location": "New York, NY",
+      "dates": "Jun 2025 - Aug 2025",
+      "bullets": ["<bullet 1>", "<bullet 2>", "<bullet 3>"]
+    }},
+    {{
+      "id": "TCS",
+      "title": "Software Engineer II",
+      "company": "Tata Consultancy Services",
+      "location": "Gandhinagar, India",
+      "dates": "Mar 2021 - Dec 2024",
+      "bullets": ["<bullet 1>", "<bullet 2>", "<bullet 3>", "<bullet 4>", "<bullet 5>"]
+    }}
+  ],
+  "projects": [
+    {{"name": "<selected configured project>", "bullets": ["<one project bullet>"]}},
+    {{"name": "<selected configured project>", "bullets": ["<one project bullet>"]}}
+  ],
+  "technical_skills": [
+    ["<Category>", ["<skill>", "<skill>"]]
+  ]
+}}
+
+CANDIDATE EXPERIENCE CATALOG
+- Experience ID: TA
+  Canonical title: Teaching Assistant
+  Company: Binghamton University
+  Location: Binghamton, NY
+  Dates: Aug 2025 - Present
+  Allowed evidence labels: EDU-TA-CODE-REVIEW
+- Experience ID: GHI
+  Canonical title: Software Engineering Intern
+  Company: Global Health Impact
+  Location: New York, NY
+  Dates: Jun 2025 - Aug 2025
+  Allowed evidence labels: GHI evidence cards in Story.md
+- Experience ID: TCS
+  Canonical title: Software Engineer II
+  Company: Tata Consultancy Services
+  Location: Gandhinagar, India
+  Dates: Mar 2021 - Dec 2024
+  Allowed evidence labels: TCS evidence cards in Story.md
+
+PROJECT CATALOG
+{project_catalog}
+
+ROUTING PRIORITY
+- Requested role type: {role_type}
+- Requested level: {level}
+- Plan selection order: AIML when the JD candidate criteria explicitly require AI, ML, LLM, model, inference, evaluation, or data science; otherwise Fullstack when the JD candidate criteria explicitly require frontend plus backend; otherwise Backend.
+- Fallback type: Backend
+- Fallback level: mid unless the JD/title clearly says entry, new grad, internship, co-op, or early career.
+- Any explicit type override: {explicit_override}
+
+OUTPUT RULES
+- Top-level JSON keys: type, level, optional summary, experience, projects, technical_skills.
+- Experience order follows RESUME_STRUCTURE.
+- TA is an experience row only when included; never write TA under Education.
+- GHI has 3 bullets.
+- TCS has exactly 5 bullets unless configuration overrides.
+- Projects: exactly 2 projects, 1 bullet each.
+- Skills: grouped into at most 5 category rows with at most 6 skills per row; compact, JD-relevant, evidence-traceable.
+
+=== END RESUME CONFIGURATION ==="""
+
     return f"""=== RESUME CONFIGURATION - IMMUTABLE ===
 
 CANDIDATE EXPERIENCE CATALOG
@@ -1057,18 +1472,108 @@ def split_skill_terms(value: Any) -> list[str]:
     return terms
 
 
-def compact_model_skills_to_technical_skills(skills: Any) -> dict[str, str]:
+def compact_model_skills_to_technical_skills(skills: Any) -> list[list[Any]]:
+    def rows_to_skill_array(rows: dict[str, str]) -> list[list[Any]]:
+        return [[label, split_skill_terms(terms)] for label, terms in rows.items()]
+
+    def parse_category_string(value: str) -> dict[str, str]:
+        text = re.sub(r"\s+", " ", value or "").strip()
+        matches = list(re.finditer(r"(?:^|,\s*)([^,:]{1,50}):\s*", text))
+        if not matches:
+            return {}
+        rows: dict[str, str] = {}
+        for index, match in enumerate(matches):
+            if len(rows) >= 5:
+                break
+            label = re.sub(r"\s+", " ", match.group(1)).strip()
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            terms = text[start:end].strip(" ,")
+            add_category(rows, label, terms)
+        return rows
+
+    def clean_skill_terms(value: Any) -> list[str]:
+        if isinstance(value, list):
+            raw_terms: list[Any] = []
+            for item in value:
+                if isinstance(item, (list, tuple)):
+                    raw_terms.extend(item)
+                else:
+                    raw_terms.append(item)
+        else:
+            raw_terms = split_skill_terms(value)
+        terms: list[str] = []
+        seen: set[str] = set()
+        for item in raw_terms:
+            cleaned = re.sub(r"\s+", " ", str(item or "")).strip()
+            key = cleaned.lower()
+            if cleaned and key not in seen:
+                terms.append(cleaned)
+                seen.add(key)
+        return terms
+
+    def add_category(rows: dict[str, str], label: Any, value: Any) -> None:
+        if len(rows) >= 5:
+            return
+        category = re.sub(r"\s+", " ", str(label or "")).strip()
+        if not category or category.lower() in {"skills", "technical skills"}:
+            category = "Skills"
+        terms = clean_skill_terms(value)[:6]
+        if terms:
+            rows[category] = ", ".join(terms)
+
+    if isinstance(skills, str):
+        rows = parse_category_string(skills)
+        if rows:
+            return rows_to_skill_array(rows)
+
+    if isinstance(skills, dict):
+        rows: dict[str, str] = {}
+        for index in range(1, 6):
+            label = skills.get(f"row{index}_label")
+            terms = skills.get(f"row{index}_terms")
+            if label or terms:
+                add_category(rows, label, terms)
+        if rows:
+            return rows_to_skill_array(rows)
+
+        for label, terms in skills.items():
+            add_category(rows, label, terms)
+        if rows:
+            return rows_to_skill_array(rows)
+
+    if isinstance(skills, list) and any(isinstance(item, dict) for item in skills):
+        rows = {}
+        for item in skills:
+            if not isinstance(item, dict):
+                continue
+            label = item.get("category") or item.get("label") or item.get("name") or item.get("title")
+            terms = item.get("skills") or item.get("terms") or item.get("items")
+            add_category(rows, label, terms)
+        if rows:
+            return rows_to_skill_array(rows)
+
+    if isinstance(skills, list) and any(isinstance(item, (list, tuple)) for item in skills):
+        rows = {}
+        for item in skills:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            add_category(rows, item[0], item[1])
+        if rows:
+            return rows_to_skill_array(rows)
+
     if isinstance(skills, list):
-        terms = [re.sub(r"\s+", " ", str(item or "")).strip() for item in skills]
-        terms = [term for term in terms if term]
+        terms = clean_skill_terms(skills)
     else:
         terms = split_skill_terms(skills)
-    return {"Skills": ", ".join(terms)} if terms else {}
+    return [["Skills", terms[:6]]] if terms else []
 
 
 def compact_experience_lock(company: str, title: str) -> dict[str, str]:
     company_key = company.strip().lower()
     title_key = title.strip().lower()
+    if "binghamton university" in company_key or "teaching assistant" in title_key:
+        return {"location": "Binghamton, NY", "dates": "Aug 2025 - Present", "employment_note": ""}
     if "global health impact" in company_key:
         return {"location": "New York, NY", "dates": "Jun 2025 - Aug 2025", "employment_note": GHI_EMPLOYMENT_NOTE}
     if "tata consultancy services" in company_key and "ii" in title_key:
@@ -1080,8 +1585,10 @@ def compact_experience_lock(company: str, title: str) -> dict[str, str]:
 
 def compact_project_url(name: str) -> str:
     lower = name.lower()
+    normalized = re.sub(r"[^a-z0-9]+", "", lower)
     for key, url in PROJECT_URLS.items():
-        if key in lower:
+        normalized_key = re.sub(r"[^a-z0-9]+", "", key.lower())
+        if key in lower or (normalized_key and normalized_key in normalized):
             return url
     return ""
 
@@ -1095,6 +1602,16 @@ def v2_header_location(inp: ResumeInput) -> str:
 
 def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v3") -> dict[str, Any]:
     profile = normalize_prompt_profile(prompt_profile)
+    type_value = compact.get("type") or compact.get("Type")
+    summary_text = str(compact.get("summary") or compact.get("Summary") or "").strip()
+    raw_order_value = compact.get("experience_order") or compact.get("Experience_Order")
+    provided_section_order = normalize_section_order_value(compact.get("section_order") or compact.get("Section_Order"))
+    provided_experience_order = normalize_experience_order_value(raw_order_value)
+    strategy_type = strategy_from_order(provided_experience_order, type_value)
+    section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
+    requested_order = provided_experience_order or canonical_strategy_experience_order(strategy_type)
+    level_value = compact.get("level") or compact.get("Level") or strategy_type
+    level, layout_profile = compact_strategy_level(strategy_type) if str(type_value or "").strip().lower().replace("-", "").replace(" ", "") in {"newgrad", "entry", "mid"} and not (compact.get("level") or compact.get("Level")) else compact_level_config(level_value)
     jobs: list[dict[str, Any]] = []
     source_experience = (
         compact.get("experience")
@@ -1108,15 +1625,23 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
             continue
         title = str(item.get("title") or item.get("Title") or "").strip()
         company = str(item.get("company") or item.get("Company") or "").strip()
+        if "binghamton university" in company.lower() or "teaching assistant" in title.lower():
+            title = "Teaching Assistant"
+            company = company or "Binghamton University"
         lock = compact_experience_lock(company, title)
         jobs.append({
+            "id": str(item.get("id") or item.get("ID") or "").strip(),
             "title": title,
             "company": company,
-            "location": lock["location"],
-            "dates": lock["dates"],
+            "location": str(item.get("location") or item.get("Location") or lock["location"]).strip(),
+            "dates": str(item.get("dates") or item.get("Dates") or lock["dates"]).strip(),
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
             "employment_note": lock["employment_note"],
         })
+
+    if requested_order:
+        rank = experience_order_rank(requested_order)
+        jobs.sort(key=lambda job: rank.get(experience_identity(job), len(rank)))
 
     projects: list[dict[str, Any]] = []
     for item in compact.get("projects") or compact.get("Projects") or []:
@@ -1133,19 +1658,24 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         })
 
     config = {
-        "type": compact_config_type(compact.get("type") or compact.get("Type")),
-        "level": 3,
-        "layout_profile": "mid",
+        "type": compact_config_type(compact.get("role_type") or compact.get("Role_Type") or compact.get("role_family") or compact.get("Role_Family")),
+        "level": level,
+        "layout_profile": layout_profile,
         "output": "",
         "bold_markers": False,
         "ta_active": False,
         "company": inp.company,
         "role": inp.title or "Software Engineer",
         "prompt_profile": profile,
+        "strategy_type": strategy_type,
     }
-    raw_experience_order = str(compact.get("experience_order") or compact.get("Experience_Order") or "").strip().lower()
+    if section_order:
+        config["section_order"] = section_order
+    raw_experience_order = str(raw_order_value or "").strip().lower()
     normalized_order = raw_experience_order.replace("-", "_").replace(" ", "_")
-    if normalized_order in {"tcs", "tcs_first", "ghi", "ghi_first", "json", "json_order"}:
+    if requested_order:
+        config["experience_order"] = "json_order"
+    elif normalized_order in {"tcs", "tcs_first", "ghi", "ghi_first", "json", "json_order"}:
         config["experience_order"] = {"tcs": "tcs_first", "ghi": "ghi_first", "json": "json_order"}.get(normalized_order, normalized_order)
     elif profile in {"v2", "v3"}:
         config["experience_order"] = "json_order"
@@ -1157,13 +1687,16 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
     gujarat_university = "Gujarat Technological University (GTU)"
 
     return normalize_resume_json({
+        "type": strategy_type,
+        "section_order": section_order,
+        "experience_order": requested_order,
         "config": config,
         "name": CANDIDATE_NAME,
         "contact": candidate_contact_line(),
         "location": header_location,
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
-        "summary": "",
+        "summary": summary_text,
         "education": [
             {
                 "university": binghamton_university,
@@ -1181,29 +1714,50 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         "professional_experience": jobs,
         "projects": projects,
         "technical_skills": compact_model_skills_to_technical_skills(
-            compact.get("skills")
-            or compact.get("Skills")
-            or compact.get("technical_skills")
+            compact.get("technical_skills")
             or compact.get("Technical_Skills")
+            or compact.get("skills")
+            or compact.get("Skills")
         ),
     })
 
 
 def resume_json_to_compact(data: dict[str, Any]) -> dict[str, Any]:
-    if all(key in data for key in ("type", "experience", "projects", "skills")):
+    if all(key in data for key in ("type", "experience", "projects")) and (
+        "technical_skills" in data or "skills" in data
+    ):
         return data
+    cfg = data.get("config") or {}
+    jobs = [
+        item
+        for item in data.get("professional_experience") or data.get("experience") or []
+        if isinstance(item, dict)
+    ]
+    order = normalize_experience_order_value(data.get("experience_order") or cfg.get("experience_order"))
+    if not order:
+        order = [experience_identity(item) for item in jobs]
+    order = [item for item in order if item]
+    strategy_type = str(data.get("type") or cfg.get("strategy_type") or "").strip() or strategy_from_order(
+        order,
+        "Mid" if int(cfg.get("level") or 2) == 3 else "Entry",
+    )
     return {
-        "type": compact_type_label((data.get("config") or {}).get("type") or data.get("type")),
+        "type": strategy_type,
+        "section_order": normalize_section_order_value(
+            data.get("section_order") or cfg.get("section_order")
+        ) or canonical_strategy_section_order(strategy_type),
+        "experience_order": order,
+        "summary": str(data.get("summary") or "").strip(),
         "experience": [
             {
+                "id": experience_identity(item),
                 "title": item.get("title", ""),
                 "company": item.get("company", ""),
                 "location": item.get("location", ""),
                 "dates": item.get("dates", ""),
                 "bullets": item.get("bullets") or [],
             }
-            for item in data.get("professional_experience") or data.get("experience") or []
-            if isinstance(item, dict)
+            for item in jobs
         ],
         "projects": [
             {
@@ -1213,7 +1767,9 @@ def resume_json_to_compact(data: dict[str, Any]) -> dict[str, Any]:
             for item in data.get("projects") or []
             if isinstance(item, dict)
         ],
-        "skills": split_skill_terms(data.get("technical_skills") or data.get("skills") or {}),
+        "technical_skills": compact_model_skills_to_technical_skills(
+            data.get("technical_skills") or data.get("skills") or {}
+        ),
     }
 
 
@@ -1374,7 +1930,7 @@ async def call_model(
     system_blocks: list[dict[str, Any]],
     messages: list[dict[str, str]],
     label: str,
-    max_tokens: int = 16384,
+    max_tokens: int | None = None,
     cost_cb=None,
     output_validator: Callable[[str], str | None] | None = None,
     retry_instruction: str = NVIDIA_RETRY_INSTRUCTION,
@@ -1383,12 +1939,16 @@ async def call_model(
     model_override: str | None = None,
     nvidia_thinking_override: bool | None = None,
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
+    diagnostics: dict[str, Any] | None = None,
+    guided_json_schema_override: dict[str, Any] | None = None,
+    nvidia_validation_pass_override: bool | None = None,
 ) -> str:
     provider = provider_override or get_provider()
     if provider == "nvidia":
         model = model_override or get_nvidia_model()
     else:
         model = get_model()
+    resolved_max_tokens = max_tokens if max_tokens is not None else get_response_max_tokens()
     nvidia_thinking = (
         get_nvidia_thinking()
         if nvidia_thinking_override is None
@@ -1401,18 +1961,51 @@ async def call_model(
     output_tokens = 0
     cache_create = 0
     cache_read = 0
+    reasoning_tokens = 0
     attempts_used = 1
     finish_reason = ""
     last_error: Exception | None = None
     rejection_reason = ""
     cancel_after_accounting = False
 
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update({
+            "effective_provider": provider,
+            "effective_model": model,
+            "guided_json_enabled": False,
+            "validation_enabled": False,
+            "api_calls": 0,
+            "retries": 0,
+            "finish_reason": "",
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_response_time_seconds": 0.0,
+            "schema_validation_result": "NOT_RUN",
+        })
+
     if provider == "nvidia":
+        nvidia_validation_pass = (
+            get_nvidia_validation_pass()
+            if nvidia_validation_pass_override is None
+            else bool(nvidia_validation_pass_override)
+        )
+        guided_json_schema = (
+            guided_json_schema_override
+            if guided_json_schema_override is not None
+            else guided_json_schema_for_validator(output_validator)
+        )
         max_attempts = get_nvidia_max_attempts() if output_validator else 1
+        if diagnostics is not None:
+            diagnostics["guided_json_enabled"] = guided_json_schema is not None
+            diagnostics["validation_enabled"] = bool(output_validator and nvidia_validation_pass)
         for attempt in range(1, max_attempts + 1):
             raise_if_cancelled(cancel_event)
             attempts_used = attempt
             if attempt > 1:
+                if diagnostics is not None:
+                    diagnostics["retries"] += 1
                 await wait_before_retry(min(2 ** (attempt - 2), 8), cancel_event)
             attempt_messages = list(messages)
             if attempt > 1:
@@ -1422,18 +2015,33 @@ async def call_model(
                     "content": "\n\n".join(part for part in [retry_instruction.strip(), detail] if part),
                 })
             try:
+                if diagnostics is not None:
+                    diagnostics["api_calls"] += 1
+                    diagnostics["sanitized_request_payload"] = sanitize_nvidia_request_payload(
+                        build_nvidia_request_payload(
+                            system_blocks=system_blocks,
+                            messages=attempt_messages,
+                            model=model,
+                            thinking=nvidia_thinking,
+                            max_tokens=resolved_max_tokens,
+                            guided_json_schema=guided_json_schema,
+                        )
+                    )
                 response = await asyncio.to_thread(
                     call_nvidia_sync,
                     system_blocks=system_blocks,
                     messages=attempt_messages,
                     model=model,
                     thinking=nvidia_thinking,
-                    max_tokens=max_tokens,
+                    max_tokens=resolved_max_tokens,
+                    guided_json_schema=guided_json_schema,
                     cancel_event=cancel_event,
                 )
             except OperationCancelled:
                 raise
             except Exception as exc:
+                if not is_retryable_nvidia_error(exc):
+                    raise
                 last_error = exc
                 rejection_reason = f"API error: {exc}"
                 log(f"{label}: NVIDIA attempt {attempt}/{max_attempts} failed: {exc}")
@@ -1445,12 +2053,58 @@ async def call_model(
             output_tokens += response.usage["output_tokens"]
             cache_create += response.usage["cache_creation_input_tokens"]
             cache_read += response.usage["cache_read_input_tokens"]
+            reasoning_tokens += response.usage.get("reasoning_tokens", 0)
 
             problems: list[str] = []
+            if finish_reason.lower() in {"length", "max_tokens"}:
+                problems.append(f"truncated response (finish_reason={finish_reason})")
             if output_validator:
                 validator_error = output_validator(text)
                 if validator_error:
                     problems.append(validator_error)
+            if not problems and output_validator and nvidia_validation_pass:
+                validation_messages = [
+                    *messages,
+                    {"role": "assistant", "content": text},
+                    {
+                        "role": "user",
+                        "content": (
+                            "VALIDATION PASS:\n"
+                            "Independently verify the previous response against the original instructions and input. "
+                            "Correct any omission, schema problem, unsupported addition, or formatting defect. "
+                            "Return the complete final response only, with no validation commentary."
+                        ),
+                    },
+                ]
+                try:
+                    if diagnostics is not None:
+                        diagnostics["api_calls"] += 1
+                    validated_response = await asyncio.to_thread(
+                        call_nvidia_sync,
+                        system_blocks=system_blocks,
+                        messages=validation_messages,
+                        model=model,
+                        thinking=nvidia_thinking,
+                        max_tokens=resolved_max_tokens,
+                        seed_override=get_nvidia_validator_seed(),
+                        guided_json_schema=guided_json_schema,
+                        cancel_event=cancel_event,
+                    )
+                    input_tokens += validated_response.usage["input_tokens"]
+                    output_tokens += validated_response.usage["output_tokens"]
+                    cache_create += validated_response.usage["cache_creation_input_tokens"]
+                    cache_read += validated_response.usage["cache_read_input_tokens"]
+                    reasoning_tokens += validated_response.usage.get("reasoning_tokens", 0)
+                    validation_error = output_validator(validated_response.text)
+                    if validation_error:
+                        problems.append(f"validation pass rejected: {validation_error}")
+                    else:
+                        text = validated_response.text
+                        finish_reason = validated_response.finish_reason or finish_reason
+                except OperationCancelled:
+                    raise
+                except Exception as exc:
+                    problems.append(f"validation pass API error: {exc}")
             if not problems:
                 rejection_reason = ""
                 break
@@ -1483,7 +2137,7 @@ async def call_model(
         client = get_client()
         resp = await client.messages.create(
             model=model,
-            max_tokens=max_tokens,
+            max_tokens=resolved_max_tokens,
             system=system_blocks,
             messages=messages,
         )
@@ -1503,6 +2157,18 @@ async def call_model(
         cache_read,
     )
     elapsed = time.monotonic() - t0
+    if diagnostics is not None:
+        final_validation_error = output_validator(text) if output_validator else None
+        diagnostics.update({
+            "effective_provider": provider,
+            "effective_model": model,
+            "finish_reason": finish_reason or "unknown",
+            "prompt_tokens": input_tokens,
+            "completion_tokens": output_tokens,
+            "reasoning_tokens": reasoning_tokens,
+            "total_response_time_seconds": round(elapsed, 3),
+            "schema_validation_result": "PASS" if not final_validation_error else f"FAIL: {final_validation_error}",
+        })
     thinking_log = f" thinking={'on' if nvidia_thinking else 'off'}" if provider == "nvidia" else ""
     log(
         f"{label}: provider={provider} model={model}{thinking_log} "
@@ -1549,13 +2215,137 @@ def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
 
 
 def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
-    if is_experimental_prompt_profile(prompt_profile):
+    profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v3":
+        return [
+            cached_text_block(read_prompt("prompt.md", profile)),
+            cached_text_block(read_prompt("Story.md", profile)),
+            cached_text_block(read_prompt("hotdog.md", profile)),
+        ]
+    if profile == "v2":
         return [cached_text_block(read_prompt("hotdog.md", prompt_profile))]
     return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
 
 def labeled_step(request_label: str, step: str) -> str:
     return f"{request_label} | {step}" if request_label else step
+
+
+def v3_runtime_input(
+    inp: ResumeInput,
+    *,
+    run_mode: str,
+    approval_text: str = "",
+    pass1_text: str = "",
+    resume_json: dict[str, Any] | None = None,
+) -> str:
+    parts = [
+        read_prompt("prompt_short.md", "v3"),
+        f"RUN MODE:\n{run_mode}",
+        f"COMPANY:\n{inp.company.strip()}",
+        f"TITLE:\n{inp.title.strip()}",
+        f"JD:\n{inp.jd.strip()}",
+        "COMPANY RESEARCH:\nNot provided.",
+        "GITHUB PROJECT RESEARCH:\nNot provided.",
+    ]
+    if inp.words.strip():
+        parts.append(f"LOCATION:\n{inp.words.strip()}")
+    if inp.des.strip():
+        parts.append(f"DES:\n{inp.des.strip()}")
+    if pass1_text.strip():
+        parts.append(f"PASS 1 PLAN:\n{pass1_text.strip()}")
+    if approval_text.strip():
+        parts.append(f"APPROVED DES:\n{approval_text.strip()}")
+    if resume_json is not None:
+        parts.append(
+            "GENERATED RESUME JSON:\n"
+            + json.dumps(resume_json_to_compact(resume_json), indent=2)
+        )
+    return "\n\n".join(parts)
+
+
+def v4_jd_input(inp: ResumeInput) -> str:
+    return json.dumps({"JOB_DESCRIPTION": inp.jd.strip()}, ensure_ascii=False)
+
+
+V4_JD_RETRY_INSTRUCTION = """
+The previous JD Parse response did not match the required JSON contract.
+Return the complete corrected JSON object only. Do not return Markdown, commentary, evidence, or additional keys.
+"""
+
+
+def validate_v4_jd_response(text: str) -> str | None:
+    try:
+        data = extract_json(text)
+    except Exception as exc:
+        return f"Could not extract valid JD Parse JSON: {exc}"
+    expected_top = {"role", "level", "filters", "5", "4", "3", "2"}
+    if set(data) != expected_top:
+        return f"JD Parse top-level keys must be exactly {sorted(expected_top)}"
+    if not isinstance(data["role"], str) or not data["role"].strip():
+        return "JD Parse role must be a non-empty string"
+    if data["level"] not in {"entry", "mid", "out_of_scope", "unclear"}:
+        return "JD Parse level is invalid"
+    if not isinstance(data["filters"], list) or not all(isinstance(item, str) for item in data["filters"]):
+        return "JD Parse filters must be an array of strings"
+
+    expected_statuses = {"required", "core", "preferred"}
+    expected_types = {"tech", "nontech"}
+    for bucket in ("5", "4", "3", "2"):
+        bucket_data = data[bucket]
+        if not isinstance(bucket_data, dict) or set(bucket_data) != expected_statuses:
+            return f"JD Parse bucket {bucket} must contain required, core, and preferred"
+        for status in ("required", "core", "preferred"):
+            status_data = bucket_data[status]
+            if not isinstance(status_data, dict) or set(status_data) != expected_types:
+                return f"JD Parse bucket {bucket}.{status} must contain tech and nontech"
+            for item_type in ("tech", "nontech"):
+                values = status_data[item_type]
+                if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+                    return f"JD Parse bucket {bucket}.{status}.{item_type} must be an array of strings"
+    return None
+
+
+def v4_jd_guided_json_schema() -> dict[str, Any]:
+    path = PROMPT_V4_DIR / "schemas" / "01_jd_analyzer.schema.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def guided_json_schema_for_validator(
+    validator: Callable[[str], str | None] | None,
+) -> dict[str, Any] | None:
+    if not validator or not get_nvidia_guided_json():
+        return None
+    if validator is validate_v4_jd_response:
+        return v4_jd_guided_json_schema()
+    if validator in {validate_json_response, validate_compact_resume_response}:
+        return {"type": "object"}
+    return None
+
+
+def format_v4_jd_output(data: dict[str, Any]) -> str:
+    lines = [
+        "JD PARSE RESULT",
+        "",
+        f"Role: {data.get('role', '')}",
+        f"Level: {str(data.get('level', '')).replace('_', ' ').title()}",
+        "",
+        "FILTERS",
+    ]
+    filters = data.get("filters") or []
+    lines.extend([f"- {item}" for item in filters] or ["- None"])
+    for bucket, label in (("5", "CRITICAL"), ("4", "HIGH"), ("3", "RELEVANT"), ("2", "OPTIONAL")):
+        lines.extend(["", f"BUCKET {bucket} - {label}"])
+        for status in ("required", "core", "preferred"):
+            status_data = (data.get(bucket) or {}).get(status) or {}
+            tech = ", ".join(status_data.get("tech") or []) or "None"
+            nontech = ", ".join(status_data.get("nontech") or []) or "None"
+            lines.extend([
+                f"{status.upper()}",
+                f"  Technical: {tech}",
+                f"  Nontechnical: {nontech}",
+            ])
+    return "\n".join(lines)
 
 
 async def run_pass1(
@@ -1566,19 +2356,31 @@ async def run_pass1(
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
     prompt_profile: str = "stable",
+    diagnostics: dict[str, Any] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if is_experimental_prompt_profile(profile):
+    if profile == "v4":
+        user_message = v4_jd_input(inp)
+    elif profile == "v3":
+        user_message = v3_runtime_input(inp, run_mode="PASS 1 - COMPANY + JD PLAN")
+    elif profile == "v2":
+        pass1_run_mode = (
+            "RUN MODE:\nPASS 1 - COMPANY + JD PLAN"
+            if profile == "v3"
+            else "RUN MODE:\nPASS 1 - PLAN ONLY"
+        )
         parts = [
             read_prompt("prompt_short.md", profile),
-            V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
-            "RUN MODE:\nPASS 1 - PLAN ONLY",
-            experimental_resume_configuration(inp),
+            V2_PASS1_COMPACT_INSTRUCTION,
+            pass1_run_mode,
+            experimental_resume_configuration(inp, profile),
         ]
         parts += [
+            f"Company:\n{inp.company.strip()}",
+            "COMPANY RESEARCH:\nNot provided. Use the JD company signals only; do not invent culture.",
             f"JD:\n{inp.jd.strip()}",
             f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
-            f"Company:\n{inp.company.strip()}",
+            f"LEVEL:\n{experimental_level_label(inp)}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
         ]
@@ -1590,19 +2392,33 @@ async def run_pass1(
             input_to_text(inp),
         ])
     return await call_model(
-        system_blocks=pass1_system(profile),
+        system_blocks=(
+            [cached_text_block(read_prompt("prompts/01_JD_Analyzer.md", "v4"))]
+            if profile == "v4"
+            else pass1_system(profile)
+        ),
         messages=[{"role": "user", "content": user_message}],
-        label=labeled_step(request_label, "PASS 1"),
-        max_tokens=16384,
+        label=labeled_step(request_label, "JD PARSE" if profile == "v4" else "PASS 1"),
         cost_cb=cost_cb,
-        output_validator=None if profile in {"v2", "v3"} else validate_pass1_response,
-        retry_instruction=None if profile in {"v2", "v3"} else (
-            NVIDIA_RETRY_INSTRUCTION
-            + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
+        output_validator=(
+            validate_v4_jd_response
+            if profile == "v4"
+            else (None if profile in {"v2", "v3"} else validate_pass1_response)
+        ),
+        retry_instruction=(
+            V4_JD_RETRY_INSTRUCTION
+            if profile == "v4"
+            else (
+                None if profile in {"v2", "v3"} else (
+                    NVIDIA_RETRY_INSTRUCTION
+                    + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
+                )
+            )
         ),
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
+        diagnostics=diagnostics,
     )
 
 
@@ -1620,22 +2436,42 @@ async def run_pass2(
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
     normalized_approval = approval_text.strip() if is_experimental_prompt_profile(profile) else normalize_approval(approval_text)
-    if profile in {"v2", "v3"}:
+    if profile == "v3":
+        first_user = v3_runtime_input(inp, run_mode="PASS 1 - COMPANY + JD PLAN")
+        second_user = v3_runtime_input(
+            inp,
+            run_mode="PASS 2 - WRITE APPROVED RESUME JSON",
+            approval_text=normalized_approval or "Use current evidence only.",
+            pass1_text=pass1_text,
+        )
+        messages = [
+            {"role": "user", "content": first_user},
+            {"role": "assistant", "content": pass1_text.strip()},
+            {"role": "user", "content": second_user},
+        ]
+    elif profile == "v2":
+        pass1_run_mode = (
+            "RUN MODE:\nPASS 1 - COMPANY + JD PLAN"
+            if profile == "v3"
+            else "RUN MODE:\nPASS 1 - PLAN ONLY"
+        )
         first_user = "\n\n".join([
             read_prompt("prompt_short.md", profile),
-            V3_PASS1_COMPACT_INSTRUCTION if profile == "v3" else V2_PASS1_COMPACT_INSTRUCTION,
-            "RUN MODE:\nPASS 1 - PLAN ONLY",
-            experimental_resume_configuration(inp),
+            V2_PASS1_COMPACT_INSTRUCTION,
+            pass1_run_mode,
+            experimental_resume_configuration(inp, profile),
+            f"Company:\n{inp.company.strip()}",
+            "COMPANY RESEARCH:\nNot provided. Use the JD company signals only; do not invent culture.",
             f"JD:\n{inp.jd.strip()}",
             f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
-            f"Company:\n{inp.company.strip()}",
+            f"LEVEL:\n{experimental_level_label(inp)}",
             f"Location:\n{inp.words.strip()}",
             f"DES (optional):\n{inp.des.strip()}",
-            f"RESUME RULES FROM rules/Rules.md:\n{read_resume_rules()}",
+            f"RESUME RULES FROM local/rules/Rules.md:\n{read_resume_rules()}",
         ])
         second_user = "\n\n".join([
             "RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON",
-            "APPROVAL / APPROVED DES:",
+            "APPROVED DES:" if profile == "v3" else "APPROVAL / APPROVED DES:",
             normalized_approval.strip() or "Use current evidence only. No DES IDs approved.",
             (
                 "Use the approved PASS 1 plan. If approval says 1 to 4, 1,2,3, or names DES IDs, "
@@ -1671,9 +2507,8 @@ async def run_pass2(
         system_blocks=pass2_system(profile),
         messages=messages,
         label=labeled_step(request_label, "PASS 2"),
-        max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=None if is_experimental_prompt_profile(profile) else validate_json_response,
+        output_validator=None if profile in {"v2", "v3"} else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -1701,15 +2536,44 @@ async def run_recruiter_review(
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile in {"v2", "v3"}:
+    if profile == "v3":
+        resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
+        if not resume_input.company.strip():
+            resume_input.company = company
+        if not resume_input.title.strip():
+            resume_input.title = title
+        if not resume_input.jd.strip():
+            resume_input.jd = jd
+        parts = [
+            v3_runtime_input(
+                resume_input,
+                run_mode="HOTDOG REPAIR JSON",
+                approval_text=des,
+                pass1_text=pass1_audit,
+                resume_json=resume1_json,
+            )
+        ]
+    elif profile == "v2":
         resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
         parts = [
-            experimental_resume_configuration(resume_input),
+            experimental_resume_configuration(resume_input, profile),
             "",
             "=== INPUT START ===",
             "",
+            "COMPANY:",
+            company.strip(),
+            "",
+            "COMPANY RESEARCH:",
+            "Not provided. Use the JD company signals only; do not invent culture.",
+            "",
             "JD:",
             jd.strip(),
+            "",
+            "ROLE TYPE:",
+            experimental_role_label(resume_input.mode),
+            "",
+            "LEVEL:",
+            experimental_level_label(resume_input),
             "",
             "CANDIDATE DES INPUT:",
             resume_input.des.strip(),
@@ -1723,7 +2587,7 @@ async def run_recruiter_review(
             "RESUME GENERATION PROCESS / HOTDOG HANDOFF:",
             resume_generation_process.strip() or "Not provided.",
             "",
-            "RESUME RULES FROM rules/Rules.md:",
+            "RESUME RULES FROM local/rules/Rules.md:",
             read_resume_rules(),
             "",
             "STORY.md:",
@@ -1762,9 +2626,8 @@ async def run_recruiter_review(
         system_blocks=recruiter_system(profile),
         messages=[{"role": "user", "content": "\n".join(parts)}],
         label=labeled_step(request_label, "FINAL CHECK" if is_experimental_prompt_profile(profile) else "RECRUITER REVIEW"),
-        max_tokens=16384,
         cost_cb=cost_cb,
-        output_validator=None if is_experimental_prompt_profile(profile) else validate_json_response,
+        output_validator=None if profile in {"v2", "v3"} else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -1818,7 +2681,6 @@ async def run_final_review(
             ),
         }],
         label=labeled_step(request_label, "FINAL QA 1/3 AUDIT"),
-        max_tokens=16384,
         cost_cb=cost_cb,
         cancel_event=cancel_event,
         output_validator=validate_nonempty_response,
@@ -1843,7 +2705,6 @@ async def run_final_review(
             ]),
         }],
         label=labeled_step(request_label, "FINAL QA 2/3 REPAIR"),
-        max_tokens=16384,
         cost_cb=cost_cb,
         cancel_event=cancel_event,
         output_validator=validate_json_response,
@@ -1873,7 +2734,6 @@ async def run_final_review(
             ]),
         }],
         label=labeled_step(request_label, "FINAL QA 3/3 FINAL SCAN"),
-        max_tokens=16384,
         cost_cb=cost_cb,
         cancel_event=cancel_event,
         output_validator=validate_json_response,
@@ -1943,7 +2803,6 @@ async def run_application_answers(
         system_blocks=system_blocks,
         messages=[{"role": "user", "content": user_message}],
         label=labeled_step(request_label, "APPLICATION QA"),
-        max_tokens=16384,
         cost_cb=cost_cb,
         cancel_event=cancel_event,
         model_override=nvidia_model,
@@ -1963,14 +2822,41 @@ def normalize_resume_json(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def extract_json(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    try:
+        complete = json.loads(stripped)
+    except json.JSONDecodeError:
+        complete = None
+    if isinstance(complete, dict):
+        return normalize_resume_json(complete)
+
     blocks = re.findall(r"```json\s*(\{.*?\})\s*```", text, flags=re.DOTALL)
-    candidates = blocks or re.findall(r"(\{.*\})", text, flags=re.DOTALL)
+    candidates: list[str] = list(blocks)
+    if not candidates:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", text):
+            try:
+                parsed, end = decoder.raw_decode(text[match.start():])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                candidates.append(text[match.start():match.start() + end])
     last_error: Exception | None = None
+    fallback: dict[str, Any] | None = None
     for candidate in reversed(candidates):
         try:
-            return normalize_resume_json(json.loads(candidate))
+            data = json.loads(candidate)
+            if not isinstance(data, dict):
+                continue
+            if fallback is None:
+                fallback = data
+            lower_keys = {str(key).lower() for key in data}
+            if "experience" in lower_keys or "professional_experience" in lower_keys:
+                return normalize_resume_json(data)
         except json.JSONDecodeError as exc:
             last_error = exc
+    if fallback is not None:
+        return normalize_resume_json(fallback)
     raise ValueError(f"Could not extract valid JSON from model output: {last_error}")
 
 

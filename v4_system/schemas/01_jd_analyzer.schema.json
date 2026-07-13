@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jd_analyzer_output_v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "level", "filters", "5", "4", "3", "2"],
+  "properties": {
+    "role": {"type": "string"},
+    "level": {"type": "string", "enum": ["entry", "mid", "out_of_scope", "unclear"]},
+    "filters": {"type": "array", "items": {"type": "string"}},
+    "5": {"$ref": "#/$defs/bucket"},
+    "4": {"$ref": "#/$defs/bucket"},
+    "3": {"$ref": "#/$defs/bucket"},
+    "2": {"$ref": "#/$defs/bucket"}
+  },
+  "$defs": {
+    "pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tech", "nontech"],
+      "properties": {
+        "tech": {"type": "array", "items": {"type": "string"}},
+        "nontech": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "core", "preferred"],
+      "properties": {
+        "required": {"$ref": "#/$defs/pair"},
+        "core": {"$ref": "#/$defs/pair"},
+        "preferred": {"$ref": "#/$defs/pair"}
+      }
+    }
+  }
+}

@@ -29,6 +29,7 @@ from pipeline import (
     enforce_linkedin_message_limit,
     extract_json,
     extract_linkedin_message,
+    format_v4_jd_output,
     load_config,
     get_default_nvidia_model_option,
     nvidia_model_option_label,
@@ -50,6 +51,15 @@ from pipeline import (
     update_des_facts_file,
     compact_to_resume_json,
 )
+from v4_system.runtime import (
+    ensure_v4_renderer_input,
+    format_des_questions,
+    format_experience_output,
+    format_final_output as format_v4_final_output,
+    format_mapper_output,
+    format_project_output,
+    run_v4_application,
+)
 
 
 ROOT = Path(__file__).parent
@@ -58,7 +68,7 @@ ROOT = Path(__file__).parent
 def manager_script_for_profile(prompt_profile: str) -> Path:
     if prompt_profile == "v2":
         return ROOT / "v2_experimental_flow" / "manager_Updated.py"
-    if prompt_profile == "v3":
+    if prompt_profile in {"v3", "v4"}:
         return ROOT / "v3_experimental_flow" / "manager_Updated.py"
     return ROOT / "manager.py"
 
@@ -70,6 +80,12 @@ REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt"),
     "jd": ("01_job_description.txt", "01_jd.txt"),
     "des": ("02_pass1_des_process.txt", "02_pass1_des_bank.txt"),
+    "jd_parse": ("02_jd_parse_output.json",),
+    "v4_mapper": ("03_v4_mapper_plan.json",),
+    "v4_experience": ("04_v4_experience_output.json",),
+    "v4_projects": ("04_v4_project_output.json",),
+    "v4_validator": ("04_v4_validator_output.json",),
+    "v4_renderer": ("06_v4_renderer_input.json",),
     "approval": ("03_des_approval.txt", "03_approval.txt"),
     "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
     "resume_json": ("05_resume_output.json", "05_final_resume.json"),
@@ -87,6 +103,60 @@ REQUEST_FILE_ALIASES = {
     "docx_ghi_log": ("13_docx_ghi_build_log.txt",),
     "pdf_log": ("14_pdf_archive_log.txt", "07_pdf_archive.txt"),
 }
+
+COMBINED_02_TO_07_FILE = "combined_02_to_07.txt"
+COMBINED_02_TO_07_KEYS = (
+    "des",
+    "approval",
+    "resume_process",
+    "resume_json",
+    "recruiter_process",
+    "recruiter_json",
+)
+
+
+def v4_start_message(request_dir: Path, des_reply: str = "") -> str:
+    if des_reply.strip():
+        return "Step 2/4: Applying DES and rerunning Story Mapper..."
+    checkpoints = request_dir / "v4_checkpoints"
+    if not (checkpoints / "01_jd_analyzer.json").is_file():
+        return "Step 1/4: JD Analyzer running..."
+    if not (checkpoints / "02_story_mapper.json").is_file():
+        return "Step 2/4: Story Mapper running..."
+    if not (
+        (checkpoints / "03a_experience_writer.json").is_file()
+        and (checkpoints / "03b_project_writer.json").is_file()
+    ):
+        return "Step 3/4: Experience and Project Writers running..."
+    return "Step 4/4: Validator/Repair running..."
+
+
+def existing_request_file_for_key(request_dir: Path, key: str) -> Path | None:
+    for name in REQUEST_FILE_ALIASES[key]:
+        path = request_dir / name
+        if path.exists():
+            return path
+    return None
+
+
+def combine_request_02_to_07(request_dir: Path) -> Path | None:
+    if not request_dir.exists():
+        return None
+
+    sections: list[str] = []
+    for key in COMBINED_02_TO_07_KEYS:
+        path = existing_request_file_for_key(request_dir, key)
+        if not path:
+            continue
+        content = path.read_text(encoding="utf-8").strip()
+        sections.append(f"===== {path.name} =====\n{content}")
+
+    if not sections:
+        return None
+
+    combined_path = request_dir / COMBINED_02_TO_07_FILE
+    save_text(combined_path, "\n\n".join(sections) + "\n")
+    return combined_path
 
 
 def open_path(path: Path) -> None:
@@ -130,6 +200,7 @@ class JobTab(ttk.Frame):
         self.job_description = ""
         self.jd_showing_des = False
         self.cancel_event = threading.Event()
+        self.v4_auto_retry_id: str | None = None
 
         self._build()
 
@@ -146,6 +217,9 @@ class JobTab(ttk.Frame):
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
         self.auto_btn = ttk.Button(toolbar, text="Auto JSON", command=self.on_auto_json)
         self.auto_btn.grid(row=0, column=1, padx=(0, 6))
+        self.approve_des_btn = ttk.Button(toolbar, text="Approved DES", command=self.on_approve_all_des)
+        self.approve_des_btn.grid(row=0, column=1, padx=(0, 6))
+        self.approve_des_btn.grid_remove()
         self.json_btn = ttk.Button(toolbar, text="Generate JSON", command=self.on_generate_json)
         self.json_btn.grid(row=0, column=2, padx=(0, 6))
         self.recruiter_btn = ttk.Button(toolbar, text="Recruiter", command=self.on_recruiter_review)
@@ -156,15 +230,13 @@ class JobTab(ttk.Frame):
         self.questions_btn.grid(row=0, column=5, padx=(0, 6))
         self.docx_btn = ttk.Button(toolbar, text="DOCX", command=self.on_build_docx)
         self.docx_btn.grid(row=0, column=6, padx=(0, 6))
-        self.docx_ghi_btn = ttk.Button(toolbar, text="DOCX+GHI", command=lambda: self.on_build_docx(ghi_first=True))
-        self.docx_ghi_btn.grid(row=0, column=7, padx=(0, 6))
         self.pdf_btn = ttk.Button(toolbar, text="PDF", command=self.on_pdf_archive)
-        self.pdf_btn.grid(row=0, column=8, padx=(0, 6))
+        self.pdf_btn.grid(row=0, column=7, padx=(0, 6))
         self.stop_btn = ttk.Button(toolbar, text="Stop", command=self.on_stop_ai, state="disabled")
-        self.stop_btn.grid(row=0, column=9, padx=(0, 6))
-        ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=10, padx=(0, 6))
-        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=11, padx=(0, 6))
-        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=12, padx=(0, 6))
+        self.stop_btn.grid(row=0, column=8, padx=(0, 6))
+        ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=9, padx=(0, 6))
+        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=10, padx=(0, 6))
+        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=11, padx=(0, 6))
         self.cost_label = ttk.Label(toolbar, text="$0.0000")
         self.cost_label.grid(row=0, column=14, sticky="e", padx=(8, 8))
         self.status = ttk.Label(toolbar, text="Ready", width=28, anchor="e")
@@ -313,10 +385,37 @@ class JobTab(ttk.Frame):
 
     def apply_prompt_profile_view(self) -> None:
         prompt_profile = self.selected_prompt_profile()
-        if prompt_profile in {"v2", "v3"}:
-            self.words.field_label.config(text="Location")
+        if prompt_profile == "v4":
+            self.words.master.grid_remove()
+            self.des.master.grid_remove()
+            self.approval.master.grid()
+            self.approval.field_label.config(text="DES Approval (only when requested)")
+            self.app_questions.master.grid_remove()
+            pending_des = bool(self.request_dir and (self.request_dir / "v4_checkpoints" / "pending_des.json").exists())
+            self.pass1_btn.config(text="Continue V4" if pending_des else "Run V4")
             self.pass1_btn.grid()
             self.auto_btn.grid_remove()
+            self.approve_des_btn.grid_remove()
+            self.json_btn.grid_remove()
+            self.recruiter_btn.grid_remove()
+            self.final_qa_btn.grid_remove()
+            self.questions_btn.grid_remove()
+            self.docx_btn.grid()
+            self.pdf_btn.grid()
+        elif prompt_profile in {"v2", "v3"}:
+            self.words.master.grid()
+            self.des.master.grid()
+            self.des.field_label.config(text="DES / Existing Evidence")
+            self.words.field_label.config(text="Location")
+            self.pass1_btn.config(text="PASS 1")
+            self.pass1_btn.grid()
+            self.auto_btn.grid_remove()
+            if prompt_profile == "v3":
+                self.approve_des_btn.grid()
+            else:
+                self.approve_des_btn.grid_remove()
+            self.json_btn.grid()
+            self.recruiter_btn.grid()
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
             self.json_btn.config(text="Prompt")
@@ -325,12 +424,23 @@ class JobTab(ttk.Frame):
             if self.text_value(self.approval).lower() in {"approved:", "approved", "confirm", "confirm:"}:
                 self.approval.delete("1.0", "end")
             self.app_questions.master.grid()
+            self.docx_btn.grid()
+            self.pdf_btn.grid()
         else:
+            self.words.master.grid()
+            self.des.master.grid()
+            self.des.field_label.config(text="DES / Existing Evidence")
             self.words.field_label.config(text="Words / Keywords")
+            self.pass1_btn.config(text="PASS 1")
             self.pass1_btn.grid()
             self.auto_btn.grid()
+            self.approve_des_btn.grid_remove()
+            self.json_btn.grid()
+            self.recruiter_btn.grid()
             self.final_qa_btn.grid()
             self.questions_btn.grid()
+            self.docx_btn.grid()
+            self.pdf_btn.grid()
             self.json_btn.config(text="Generate JSON")
             self.recruiter_btn.config(text="Recruiter")
             self.approval.master.grid()
@@ -364,6 +474,11 @@ class JobTab(ttk.Frame):
             raise ValueError("Create or load a request first.")
         return folder / REQUEST_FILE_ALIASES[key][0]
 
+    def refresh_combined_02_to_07(self, request_dir: Path | None = None) -> None:
+        folder = request_dir or self.request_dir
+        if folder:
+            combine_request_02_to_07(folder)
+
     def show_des_in_jd(self, pass1_text: str) -> None:
         if not self.jd_showing_des:
             current_jd = self.text_value(self.jd)
@@ -387,6 +502,11 @@ class JobTab(ttk.Frame):
         if not self.request_dir:
             return []
         definitions = [
+            ("Output | JD Parse", "jd_parse"),
+            ("V4 | Story Mapper", "v4_mapper"),
+            ("V4 | Experience Writer", "v4_experience"),
+            ("V4 | Project Writer", "v4_projects"),
+            ("V4 | Validator", "v4_validator"),
             ("Model Process | PASS 1 DES", "des"),
             ("Model Process | Resume Generation", "resume_process"),
             ("Output | Resume JSON", "resume_json"),
@@ -447,6 +567,41 @@ class JobTab(ttk.Frame):
         sections: list[str] = []
         for path in paths:
             text = path.read_text(encoding="utf-8")
+            if selected == "Output | JD Parse":
+                try:
+                    text = format_v4_jd_output(json.loads(text))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 JD Analyzer artifact is unavailable in the readable view."
+            elif selected == "V4 | Story Mapper":
+                try:
+                    text = format_mapper_output(json.loads(text))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 Story Mapper artifact is unavailable in the readable view."
+            elif selected == "V4 | Experience Writer":
+                try:
+                    text = format_experience_output(json.loads(text))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 Experience Writer artifact is unavailable in the readable view."
+            elif selected == "V4 | Project Writer":
+                try:
+                    text = format_project_output(json.loads(text))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 Project Writer artifact is unavailable in the readable view."
+            elif selected == "V4 | Validator":
+                try:
+                    validator_output = json.loads(text)
+                    text = (
+                        format_des_questions(validator_output.get("des_questions", []), "4")
+                        if validator_output.get("status") == "des_required"
+                        else format_v4_final_output(validator_output)
+                    )
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 Validator artifact is unavailable in the readable view."
+            elif selected == "Output | Resume JSON" and self.selected_prompt_profile() == "v4":
+                try:
+                    text = format_v4_final_output(json.loads(text))
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    text = "This saved V4 resume artifact is unavailable in the readable view."
             if len(paths) > 1:
                 text = self.response_summary(text)
                 sections.append(f"{path.name}\n{'=' * len(path.name)}\n{text}")
@@ -713,6 +868,7 @@ class JobTab(ttk.Frame):
             ]),
         )
         save_text(self.request_file("jd"), inp.jd)
+        self.refresh_combined_02_to_07(self.request_dir)
         self.app.rename_tab(self, self.tab_caption())
         self.app.update_tab_status(self)
         return self.request_dir
@@ -722,11 +878,11 @@ class JobTab(ttk.Frame):
         for button in (
             self.pass1_btn,
             self.auto_btn,
+            self.approve_des_btn,
             self.json_btn,
             self.recruiter_btn,
             self.final_qa_btn,
             self.docx_btn,
-            self.docx_ghi_btn,
             self.pdf_btn,
             self.questions_btn,
         ):
@@ -784,6 +940,119 @@ class JobTab(ttk.Frame):
                 },
             )
 
+    def run_v4(
+        self,
+        inp: ResumeInput,
+        request_dir: Path,
+        nvidia_model: str,
+        nvidia_thinking: bool,
+    ) -> None:
+        pending_path = request_dir / "v4_checkpoints" / "pending_des.json"
+        des_reply = self.text_value(self.approval) if pending_path.exists() else ""
+        if pending_path.exists() and not des_reply:
+            pending = json.loads(pending_path.read_text(encoding="utf-8"))
+            self.show_output(
+                "V4 DES Approval",
+                format_des_questions(pending.get("questions", []), "2" if pending.get("source_stage") == "story_mapper" else "4"),
+            )
+            self.approval.focus_set()
+            self.set_stage("Step 2/4: DES approval required" if pending.get("source_stage") == "story_mapper" else "Step 4/4: DES approval required")
+            return
+
+        if self.v4_auto_retry_id is not None:
+            try:
+                self.after_cancel(self.v4_auto_retry_id)
+            except tk.TclError:
+                pass
+            self.v4_auto_retry_id = None
+
+        self.set_busy(
+            True,
+            v4_start_message(request_dir, des_reply),
+            cancellable=True,
+        )
+
+        def task():
+            events: list[CostEvent] = []
+
+            def report_stage(step_number: str, stage: str) -> None:
+                if stage in {"experience_writer", "project_writer"}:
+                    message = "Step 3/4: Experience and Project Writers running..."
+                else:
+                    label = {
+                        "jd_analyzer": "JD Analyzer",
+                        "story_mapper": "Story Mapper",
+                        "validator_repair": "Validator/Repair",
+                    }.get(stage, stage.replace("_", " ").title())
+                    message = f"Step {step_number}/4: {label} running..."
+                self.app.after(0, lambda message=message: self.set_stage(message))
+
+            result = asyncio.run(run_v4_application(
+                request_dir=request_dir,
+                application_id=self.request_id,
+                jd=inp.jd,
+                des_reply=des_reply,
+                model=nvidia_model,
+                thinking=nvidia_thinking,
+                cost_cb=events.append,
+                cancel_event=self.cancel_event,
+                stage_cb=report_stage,
+            ))
+            return result, events
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            if err:
+                self.set_busy(False, "V4 input needs correction")
+                messagebox.showerror("V4 input needed", str(err), parent=self)
+                return
+            v4_result, events = result
+            self.set_busy(False, v4_result.message)
+            self.add_cost_events(events)
+            self.refresh_output_choices()
+            if v4_result.status == "des_required":
+                self.pass1_btn.config(text="Continue V4")
+                self.show_output(
+                    "V4 DES Approval",
+                    format_des_questions(v4_result.des_questions, v4_result.step_number),
+                )
+                self.approval.focus_set()
+                self.set_stage(f"Step {v4_result.step_number}/4: DES approval required")
+                return
+            if v4_result.status == "retry_scheduled":
+                self.pass1_btn.config(text="Run V4")
+                self.show_output(
+                    "V4 Automatic Recovery",
+                    "\n".join([
+                        "V4 RESUME SYSTEM",
+                        "",
+                        f"Step {v4_result.step_number} of 4 is being retried automatically.",
+                        "Completed stage checkpoints are preserved.",
+                    ]),
+                )
+                delay_ms = max(1, v4_result.retry_after_seconds) * 1000
+                request_id = self.request_id
+
+                def retry() -> None:
+                    self.v4_auto_retry_id = None
+                    if self.request_id == request_id and self.selected_prompt_profile() == "v4":
+                        self.on_pass1()
+
+                self.v4_auto_retry_id = self.after(delay_ms, retry)
+                return
+            if v4_result.output is None:
+                self.show_output("V4", v4_result.message)
+                return
+            self.pass1_raw = json.dumps(v4_result.output, indent=2)
+            self.final_json_path = Path(v4_result.renderer_path)
+            self.pass1_btn.config(text="V4 Complete")
+            self.show_output("V4 Final Resume", format_v4_final_output(v4_result.output))
+            self.select_output_artifact("Output | Resume JSON")
+            self.set_stage(f"Step 4/4: {v4_result.status.replace('_', ' ').title()}")
+
+        run_bg(self.app, task, done)
+
     def on_pass1(self) -> None:
         try:
             inp = self.make_input()
@@ -794,7 +1063,15 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
 
-        self.set_busy(True, "PASS 1 running...", cancellable=True)
+        if prompt_profile == "v4":
+            self.run_v4(inp, request_dir, nvidia_model, nvidia_thinking)
+            return
+
+        self.set_busy(
+            True,
+            "JD Parse running..." if prompt_profile == "v4" else "PASS 1 running...",
+            cancellable=True,
+        )
 
         def task():
             events: list[CostEvent] = []
@@ -812,14 +1089,33 @@ class JobTab(ttk.Frame):
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            self.set_busy(False, "PASS 1 ready" if not err else "PASS 1 failed")
+            self.set_busy(
+                False,
+                ("JD Parse ready" if prompt_profile == "v4" else "PASS 1 ready")
+                if not err
+                else ("JD Parse failed" if prompt_profile == "v4" else "PASS 1 failed"),
+            )
             if err:
-                messagebox.showerror("PASS 1 failed", str(err), parent=self)
+                messagebox.showerror("JD Parse failed" if prompt_profile == "v4" else "PASS 1 failed", str(err), parent=self)
                 return
             result, events = result
+            if prompt_profile == "v4":
+                try:
+                    parsed = extract_json(result)
+                except Exception as exc:
+                    messagebox.showerror("JD Parse failed", str(exc), parent=self)
+                    return
+                self.pass1_raw = result
+                save_json(self.request_file("jd_parse", request_dir), parsed)
+                self.refresh_output_choices()
+                self.show_output("JD Parse", format_v4_jd_output(parsed))
+                self.set_stage("V4 JD Parse ready")
+                self.add_cost_events(events)
+                return
             self.pass1_raw = result
             self.show_des_in_jd(result)
             save_text(self.request_file("des", request_dir), result)
+            self.refresh_combined_02_to_07(request_dir)
             self.record_des_facts(
                 inp=inp,
                 prompt_profile=prompt_profile,
@@ -851,6 +1147,7 @@ class JobTab(ttk.Frame):
             return
 
         save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+        self.refresh_combined_02_to_07(request_dir)
         self.record_des_facts(
             inp=inp,
             prompt_profile=prompt_profile,
@@ -881,6 +1178,7 @@ class JobTab(ttk.Frame):
                 ),
             ))
             save_text(self.request_file("resume_process", request_dir), raw)
+            self.refresh_combined_02_to_07(request_dir)
             try:
                 data = extract_json(raw)
                 if is_experimental_profile(prompt_profile):
@@ -909,6 +1207,7 @@ class JobTab(ttk.Frame):
                 return
             self.final_json_path = self.request_file("resume_json", request_dir)
             save_json(self.final_json_path, data)
+            self.refresh_combined_02_to_07(request_dir)
             self.recruiter_json_path = None
             self.final_qa_json_path = None
             self.docx_path = None
@@ -924,7 +1223,48 @@ class JobTab(ttk.Frame):
         unique = sorted(set(numbers))
         if not unique:
             return ""
-        return ",".join(str(n) for n in unique)
+        return "Approved: " + ",".join(str(n) for n in unique)
+
+    def latest_pass1_des_text(self) -> str:
+        if self.pass1_raw.strip():
+            return self.pass1_raw.strip()
+        des_path = self.existing_request_file("des")
+        if des_path:
+            text = des_path.read_text(encoding="utf-8").strip()
+            if text:
+                self.pass1_raw = text
+                return text
+        return self.text_value(self.output)
+
+    def on_approve_all_des(self) -> None:
+        try:
+            inp = self.make_input()
+            request_dir = self.ensure_request_dir(inp)
+            prompt_profile = self.selected_prompt_profile()
+            pass1_text = self.latest_pass1_des_text()
+            if not pass1_text:
+                raise ValueError("Run PASS 1 first so DES candidates exist.")
+            approval = self.approve_all_des_text(pass1_text)
+            if not approval:
+                raise ValueError("No DES candidates found in PASS 1 output.")
+        except Exception as exc:
+            messagebox.showerror("Approved DES needs PASS 1", str(exc), parent=self)
+            return
+
+        self.pass1_raw = pass1_text
+        self.approval.delete("1.0", "end")
+        self.approval.insert("1.0", approval)
+        save_text(self.request_file("approval", request_dir), approval + "\n\nNormalized:\n" + approval)
+        self.refresh_combined_02_to_07(request_dir)
+        self.record_des_facts(
+            inp=inp,
+            prompt_profile=prompt_profile,
+            request_dir=request_dir,
+            pass1_text=pass1_text,
+            approval_text=approval,
+        )
+        self.show_output("Approved DES", f"All DES candidates approved.\n\n{approval}")
+        self.set_stage("Approved all DES")
 
     def on_auto_json(self) -> None:
         try:
@@ -963,11 +1303,13 @@ class JobTab(ttk.Frame):
                 prompt_profile=prompt_profile,
             ))
             save_text(self.request_file("resume_process", request_dir), pass2_raw)
+            self.refresh_combined_02_to_07(request_dir)
             try:
                 data = extract_json(pass2_raw)
                 return pass1_raw, approval_raw, approval, pass2_raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "04_resume_generation_error.txt", str(exc))
+                self.refresh_combined_02_to_07(request_dir)
                 return pass1_raw, approval_raw, approval, pass2_raw, None, events, str(exc)
 
         def done(result, err):
@@ -983,6 +1325,7 @@ class JobTab(ttk.Frame):
             self.approval.insert("1.0", approval_raw)
             save_text(self.request_file("des", request_dir), pass1_raw)
             save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+            self.refresh_combined_02_to_07(request_dir)
             self.record_des_facts(
                 inp=inp,
                 prompt_profile=prompt_profile,
@@ -999,6 +1342,7 @@ class JobTab(ttk.Frame):
                 return
             self.final_json_path = self.request_file("resume_json", request_dir)
             save_json(self.final_json_path, data)
+            self.refresh_combined_02_to_07(request_dir)
             self.recruiter_json_path = None
             self.final_qa_json_path = None
             self.docx_path = None
@@ -1067,6 +1411,7 @@ class JobTab(ttk.Frame):
                 ),
             ))
             save_text(self.request_file("recruiter_process", request_dir), raw)
+            self.refresh_combined_02_to_07(request_dir)
             try:
                 data = extract_json(raw)
                 if is_experimental_profile(prompt_profile):
@@ -1074,6 +1419,7 @@ class JobTab(ttk.Frame):
                 return raw, data, events, ""
             except Exception as exc:
                 save_text(request_dir / "06_recruiter_review_error.txt", str(exc))
+                self.refresh_combined_02_to_07(request_dir)
                 return raw, None, events, str(exc)
 
         def done(result, err):
@@ -1100,6 +1446,7 @@ class JobTab(ttk.Frame):
                 return
             self.recruiter_json_path = self.request_file("recruiter_json", request_dir)
             save_json(self.recruiter_json_path, data)
+            self.refresh_combined_02_to_07(request_dir)
             self.final_qa_json_path = None
             self.final_json_path = self.recruiter_json_path
             self.select_output_artifact("Output | Recruiter Resume JSON")
@@ -1337,6 +1684,12 @@ class JobTab(ttk.Frame):
         return temp_path
 
     def on_build_docx(self, ghi_first: bool = False) -> None:
+        if self.selected_prompt_profile() == "v4" and self.request_dir:
+            try:
+                self.final_json_path = ensure_v4_renderer_input(self.request_dir)
+            except ValueError as exc:
+                messagebox.showerror("Build DOCX needs V4 output", str(exc), parent=self)
+                return
         if not self.final_json_path or not self.final_json_path.exists():
             path = filedialog.askopenfilename(
                 title="Choose final resume JSON",
@@ -1500,10 +1853,15 @@ class JobTab(ttk.Frame):
             questions_path.read_text(encoding="utf-8") if questions_path else "",
         )
 
-        pass1_path = self.existing_request_file("des", request_dir)
+        pass1_path = self.existing_request_file(
+            "jd_parse" if self.selected_prompt_profile() == "v4" else "des",
+            request_dir,
+        )
         self.pass1_raw = pass1_path.read_text(encoding="utf-8") if pass1_path else ""
         self.request_dir = request_dir
         self.request_id = metadata.get("request id", request_dir.name) or request_dir.name
+        self.apply_prompt_profile_view()
+        self.refresh_combined_02_to_07(request_dir)
         pass2_path = self.existing_request_file("resume_json", request_dir)
         recruiter_path = self.existing_request_file("recruiter_json", request_dir)
         final_qa_path = self.existing_request_file("final_qa_json", request_dir)
@@ -1513,6 +1871,10 @@ class JobTab(ttk.Frame):
             (path for path in (self.final_qa_json_path, self.recruiter_json_path, pass2_path) if path),
             None,
         )
+        if self.selected_prompt_profile() == "v4":
+            renderer_path = self.existing_request_file("v4_renderer", request_dir)
+            if renderer_path:
+                self.final_json_path = renderer_path
         self.docx_path = None
 
         costs_path = request_dir / "costs.json"
@@ -1523,17 +1885,27 @@ class JobTab(ttk.Frame):
             self.cost_usd = float(costs.get("tab_total_usd", 0) or 0)
         self.cost_label.config(text=f"${self.cost_usd:.4f}")
 
-        if self.pass1_raw:
+        if self.pass1_raw and self.selected_prompt_profile() != "v4":
             self.show_des_in_jd(self.pass1_raw)
 
         self.refresh_output_choices()
         preferred_outputs = (
-            "Output | Final QA JSON",
-            "Output | Recruiter Resume JSON",
-            "Output | Resume JSON",
-            "Output | Application Answers",
-            "LinkedIn | Combined Outreach",
-            "Model Process | PASS 1 DES",
+            (
+                "Output | Resume JSON",
+                "V4 | Validator",
+                "V4 | Story Mapper",
+                "Output | JD Parse",
+            )
+            if self.selected_prompt_profile() == "v4"
+            else (
+                "Output | JD Parse",
+                "Output | Final QA JSON",
+                "Output | Recruiter Resume JSON",
+                "Output | Resume JSON",
+                "Output | Application Answers",
+                "LinkedIn | Combined Outreach",
+                "Model Process | PASS 1 DES",
+            )
         )
         available = set(self.output_selector.cget("values"))
         selected_output = next((label for label in preferred_outputs if label in available), "")
@@ -1543,10 +1915,23 @@ class JobTab(ttk.Frame):
         else:
             self.show_output("Output", "Saved request loaded. Select any available next step.")
 
+        pending_path = request_dir / "v4_checkpoints" / "pending_des.json"
+        if self.selected_prompt_profile() == "v4" and pending_path.exists():
+            pending = json.loads(pending_path.read_text(encoding="utf-8"))
+            step = "2" if pending.get("source_stage") == "story_mapper" else "4"
+            self.pass1_btn.config(text="Continue V4")
+            self.show_output("V4 DES Approval", format_des_questions(pending.get("questions", []), step))
+
         source_name = self.final_json_path.name if self.final_json_path else "inputs only"
         self.set_stage(f"Loaded: {source_name}")
 
     def on_clear_tab(self) -> None:
+        if self.v4_auto_retry_id is not None:
+            try:
+                self.after_cancel(self.v4_auto_retry_id)
+            except tk.TclError:
+                pass
+            self.v4_auto_retry_id = None
         for box in (
             self.company,
             self.words,
@@ -1609,7 +1994,7 @@ class ResumeApp(tk.Tk):
         balance_text = "Balance: not connected" if self.manual_balance_usd <= 0 else f"Est. remaining: ${self.manual_balance_usd:.2f}"
         self.balance_label = ttk.Label(top, text=balance_text)
         self.balance_label.grid(row=0, column=6, padx=(8, 6), sticky="w")
-        ttk.Label(top, text="Each tab can run independently. Start PASS 1 in multiple tabs for concurrent resumes.").grid(
+        ttk.Label(top, text="Each tab runs independently. Start V4 or PASS 1 in multiple tabs.").grid(
             row=0, column=7, sticky="e"
         )
 

@@ -33,7 +33,7 @@ Rules:
   - config.type controls resume type: backend, fullstack, aiml, aitool
   - config.level controls base level: 2=Entry/SWE I, 3=Mid, 4=Intern
   - config.layout_profile controls section order and experience order when present
-  - Skills render near the top for cold-apply layouts
+  - Skills render once near the bottom of the DOCX
   - If layout_profile is missing, level 3 renders TCS first and level 2/4 renders internship first
   - Python never changes role titles. It renders titles exactly from JSON.
   - Company passed in command overrides company/output filename only.
@@ -67,22 +67,22 @@ from docx.shared import Inches, Pt
 DEFAULT_FONT = "Arial"
 BODY_PT = Pt(10.5)
 SUB_PT = Pt(10.5)
-SEC_PT = Pt(10.5)
-NAME_PT = Pt(14)
-CONTACT_PT = Pt(12)
+SEC_PT = Pt(11)
+NAME_PT = Pt(18)
+CONTACT_PT = Pt(10.5)
 ZERO = Pt(0)
 
 PAGE_W = Inches(8.5)
 PAGE_H = Inches(11)
-M_TOP = Inches(0.50)
-M_BOT = Inches(0.94)
-M_LEFT = Inches(1.00)
-M_RIGHT = Inches(1.00)
+M_TOP = Inches(0.65)
+M_BOT = Inches(0.65)
+M_LEFT = Inches(0.65)
+M_RIGHT = Inches(0.65)
 TAB_PAD = Inches(0.05)
-LINE_SPACING = 360          # 360 = 1.5 line spacing in Word XML
-BULLET_LEFT_TWIPS = 720     # 0.5 inch
-BULLET_HANGING_TWIPS = 360  # 0.25 inch
-INDENT_LEFT = Inches(0.5)
+LINE_SPACING = 250          # Single spacing in Word XML
+BULLET_LEFT_TWIPS = 360     # 0.25 inch
+BULLET_HANGING_TWIPS = 180  # 0.125 inch
+INDENT_LEFT = Inches(0.25)
 
 DEFAULT_SECTION_GAP = 4   # pts between sections
 DEFAULT_SUB_GAP = 4       # pts between entries within a section
@@ -118,6 +118,8 @@ LAYOUT_ORDERS = {
     "aitool_mid":          ["summary", "skills", "experience", "projects", "education"],
     "internship":          ["education", "skills", "experience", "projects"],
 }
+
+DOCX_SECTION_ORDER = ["summary", "education", "experience", "projects", "skills"]
 
 GHI_FIRST_LAYOUTS = {"student_entry", "aiml_entry", "internship"}
 TCS_FIRST_LAYOUTS = {"professional_entry", "mid", "aitool_mid"}
@@ -297,6 +299,7 @@ def get_projects(data: dict) -> list:
 
 
 def get_skills_rows(data: dict) -> list[tuple[str, str]]:
+    """Return compact skill rows for either grouped or flat JSON schemas."""
     if isinstance(data.get("skills"), dict):
         rows = []
         s = data["skills"]
@@ -311,7 +314,50 @@ def get_skills_rows(data: dict) -> list[tuple[str, str]]:
         return rows
 
     skills = data.get("technical_skills") or {}
-    return [(clean(k), clean(v)) for k, v in skills.items() if clean(k) and clean(v)]
+    if isinstance(skills, list):
+        rows = []
+        flat_terms = []
+        for item in skills:
+            if isinstance(item, dict):
+                label = clean(item.get("category") or item.get("label") or item.get("name") or item.get("title") or "")
+                terms = item.get("skills") or item.get("terms") or item.get("items") or []
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                label = clean(item[0])
+                terms = item[1]
+            else:
+                flat_terms.append(clean(item))
+                continue
+
+            if isinstance(terms, list):
+                terms = ", ".join(clean(term) for term in terms if clean(term))
+            terms = clean(terms)
+            if label and terms:
+                rows.append((label, terms))
+        if rows:
+            return rows
+        terms = ", ".join(term for term in flat_terms if term)
+        return [("", terms)] if terms else []
+
+    if isinstance(skills, dict):
+        flat_skills = skills.get("skills")
+        if isinstance(flat_skills, list):
+            terms = ", ".join(clean(item) for item in flat_skills if clean(item))
+            return [("", terms)] if terms else []
+        if isinstance(flat_skills, str):
+            terms = clean(flat_skills)
+            return [("", terms)] if terms else []
+
+        rows = []
+        for label, terms in skills.items():
+            if isinstance(terms, list):
+                terms = ", ".join(clean(item) for item in terms if clean(item))
+            label = clean(label)
+            terms = clean(terms)
+            if label and terms:
+                rows.append((label, terms))
+        return rows
+
+    return []
 
 
 def get_project_tech(project: dict) -> str:
@@ -321,11 +367,48 @@ def get_project_tech(project: dict) -> str:
     return clean(tech)
 
 
+def experience_identity(job: dict) -> str:
+    job_id = clean(job.get("id") or job.get("ID"))
+    title = clean(job.get("title") or job.get("Title")).lower()
+    company = clean(job.get("company") or job.get("Company")).lower()
+    if job_id:
+        return job_id
+    if "binghamton university" in company or "teaching assistant" in title:
+        return "TA"
+    if "global health impact" in company:
+        return "GHI"
+    if "tata consultancy services" in company and "ii" in title:
+        return "TCS-SWE-II"
+    if "tata consultancy services" in company:
+        return "TCS-SWE"
+    return ""
+
+
+def normalize_experience_order_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [clean(item) for item in value if clean(item)]
+
+
 def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list:
     jobs = get_jobs(data)
     ghi = [j for j in jobs if "global health impact" in clean(j.get("company", "")).lower()]
     others = [j for j in jobs if "global health impact" not in clean(j.get("company", "")).lower()]
-    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+    order_value = data.get("experience_order") or config(data).get("experience_order")
+    explicit_order = normalize_experience_order_list(order_value)
+    if explicit_order:
+        aliases = {
+            re.sub(r"[^a-z0-9]+", "", item.lower()): index
+            for index, item in enumerate(explicit_order)
+        }
+        return sorted(
+            jobs,
+            key=lambda job: aliases.get(
+                re.sub(r"[^a-z0-9]+", "", experience_identity(job).lower()),
+                len(aliases),
+            ),
+        )
+    order = clean(order_value or "").lower().replace("-", "_").replace(" ", "_")
 
     if order in {"json", "json_order"}:
         return jobs
@@ -343,7 +426,10 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
 
 
 def experience_order_label(data: dict, level: int, layout_profile: str = "") -> str:
-    order = clean(config(data).get("experience_order", "")).lower().replace("-", "_").replace(" ", "_")
+    order_value = data.get("experience_order") or config(data).get("experience_order")
+    if normalize_experience_order_list(order_value):
+        return "JSON order"
+    order = clean(order_value or "").lower().replace("-", "_").replace(" ", "_")
 
     if order in {"json", "json_order"}:
         return "JSON order"
@@ -371,6 +457,27 @@ def bool_value(value: Any, default: bool = False) -> bool:
     return default
 
 
+def normalize_section_order(value: Any) -> list[str]:
+    aliases = {
+        "summary": "summary",
+        "technicalskills": "skills",
+        "skills": "skills",
+        "education": "education",
+        "projects": "projects",
+        "project": "projects",
+        "professionalexperience": "experience",
+        "experience": "experience",
+    }
+    raw_items = value if isinstance(value, list) else clean(value).split(",")
+    order: list[str] = []
+    for item in raw_items:
+        key = re.sub(r"[^a-z0-9]+", "", clean(item).lower())
+        canonical = aliases.get(key)
+        if canonical and canonical not in order:
+            order.append(canonical)
+    return order
+
+
 def build_render_profile(data: dict) -> dict[str, Any]:
     """Describe the exact content order the DOCX renderer will use."""
     cfg = config(data)
@@ -378,7 +485,7 @@ def build_render_profile(data: dict) -> dict[str, Any]:
     level = normalize_level(cfg.get("level", 3))
     layout_profile = normalize_layout_profile(cfg.get("layout_profile", ""), rtype, level)
     conf = CONFIGS[(rtype, level)]
-    configured_sections = LAYOUT_ORDERS.get(layout_profile, conf["order"])
+    configured_sections = normalize_section_order(cfg.get("section_order") or data.get("section_order")) or LAYOUT_ORDERS.get(layout_profile, conf["order"])
 
     present = {
         "summary": bool(clean(data.get("summary", ""))),
@@ -676,6 +783,22 @@ def force_bold(run) -> None:
     rpr.append(bcs)
 
 
+def add_bottom_border(paragraph, *, size: int = 8, space: int = 1, color: str = "auto") -> None:
+    ppr = paragraph._element.get_or_add_pPr()
+    for child in list(ppr):
+        if child.tag == qn("w:pBdr"):
+            ppr.remove(child)
+
+    p_bdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), str(size))
+    bottom.set(qn("w:space"), str(space))
+    bottom.set(qn("w:color"), color)
+    p_bdr.append(bottom)
+    ppr.append(p_bdr)
+
+
 def hyperlink(paragraph, text: str, url: str, size=CONTACT_PT) -> None:
     text = clean(text)
     url = clean(url)
@@ -701,11 +824,11 @@ def hyperlink(paragraph, text: str, url: str, size=CONTACT_PT) -> None:
     rpr.append(size_el)
 
     color = OxmlElement("w:color")
-    color.set(qn("w:val"), "0563C1")
+    color.set(qn("w:val"), "000000")
     rpr.append(color)
 
     underline = OxmlElement("w:u")
-    underline.set(qn("w:val"), "single")
+    underline.set(qn("w:val"), "none")
     rpr.append(underline)
 
     run.append(rpr)
@@ -734,6 +857,7 @@ def star_bold(paragraph, text: str, bold_markers: bool = True) -> None:
 def section_heading(doc: Document, text: str) -> None:
     p = doc.add_paragraph()
     headless_sp(p)
+    add_bottom_border(p)
     r = p.add_run(clean(text))
     rf(r, sz=SEC_PT, bold=True)
 
@@ -745,18 +869,31 @@ def company_header(doc: Document, company: str, title: str, location: str, dates
     tabs.clear_all()
     tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
 
-    label_parts = []
-    if clean(title) and clean(company):
-        label_parts.append(f"{clean(title)} at {clean(company)}")
-    elif clean(title):
-        label_parts.append(clean(title))
-    elif clean(company):
-        label_parts.append(clean(company))
-    if clean(location):
-        label_parts.append(clean(location))
+    title_text = clean(title)
+    company_text = clean(company)
+    location_text = clean(location)
+    is_teaching_assistant = (
+        "teaching assistant" in title_text.lower()
+        or "binghamton university" in company_text.lower()
+    )
 
-    r = p.add_run(", ".join(label_parts))
-    rf(r, sz=SUB_PT, italic=True)
+    if is_teaching_assistant:
+        title_text = "Teaching Assistant"
+        company_text = company_text or "Binghamton University"
+
+    if title_text:
+        r = p.add_run(title_text)
+        rf(r, sz=SUB_PT, bold=True)
+
+    company_parts = []
+    if company_text:
+        company_parts.append(company_text)
+    if location_text:
+        company_parts.append(location_text)
+    if company_parts:
+        prefix = ", " if title_text else ""
+        r2 = p.add_run(prefix + ", ".join(company_parts))
+        rf(r2, sz=SUB_PT, italic=True)
 
     if clean(dates):
         tab = p.add_run("\t")
@@ -846,43 +983,41 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
     section_heading(doc, "Education")
 
     for i, edu in enumerate(education):
-        p = bullet_paragraph(doc, num_id=1)
-        headless_sp(p)
-        tabs = p.paragraph_format.tab_stops
-        tabs.clear_all()
-        tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
+        university = clean(edu.get("university", ""))
+        location = clean(edu.get("location", ""))
+        if university or location:
+            p = doc.add_paragraph()
+            headless_sp(p)
+            tabs = p.paragraph_format.tab_stops
+            tabs.clear_all()
+            tabs.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
 
-        r = p.add_run(clean(edu.get("degree", "")))
-        rf(r, sz=SUB_PT)
+            r4 = p.add_run(university)
+            rf(r4, sz=SUB_PT)
+            if location:
+                tab2 = p.add_run("\t")
+                rf(tab2, sz=SUB_PT)
+                r5 = p.add_run(location)
+                rf(r5, sz=SUB_PT)
 
         # Prefer the graduation value from JSON so Prompt/Story remain source of truth.
         # Fall back to config default only when JSON omits the field.
         display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
-        if display_grad:
-            if not display_grad.lower().startswith("status"):
-                display_grad = f"{display_grad}"
-            tab = p.add_run("\t")
-            rf(tab, sz=SUB_PT)
-            r3 = p.add_run(display_grad)
-            rf(r3, sz=SUB_PT)
-
-        university = clean(edu.get("university", ""))
-        location = clean(edu.get("location", ""))
-        if university or location:
+        degree = clean(edu.get("degree", ""))
+        if degree or display_grad:
             p2 = doc.add_paragraph()
             headless_sp(p2)
-            p2.paragraph_format.left_indent = INDENT_LEFT
             tabs2 = p2.paragraph_format.tab_stops
             tabs2.clear_all()
             tabs2.add_tab_stop(rtab(doc), WD_TAB_ALIGNMENT.RIGHT)
 
-            r4 = p2.add_run(university)
-            rf(r4, sz=SUB_PT)
-            if location:
-                tab2 = p2.add_run("\t")
-                rf(tab2, sz=SUB_PT)
-                r5 = p2.add_run(location)
-                rf(r5, sz=SUB_PT)
+            r = p2.add_run(degree)
+            rf(r, sz=SUB_PT)
+            if display_grad:
+                tab = p2.add_run("\t")
+                rf(tab, sz=SUB_PT)
+                r3 = p2.add_run(display_grad)
+                rf(r3, sz=SUB_PT)
 
         if i == 0 and render_ta and clean(edu.get("ta_bullet", "")):
             bullet(doc, edu.get("ta_bullet", ""), bold_markers)
@@ -902,18 +1037,34 @@ def render_skills(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -
     for label, terms in rows:
         p = doc.add_paragraph()
         headless_sp(p)
-        r = p.add_run(f"{label}: ")
-        rf(r)
+        if clean(label).lower() not in {"skills", "technical skills"}:
+            r = p.add_run(f"{label}: ")
+            rf(r)
         star_bold(p, terms, bold_markers)
     return True
 
 
-def render_experience(doc: Document, data: dict, level: int, layout_profile: str, bold_markers: bool, sub_gap: int) -> bool:
-    jobs = ordered_experience(data, level, layout_profile)
+def is_additional_experience(job: dict) -> bool:
+    title = clean(job.get("title", "")).lower()
+    company = clean(job.get("company", "")).lower()
+    return (
+        "teaching assistant" in title
+        or "binghamton university" in company
+        or "global health impact" in company
+    )
+
+
+def render_experience_group(
+    doc: Document,
+    jobs: list,
+    heading: str,
+    bold_markers: bool,
+    sub_gap: int,
+) -> bool:
     if not jobs:
         return False
 
-    section_heading(doc, "Work History")
+    section_heading(doc, heading)
     for i, job in enumerate(jobs):
         company_header(doc, job.get("company", ""), job.get("title", ""), job.get("location", ""), job.get("dates", ""))
         employment_note = str(job.get("employment_note", "") or "").strip()
@@ -932,6 +1083,29 @@ def render_experience(doc: Document, data: dict, level: int, layout_profile: str
             gap(doc, sub_gap)
 
     return True
+
+
+def render_experience(doc: Document, data: dict, level: int, layout_profile: str, bold_markers: bool, sub_gap: int) -> bool:
+    jobs = ordered_experience(data, level, layout_profile)
+    if not jobs:
+        return False
+
+    if level == 3:
+        main_jobs = [job for job in jobs if not is_additional_experience(job)]
+        additional_jobs = [job for job in jobs if is_additional_experience(job)]
+        rendered_main = render_experience_group(doc, main_jobs, "Work History", bold_markers, sub_gap)
+        if rendered_main and additional_jobs:
+            gap(doc, sub_gap)
+        rendered_additional = render_experience_group(
+            doc,
+            additional_jobs,
+            "Additional Experience",
+            bold_markers,
+            sub_gap,
+        )
+        return rendered_main or rendered_additional
+
+    return render_experience_group(doc, jobs, "Work History", bold_markers, sub_gap)
 
 
 def render_projects(doc: Document, data: dict, bold_markers: bool, sub_gap: int) -> bool:
@@ -963,7 +1137,7 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
         fail(f"Unsupported type/level: {rtype}, {level}")
 
     conf = CONFIGS[(rtype, level)]
-    section_order = ["summary", "education", "experience", "projects", "skills"]
+    section_order = normalize_section_order(cfg.get("section_order") or data.get("section_order")) or DOCX_SECTION_ORDER
     company = company_override or clean(cfg.get("company", ""))
 
     if company_override:
@@ -1018,6 +1192,11 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
                 parts = parts[1:]
         contact_parts.extend(p for p in parts if p)
 
+    citizenship = clean(data.get("citizenship", "") or cfg.get("citizenship", ""))
+    location_text = f"{citizenship} in {location_line}" if citizenship and location_line else citizenship or location_line
+    if location_text and location_text not in contact_parts:
+        contact_parts.append(location_text)
+
     if contact_parts:
         p_contact = doc.add_paragraph()
         p_contact.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1036,13 +1215,10 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
             if i < len(contact_parts) - 1:
                 sep = p_contact.add_run(" | ")
                 rf(sep, sz=CONTACT_PT)
-
-    citizenship = clean(data.get("citizenship", "") or cfg.get("citizenship", ""))
-    if location_line or citizenship:
+    elif location_text:
         p_location = doc.add_paragraph()
         p_location.alignment = WD_ALIGN_PARAGRAPH.CENTER
         sp(p_location)
-        location_text = f"{citizenship} in {location_line}" if citizenship and location_line else citizenship or location_line
         rr = p_location.add_run(location_text)
         rf(rr, sz=CONTACT_PT)
 
@@ -1056,9 +1232,13 @@ def build_docx(json_path: str, company_override: str = "", section_gap: int = DE
         "projects":   lambda: render_projects(doc, data, bold_markers, sub_gap),
     }
 
+    rendered_sections = set()
     for section in section_order:
+        if section in rendered_sections:
+            continue
         rendered = renderers[section]()
         if rendered:
+            rendered_sections.add(section)
             gap(doc, section_gap)
 
     remove_final_empty_gap(doc)

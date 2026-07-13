@@ -1,300 +1,236 @@
-# V3 Short Instructions
+# Short Runtime Instructions — Dynamic Prompt v5.6
 
-Read `prompt.md` first and follow it exactly.
+Read `prompt.md` first. This file is only a compact reminder and must not override `prompt.md`.
 
-Use this profile only for Experience, Projects, Skills, LinkedIn outreach, and the visible V3 bullet checks.
+## Mission
 
-Do not create a top-level resume summary. `Summary` means bullet 1 inside each standard Experience entry only.
-
-## PASS 1
-
-When RUN MODE is `PASS 1 - TECH KEYWORD PLAN`, do not write final bullets, skills, or JSON.
-
-Do this:
-
-1. Extract only TECH KEYWORDS and JD VERBS / ACTION WORDS.
-2. Build a JD.docx-style `TECH KEYWORD LINE`.
-3. Decide `PRIMARY TECH`, `SECONDARY TECH`, and `SUPPLEMENTAL TECH`.
-4. Match JD words to Story.md through the capability layer.
-5. Put primary tech in the first visible Experience Summary when supported.
-6. If the JD is AI/ML/LLM-focused and the configuration supports GHI first, put the AI/ML primary tech in the GHI Summary.
-7. Assign the smallest useful JD terms to each Summary, Bullet 1, and Bullet 2 target, usually 2 to 4 and max 5 only when required.
-8. Put about 75% of supported minimum tech keywords in the first half page target when possible.
-9. Create KEYWORD MAP for every important extracted JD tech keyword.
-10. Create MISSING KEYWORD MAP for every missing, partial, lower-experience-only, or project-only keyword.
-11. Create scoped DES candidates for important missing or partial words.
-12. Stop.
-
-PASS 1 output must use this compact shape with blank lines between sections:
+Generate JD-specific resume JSON from verified evidence only:
 
 ```text
-TECH KEYWORD LINE:
-- <JD.docx-style line>
-
-PRIMARY TECH:
-- <keyword> | reason: <why>
-
-SECONDARY TECH:
-- <keyword> | reason: <why>
-
-SUPPLEMENTAL TECH:
-- <keyword> | reason: <why>
-
-JD VERBS:
-- <strong verb>
-
-KEYWORD MAP:
-- <exact JD keyword> | priority: PRIMARY / SECONDARY / SUPPLEMENTAL | status: experience-supported / project-supported / partial / missing | best scope: <Experience ID or Project ID or None> | placement: <Summary/Bullet slot/Skills/Gap> | reason: <why this proves qualification>
-
-MISSING KEYWORD MAP:
-- <exact JD keyword> | status: missing / partial / project-only / lower-experience-only / DES-needed | closest story: <Story ID or None> | safest action: <ask DES / use project / use capability wording / omit> | reason: <why not placed directly in Experience>
-
-KEYWORD PLACEMENT:
-TCS SWE II:
-Summary -> <smallest useful JD terms, usually 2 to 4>
-Bullet 1 -> <smallest useful JD terms, usually 2 to 4>
-Bullet 2 -> <smallest useful JD terms, usually 2 to 4>
-
-TCS SWE:
-Summary -> <smallest useful JD terms, usually 2 to 4>
-Bullet 1 -> <smallest useful JD terms, usually 2 to 4>
-Bullet 2 -> <smallest useful JD terms, usually 2 to 4>
-
-GHI:
-Summary -> <smallest useful JD terms, usually 2 to 4>
-Bullet 1 -> <smallest useful JD terms, usually 2 to 4>
-Bullet 2 -> <smallest useful JD terms, usually 2 to 4>
-
-PROJECT PLACEMENT:
-<Project name>:
-Bullet 1 -> <words>
-Bullet 2 -> <words>
-
-FIRST HALF PAGE TARGET:
-- Supported minimum tech keywords planned early: <list>
-- Coverage: <X/Y> | <NN%>
-
-DES CANDIDATE BANK:
-DES 1 | scope: <Experience ID or Project ID> | keyword: <keyword> | closest story: <closest Story.md direction or no match> | question: <short confirmable question> | approve text: 1
-
-APPROVAL:
-Reply with approved DES IDs and optional scoped facts, or blank to continue with current evidence.
+prompt default structure + current runtime fields + Story.md + approved DES + JD/company signals
 ```
 
-KEYWORD MAP and MISSING KEYWORD MAP are required. Do not replace them with a short coverage summary.
+Do not guess. Do not hardcode company, story, project, or bullet choices. Story.md controls facts. The JD controls emphasis. The JD is never evidence.
 
-## Capability Layer
+## Simple JSON Type
 
-Story.md guides direction. It is not a word-matching cage.
+Final JSON uses exactly one strategy type: `NewGrad`, `Entry`, or `Mid`.
 
-## JD Surface Terms
+`NewGrad` = new-grad/campus/0-1 year strategy.
 
-Use the current JD's exact surface term when the scoped evidence supports the same capability.
+```json
+{"type":"NewGrad","section_order":["summary","technical_skills","education","projects","professional_experience"],"experience_order":["TA","GHI","TCS-SWE-II","TCS-SWE"]}
+```
+
+`Entry` = default cold-apply chronological strategy.
+
+```json
+{"type":"Entry","section_order":["summary","technical_skills","professional_experience","education","projects"],"experience_order":["TA","GHI","TCS-SWE-II","TCS-SWE"]}
+```
+
+`Mid` = production-first strategy for 3+ / platform / backend / reliability JDs.
+
+```json
+{"type":"Mid","section_order":["summary","technical_skills","professional_experience","projects","education"],"experience_order":["TCS-SWE-II","TCS-SWE","GHI","TA"]}
+```
+
+Default to `Entry` unless the JD clearly indicates `NewGrad` or `Mid`. Preserve wrapper config and keep it consistent.
+
+## Source Order
+
+1. Prompt defaults and current runtime fields.
+2. Current-run approved DES for exact scope.
+3. Same-scope Story.md verified evidence.
+4. PASS 1 plan and ledgers.
+5. JD/company signals.
+
+Old resumes, old runs, examples, and generated bullets are not evidence.
+
+## Official Company Research
+
+Use official/runtime company sources only for company goals, future plans, revenue, product direction, or roadmap. If unavailable, print that official company research is not provided and use the JD only.
+
+Company research can shape summary emphasis and bullet priority. It cannot create candidate facts.
+
+## PASS 1 Must Print
+
+Use readable dividers, spacing, and section results. Stop after PASS 1. Do not write final JSON.
+
+Required sections:
 
 ```text
-Preserve JD spelling, casing, spacing, version suffixes, and product names.
-If the JD uses a versioned or specific term and Story.md proves the same capability, write the JD term.
-If the JD term is a materially different technology, platform, product, framework, cloud, database, or architecture claim, require Story.md support or approved DES.
+SECTION 01 — COMPANY + ROLE SNAPSHOT
+SECTION 02 — JD MAP
+SECTION 03 — MODE + ORDER DECISION
+SECTION 04 — SUPPORTED KEYWORDS
+SECTION 05 — MISSING IMPORTANT KEYWORDS
+SECTION 06 — PARTIAL / RISKY CLAIMS
+SECTION 07 — DO-NOT-USE CLAIM LEDGER
+SECTION 08 — DES NEEDED
+SECTION 09 — HIGHEST SIGNAL MAP
+SECTION 10 — BULLET SLOT PLAN
+SECTION 11 — PROJECT SELECTION PLAN
+SECTION 12 — SKILLS TRACEABILITY PLAN
+SECTION 13 — METRIC LEDGER
+SECTION 14 — BEHAVIOR LEDGER
+SECTION 15 — PRE-WRITE RISK FLAGS
 ```
 
-Separate every tech term with commas in keyword lines, placement plans, bullets, analysis, and skills. Do not use slash chains, unpunctuated tool runs, or parentheses to pack extra tools.
+Use compact tables only when cells are short. DES must use compact rows first; use mini-cards only when a DES row is too long. Use card blocks for long risk explanations.
 
-## JD-Only Technology Selection
+## OR-Skill Rule
 
-Use named technologies from the current JD first.
+If JD says `A, B, C, or similar/comparable`, classify the group, not every tool as mandatory.
 
-Do not dump every technology from Story.md. Story.md proves capability; the JD decides which named tech belongs in bullets and skills.
+Example: `Python, Go, Node.js, Rust, or comparable` can be satisfied by verified Python/Java/C# backend evidence. Go/Rust become missing but not blocking unless the JD explicitly requires them.
 
-When Story.md supports several interchangeable tools in the same family, such as databases, clouds, API frameworks, testing tools, UI frameworks, or monitoring tools:
-
-```text
-- If the JD names one specific tool, use only that JD-named tool when the scoped story supports the same capability.
-- If the JD names a broad family term, use the JD's broad term or one strongest supported tool, not the full story inventory.
-- If the JD names multiple tools in the same family, include only the planned JD-relevant tools needed to prove the bullet.
-- If a story-only tool is not in the JD, avoid naming it in bullets and skills; use capability wording instead.
-```
-
-This rule is dynamic. Do not hardcode a fixed technology list. Extract tech keywords from the current JD, then use only the smallest truthful set that proves the qualification.
-
-Allowed:
-
-```text
-Java backend evidence may support object-oriented programming, backend services, API development, stakeholder-facing business systems, or server-side engineering.
-Python evidence may support backend programming, scripting, data processing, automation, APIs, or AI/ML support when the scoped story supports that work.
-JavaScript, TypeScript, React, Node.js, or Next.js evidence may support fullstack, frontend, web application, or JavaScript ecosystem capability.
-Verified API framework work may support backend API experience.
-AWS, Azure, or GCP evidence may support cloud experience.
-Verified CI/CD, release, test, deployment, or Git work may support delivery engineering.
-```
-
-Not allowed:
-
-```text
-Do not rename one specific technology as another.
-Do not turn Docker Compose into Kubernetes.
-Do not turn REST API into OpenAPI unless evidenced or approved.
-Do not turn cloud work into Terraform unless evidenced or approved.
-Do not turn OpenAI API into RAG, agents, MLOps, ML, model evaluation, or production AI unless evidenced or approved.
-Do not turn AI-assisted coding into AI product integration.
-```
-
-The model may create plain wording, nontechnical WHY, and qualitative result/reason from real story context. It may not invent concrete named tools, platforms, metrics, user groups, domains, production claims, security claims, AI/ML claims, business outcomes, leadership claims, or scale.
+Never write `Next.js-ready`, `Go-ready`, `Rust-ready`, `Azure-ready`, or `production-ready`.
 
 ## DES
 
-Approved DES is evidence for its named scope only.
+DES candidates are questions, not evidence. Do not stop for input; continue with safe evidence.
 
-If an approved DES keyword is important to the JD, place it into the planned bullet for that scope.
-
-Hotdog must preserve approved DES when it is scoped, JD-relevant, compact, and not contradicted.
-
-Use handoff:
+DES must be compact and readable. First print one-line rows:
 
 ```text
-HOTDOG HANDOFF:
-- <Experience ID or Project> B<n>: keywords=<smallest useful planned JD terms>; source=<Story label or Approved DES ID>; preserve=<why>
+DES ID | Keyword / claim | JD importance + branch | Priority | Section priority | Story | Question | Fallback
 ```
 
-## PASS 2
+Rules:
+- `JD importance + branch` must mention AND, OR_GROUP, PREFERRED, RESPONSIBILITY, or VALUE.
+- `Section priority` must say Experience first, Project only, Skills after proof, Summary restriction, or Omit unless approved.
+- `Story` must be Story number, TCS shared pool, Project name, or `None` for missing evidence.
+- Missing keywords go into DES with `Story: None`; do not write a long separate missing section.
+- Keep questions short. The user will write the DES answer.
+- One DES = one scope + one claim family.
 
-When RUN MODE is `PASS 2 - WRITE APPROVED RESUME JSON`, use the approved PASS 1 plan and approved DES.
+Priority:
+- REQUIRED only for true blockers or claims the resume plans to make.
+- RECOMMENDED for preferred keywords or OR-list gaps.
+- OPTIONAL for nice-to-have proof.
+- NOT_RECOMMENDED for broad user-fill or already-covered claims.
 
-Write as a FAANG senior engineering manager. Verify as a recruiter and nontechnical hiring manager.
+## Highest Signal Rule
 
-Build:
+Rank evidence by hard requirement match, repeated keyword match, production strength, metric strength, recency, recruiter readability, hiring-manager credibility, and risk.
 
-1. Experience
-2. Projects
-3. Skills
+TCS-SWE-II B1/B2 must carry the strongest production proof. Project 1 must cover the highest-value JD gap not covered by Experience.
 
-Each bullet must answer:
+## Bullet Rules
+
+Every bullet needs:
 
 ```text
-WHAT:
-What was built, fixed, designed, tested, released, automated, integrated, reviewed, owned, or coordinated?
-
-HOW:
-Which JD-relevant keyword, method, tool, language, framework, platform, or practice was used?
-
-WHERE:
-Which system, service, workflow, release path, data flow, project, team process, or integration did this happen in?
-
-WHY:
-Why did it matter in plain nontechnical language?
-
-RESULT / REASON:
-What outcome, result, reason, risk reduction, user value, business value, team value, delivery value, quality value, or operational value came from the work?
+WHY/CONTEXT + WHAT + HOW + BENEFIT/OUTCOME
 ```
 
-The bullet must show the outcome, not just tell the story.
+Experience bullets <=25 words. Project bullets <=28 words.
 
-The WHY and RESULT/REASON must be a clear nontechnical user, stakeholder, team, or business reason.
+Use one workstream, one strong unique opening verb, one main method/stack group, and one primary outcome/metric.
 
-Do not write a bullet that only lists technologies. Connect actual work to a mechanism and a user, stakeholder, team, or business impact.
+Avoid repeated AI rhythm: `Verb + tech + metric + reducing + metric`.
 
-Use the smallest useful set of important JD tech keywords or capability terms when supported. Prefer 2 to 4 JD tech keywords in a 22 to 25 word bullet. Use 5 only when the JD truly requires the cluster and the sentence still reads naturally. Never stuff.
+## Personal Projects
 
-## Strong Verbs Only
+Projects are personal/self-built/self-tested/prototype unless evidence proves production deployment.
 
-Prefer:
+Project bullets must explain:
+
+1. what the project does,
+2. what workflow/problem it helps,
+3. how it is built,
+4. one validation proof only when useful.
+
+Use 0-1 metric by default. Use 2 metrics only when one is scope and one is outcome. Avoid 3+ metrics.
+
+Good titles:
 
 ```text
-Led
-Owned
-Designed
-Integrated
-Automated
-Validated
-Coordinated
-Standardized
-Reviewed
-Guided
-Tested
-Deployed
-Migrated
-Restored
-Protected
-Analyzed
-Configured
-Debugged
-Released
-Architected
+FilingQuery - SEC filing question-answering platform
+EvalTrace - RAG evaluation quality-gate pipeline
 ```
 
-Never open bullets with:
+## Arrow-Free Metrics
+
+Final JSON must not contain `→`, `->`, `=>`, `↔`, or `⇒`.
+
+Convert `23%→4%` to `from 23% to 4%` and `8s→2s` to `from 8s to 2s` while preserving exact values.
+
+## Summary
+
+Summary target: 28-36 words. Hard range: 25-40 words.
+
+Summary must be contribution-focused:
+
+- role family,
+- verified strengths,
+- how those strengths help the target team.
+
+Do not write:
+
+- seeking to contribute,
+- excited to work,
+- I want,
+- passionate,
+- expertise in a tool not proven in final Experience/Project.
+
+Summary must not contradict final JSON. If Next.js/Azure/Go/Rust are not proven in Experience/Project or verified Story.md, they cannot appear in Summary.
+
+## Skills
+
+Every skill must trace to final Experience bullet, final Project bullet, verified Story.md, or approved DES used in Experience/Project first. Remove unsupported or user-fill/edit-verify skills without approval.
+
+## PASS 2 Must Print Checks
+
+Before final JSON, print checks with readable dividers:
 
 ```text
-Built
-Developed
-Implemented
-Delivered
-Worked on
-Responsible for
-Helped with
-Assisted with
-Participated in
-Utilized
-Leveraged
-Enhanced
-Optimized
-Streamlined
-Spearheaded
-Pioneered
-Collaborated on
+SECTION 01 — DES usage
+SECTION 02 — Missing important keywords
+SECTION 03 — Do-not-use ledger
+SECTION 04 — Highest signal placement
+SECTION 05 — First-two-bullet score
+SECTION 06 — Project proof score
+SECTION 07 — Skill traceability
+SECTION 08 — Verb ledger
+SECTION 09 — Outcome phrase ledger
+SECTION 10 — Sentence rhythm check
+SECTION 11 — Number overload check
+SECTION 12 — Metric token table
+SECTION 13 — Final JSON word-count table
+SECTION 14 — Wrapper preservation note
+SECTION 15 — Human recruiter trust check
+SECTION 16 — Repair log
+SECTION 17 — Quality result
 ```
 
-## Visible Checks
+## Final JSON Source of Truth
 
-After each final bullet in PASS 2 analysis, print:
+All checks must be calculated from final JSON exactly as printed, not draft bullets or analysis text.
+
+After every repair, rerun checks on final JSON:
+
+- word count,
+- summary contradiction,
+- skill traceability,
+- arrow-free metrics,
+- project metric density,
+- do-not-use claims.
+
+Do not reuse pre-repair PASS values.
+
+Also rerun:
+- JD branch / OR logic
+- exact JD wording
+- top-third placement
+- experience-first keyword placement
+- DES compactness and story/None field
+
+Quality result choices:
 
 ```text
-CHECK - <Experience or Project> B<n>:
-- Keywords: PASS | <smallest useful planned JD terms>
-- JD-Tech Scope: PASS | <only JD-relevant named tech; no story inventory>
-- Verb: PASS | <opening verb>
-- WHAT: PASS | <short phrase>
-- HOW: PASS | <short phrase>
-- WHERE: PASS | <short phrase>
-- WHY: PASS | <plain nontechnical reason>
-- RESULT/REASON: PASS | <user, stakeholder, team, or business impact>
-- Hotdog: PASS | <removed or none>
-- Repetition: PASS | <none or accepted reason>
-- Compact: PASS | <word count only>
+READY
+READY_WITH_DES_GAPS
+REPAIRED_READY
+SAFE_FALLBACK_WITH_DES_REQUIRED
 ```
-
-If any check fails, rewrite the bullet before showing it. Do not show failed drafts.
-
-## Compact Style
-
-```text
-All resume bullets: target 22 to 25 words.
-Hard max: 25 words.
-If a bullet needs more than 25 words, remove extra tech, adjectives, or process detail before dropping WHAT, HOW, WHERE, WHY, or RESULT.
-```
-
-Use past tense, one sentence, exactly one period, strong verb, plain language, user/business impact, and no buzzwords.
-
-Avoid unnecessary numbers. Use metrics only when real, supported, and useful.
-
-## Output
-
-PASS 2 returns exactly:
-
-1. `ANALYSIS`
-2. `LINKEDIN OUTREACH`
-3. One valid JSON object
-
-Leave blank lines between major sections.
-
-Do not wrap JSON in Markdown fences. Do not write anything after JSON.
-
-JSON top-level keys must be exactly:
-
-```text
-type
-experience
-projects
-skills
-```
-
-No top-level summary.

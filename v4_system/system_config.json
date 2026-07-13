@@ -1,0 +1,371 @@
+{
+  "schema_version": "resume_prompt_system_v1",
+  "system_name": "Evidence-Grounded JD Resume Tailoring",
+  "prompt_paths": {
+    "jd_analyzer": "prompts/01_JD_Analyzer.md",
+    "story_mapper": "prompts/02_Story_Mapper.md",
+    "experience_writer": "prompts/03_Experience_Writer.md",
+    "project_writer": "prompts/04_Project_Writer.md",
+    "validator_repair": "prompts/05_Validator_Repair.md"
+  },
+  "output_schema_paths": {
+    "jd_analyzer": "schemas/01_jd_analyzer.schema.json",
+    "story_mapper": "schemas/02_story_mapper.schema.json",
+    "experience_writer": "schemas/03_experience_writer.schema.json",
+    "project_writer": "schemas/04_project_writer.schema.json",
+    "validator_repair": "schemas/05_validator_repair.schema.json"
+  },
+  "input_paths": {
+    "candidate_profile": "candidate_profile.json",
+    "story_bank": "story.md",
+    "approved_des_evidence": "approved_des_evidence.json"
+  },
+  "resume_modes": {
+    "entry_swe": {
+      "level_acceptance": ["entry", "unclear"],
+      "experience_display_order": ["TA", "GHI", "TCS_SWE_II", "TCS_SWE_I"],
+      "experience_mapping_preference": ["TA", "GHI", "TCS_SWE_II", "TCS_SWE_I"],
+      "experience_bullets": {
+        "TA": 2,
+        "GHI": 3,
+        "TCS_SWE_II": 4,
+        "TCS_SWE_I": 2
+      },
+      "projects": {
+        "count": 2,
+        "bullets_each": 2
+      },
+      "summary": {
+        "enabled": false,
+        "minimum_words": 0,
+        "maximum_words": 0
+      },
+      "layout_profile": "professional_entry",
+      "strategy_type": "Entry"
+    },
+    "mid_swe": {
+      "level_acceptance": ["mid", "unclear"],
+      "experience_display_order": ["TA", "GHI", "TCS_SWE_II", "TCS_SWE_I"],
+      "experience_mapping_preference": ["TCS_SWE_II", "TCS_SWE_I", "GHI", "TA"],
+      "experience_bullets": {
+        "TA": 1,
+        "GHI": 2,
+        "TCS_SWE_II": 4,
+        "TCS_SWE_I": 2
+      },
+      "projects": {
+        "count": 2,
+        "bullets_each": 2
+      },
+      "summary": {
+        "enabled": true,
+        "minimum_words": 35,
+        "maximum_words": 40
+      },
+      "layout_profile": "professional_mid",
+      "strategy_type": "Mid"
+    },
+    "entry_ai_ml": {
+      "level_acceptance": ["entry", "unclear"],
+      "qualification_rule": "Use only when the role's core work includes model or ML or LLM development, training, evaluation, inference, retrieval, agents, or ML pipelines. AI-assisted coding vocabulary alone is insufficient.",
+      "experience_display_order": ["TA", "GHI", "TCS_COMBINED"],
+      "experience_mapping_preference": ["GHI", "TCS_COMBINED", "TA"],
+      "combined_role": {
+        "id": "TCS_COMBINED",
+        "source_role_ids": ["TCS_SWE_I", "TCS_SWE_II"]
+      },
+      "experience_bullets": {
+        "TA": 2,
+        "GHI": 3,
+        "TCS_COMBINED": 3
+      },
+      "projects": {
+        "count": 3,
+        "bullets_each": 2
+      },
+      "summary": {
+        "enabled": false,
+        "minimum_words": 0,
+        "maximum_words": 0
+      },
+      "layout_profile": "professional_entry_ai_ml",
+      "strategy_type": "Entry_AI_ML"
+    }
+  },
+  "keyword_priority": {
+    "processing_order": [
+      "5.required",
+      "5.core",
+      "5.preferred",
+      "4.required",
+      "4.core",
+      "4.preferred",
+      "3.required",
+      "3.core",
+      "3.preferred",
+      "2.required",
+      "2.core",
+      "2.preferred"
+    ],
+    "weights": {
+      "5.required": 150,
+      "5.core": 135,
+      "5.preferred": 115,
+      "4.required": 120,
+      "4.core": 110,
+      "4.preferred": 95,
+      "3.required": 90,
+      "3.core": 80,
+      "3.preferred": 65,
+      "2.required": 45,
+      "2.core": 35,
+      "2.preferred": 25
+    },
+    "placement_policy": {
+      "bucket_5": "Place supported terms first in experience or projects and technical skills when applicable.",
+      "bucket_4": "Place after Bucket 5 using the strongest coherent evidence.",
+      "bucket_3": "Place selectively when natural and space remains.",
+      "bucket_2": "Prefer skills-only or omit unless it strengthens an already selected bullet."
+    }
+  },
+  "story_mapping": {
+    "evidence_states": [
+      "direct",
+      "supported_equivalent",
+      "candidate_approved",
+      "confirmation_required",
+      "missing",
+      "not_selected"
+    ],
+    "score_weights": {
+      "evidence_strength": 50,
+      "keyword_priority": 20,
+      "resume_mode_source_fit": 15,
+      "impact_and_scale": 10,
+      "bullet_coherence_and_capacity": 5
+    },
+    "automatic_placement_minimum_evidence_score": 32,
+    "source_preference_is_tiebreaker_only": true,
+    "never_infer_named_technology": true,
+    "approved_keyword_confidence": 1.0,
+    "max_keywords_per_bullet": 4,
+    "prefer_one_anchor_story_per_bullet": true
+  },
+  "des": {
+    "enabled": true,
+    "only_user_pause": true,
+    "numbering_starts_at": 1,
+    "approval_confidence": 1.0,
+    "approval_attaches_to_mapper_proposed_story": true,
+    "approval_means_candidate_personally_used_keyword": true,
+    "approval_does_not_authorize_new_metrics": true,
+    "approval_does_not_authorize_new_employer_or_project": true,
+    "bank_scope": {
+      "current_jd_keywords_only": true,
+      "require_same_story_for_reuse": true,
+      "normalization": "casefold_and_collapse_whitespace"
+    },
+    "accepted_reply_patterns": [
+      "DES 1 to 4",
+      "1 to 4",
+      "DES 1-4",
+      "1-4",
+      "DES 1, 3, 5",
+      "1, 3, 5",
+      "DES 1 to 4, followed by explanatory English",
+      "1 to 4, followed by explanatory English"
+    ],
+    "technical_categories_requiring_des_when_missing": [
+      "programming_language",
+      "framework_or_library",
+      "database_or_data_store",
+      "cloud_platform_or_named_service",
+      "infrastructure_or_devops_tool",
+      "named_api_or_protocol",
+      "security_technology",
+      "observability_tool",
+      "ai_ml_method_framework_or_tool",
+      "technical_architecture_or_domain"
+    ],
+    "categories_auto_approved_without_des": [
+      "nontechnical_competency",
+      "ownership",
+      "leadership",
+      "mentorship",
+      "teamwork",
+      "collaboration",
+      "communication",
+      "stakeholder_management",
+      "requirements_gathering",
+      "project_delivery",
+      "prioritization",
+      "problem_solving",
+      "working_through_ambiguity",
+      "documentation",
+      "knowledge_sharing",
+      "SDLC",
+      "Agile",
+      "code_review",
+      "testing_practice",
+      "deployment_practice",
+      "production_support",
+      "incident_response_practice"
+    ],
+    "blocking_policy": {
+      "5.required.tech": true,
+      "5.core.tech": true,
+      "5.preferred.tech": false,
+      "4.required.tech": true,
+      "4.core.tech": false,
+      "4.preferred.tech": false,
+      "3.required.tech": false,
+      "3.core.tech": false,
+      "3.preferred.tech": false,
+      "2.required.tech": false,
+      "2.core.tech": false,
+      "2.preferred.tech": false,
+      "all_nontech": false
+    },
+    "after_approval": {
+      "state": "candidate_approved",
+      "confidence": 1.0,
+      "eligible_for_experience": true,
+      "eligible_for_projects": true,
+      "eligible_for_skills": true,
+      "use_existing_story_metrics_only": true
+    }
+  },
+  "writing": {
+    "bullet_min_words": 18,
+    "bullet_max_words": 24,
+    "unique_opening_verbs_across_resume": true,
+    "one_sentence_per_bullet": true,
+    "max_primary_achievements_per_bullet": 1,
+    "keyword_wording": "Use the exact keyword string emitted by the JD Analyzer, including capitalization and punctuation.",
+    "named_term_policy": "Named technologies, tools, platforms, frameworks, methods, and ATS terms may appear only when assigned by mapper keyword ID to that bullet or project.",
+    "required_components": [
+      "accurate_action",
+      "technical_or_business_object",
+      "approved_keyword_or_method",
+      "approved_scope_or_result"
+    ],
+    "preferred_formula": "Action + object or purpose + approved method or technology + scale + measurable or concrete result",
+    "leadership_signals": [
+      "leadership",
+      "mentorship",
+      "teamwork",
+      "ownership"
+    ],
+    "leadership_policy": "Demonstrate naturally when relevant; do not force all signals into every resume or inflate people leadership.",
+    "past_role_tense": "past",
+    "current_role_tense": "present",
+    "forbidden_openings": [
+      "Responsible for",
+      "Worked on",
+      "Helped with",
+      "Assisted with",
+      "Participated in",
+      "Involved in",
+      "Tasked with"
+    ],
+    "avoid_empty_modifiers": [
+      "successfully",
+      "significantly",
+      "effectively",
+      "seamlessly",
+      "cutting-edge",
+      "world-class",
+      "results-driven",
+      "passionate",
+      "dynamic"
+    ],
+    "metric_policy": "Use only exact approved metrics. Never estimate, modify, combine, or invent numbers.",
+    "client_policy": "Never name a confidential client. Use U.S.-based client only when needed and approved."
+  },
+  "skills": {
+    "allowed_sources": [
+      "direct",
+      "supported_equivalent",
+      "candidate_approved"
+    ],
+    "categories": [
+      "Languages",
+      "Frameworks and Libraries",
+      "Databases",
+      "Cloud and Infrastructure",
+      "AI and ML",
+      "Testing and Developer Tools"
+    ],
+    "soft_skills_in_technical_skills": false,
+    "source": "mapper_skills_keyword_ids",
+    "include_all_eligible_current_jd_terms": true,
+    "exact_jd_wording": true,
+    "deduplicate_across_categories": true,
+    "exclude_unassigned_story_terms": true,
+    "bucket_5_should_have_bullet_evidence_when_possible": true
+  },
+  "validator": {
+    "validate_and_repair": true,
+    "may_rewrite_bullets": true,
+    "may_not_add_unapproved_facts": true,
+    "may_not_change_locked_profile_fields": true,
+    "may_not_change_metrics": true,
+    "may_remove_unsupported_keyword": true,
+    "may_move_keyword_to_better_supported_bullet": true,
+    "des_owner": "story_mapper",
+    "may_request_des_for_important_missing_technical_keyword": false,
+    "never_request_des_for_auto_approved_category": true,
+    "statuses": ["valid", "repaired"],
+    "des_questions_must_be_empty": true,
+    "never_return_failure_status": true
+  },
+  "recovery": {
+    "never_raise_model_or_schema_error_to_user": true,
+    "retryable_conditions": [
+      "network_error",
+      "rate_limit",
+      "timeout",
+      "truncation",
+      "invalid_json",
+      "schema_failure"
+    ],
+    "after_max_attempts": "Persist checkpoint and automatically retry later; do not discard successful earlier-stage outputs.",
+    "only_user_visible_pause": "des_required"
+  },
+  "validation_release_gate": {
+    "minimum_live_jobs": 48,
+    "role_distribution": {
+      "entry_swe": 16,
+      "mid_swe": 16,
+      "entry_ai_ml": 16
+    },
+    "minimum_faang_jobs": 12,
+    "maximum_jobs_per_company": 5,
+    "official_career_pages_only": true,
+    "required_metrics": [
+      "schema_pass_rate",
+      "jd_keyword_precision",
+      "named_technology_hallucination_rate",
+      "story_mapping_precision",
+      "des_question_precision",
+      "unsupported_resume_claim_rate",
+      "keyword_placement_precision",
+      "status_accuracy",
+      "bucket_accuracy",
+      "bullet_word_limit_pass_rate",
+      "unique_opening_verb_pass_rate",
+      "validator_repair_success_rate"
+    ],
+    "acceptance_targets": {
+      "schema_pass_rate": 1.0,
+      "jd_keyword_precision_minimum": 0.95,
+      "named_technology_hallucination_rate_maximum": 0.01,
+      "story_mapping_precision_minimum": 0.95,
+      "unsupported_resume_claim_rate_maximum": 0.0,
+      "keyword_placement_precision_minimum": 0.95,
+      "bullet_word_limit_pass_rate": 1.0,
+      "unique_opening_verb_pass_rate": 1.0,
+      "validator_repair_success_rate_minimum": 0.95
+    }
+  }
+}
