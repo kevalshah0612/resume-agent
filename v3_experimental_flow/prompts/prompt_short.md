@@ -1,4 +1,4 @@
-# Short Runtime Instructions — Dynamic Prompt v5.6
+# Short Runtime Instructions — Current
 
 Read `prompt.md` first. This file is only a compact reminder and must not override `prompt.md`.
 

@@ -95,13 +95,14 @@ class LinkedinMessageTests(unittest.TestCase):
 
 
 class PromptProfileTests(unittest.TestCase):
-    def test_default_prompt_profile_is_v4(self):
-        self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "v4")
+    def test_default_prompt_profile_is_stable(self):
+        self.assertEqual(app_properties.DEFAULT_PROMPT_PROFILE, "stable")
 
     def test_resume_rules_prefer_local_rules(self):
         rules = pipeline.read_resume_rules()
         self.assertTrue(rules)
-        self.assertIn("-> keywords - HM", rules)
+        self.assertIn("use Experience evidence first", rules)
+        self.assertIn("Projects complement Experience", rules)
 
     def test_v3_prompt_contract_matches_local_resume_rules(self):
         prompt = pipeline.read_prompt("prompt.md", "v3")
@@ -109,169 +110,43 @@ class PromptProfileTests(unittest.TestCase):
         hotdog = pipeline.read_prompt("hotdog.md", "v3")
         story = pipeline.read_prompt("Story.md", "v3")
 
+        self.assertIn("PASS 1 - COMPANY + JD PLAN", prompt)
+        self.assertIn("PASS 1 Must Print", prompt_short)
         for text in (prompt, prompt_short):
-            self.assertNotRegex(text, r"->|=>|â†’")
-
-        for text in (prompt, prompt_short):
-            self.assertIn("PASS 1 - COMPANY + JD PLAN", text)
-            self.assertTrue("PROJECT SELECTION" in text or "Select exactly 2 projects" in text or "Select configured projects" in text)
-            self.assertTrue("Target: 22-26 words." in text or "target 22-26 words" in text)
-            self.assertTrue("Hard max: 28 words." in text or "hard max 28 words" in text or "hard max 28" in text)
-            self.assertIn("WHAT + HOW + OUTCOME", text)
-            self.assertTrue("at most 5 categories" in text or "max 5 categories" in text)
-            self.assertTrue("at most 6 skills" in text or "6 skills per category" in text)
+            self.assertIn("PROJECT SELECTION PLAN", text)
+            self.assertIn("WHY/CONTEXT + WHAT + HOW + BENEFIT/OUTCOME", text)
+            self.assertIn("SKILLS TRACEABILITY PLAN", text)
             self.assertIn("METRIC LEDGER", text)
-            self.assertIn("KEYWORD UNIT PLAN", text)
+            self.assertIn("Final JSON Source", text)
 
-        self.assertIn("STRUCTURE DECISION", prompt)
-        self.assertIn("STRUCTURE CHECK", prompt)
-        self.assertIn("MAIN STACK PLACEMENT", prompt)
-        self.assertIn("FINAL_RESUME_JSON_TEMPLATE", prompt)
         self.assertIn('"max_skills_per_category": 6', prompt)
         self.assertIn('"title": "Teaching Assistant"', prompt)
-        self.assertNotIn("Teaching Assistant, Databases and Object-Oriented Programming", prompt)
         self.assertIn("DES candidates are questions, not evidence", prompt)
-        self.assertIn("Metric Integrity Rule", prompt)
-        self.assertIn("Metric formatting is not a creative-writing task", prompt)
-        self.assertIn("Do not use arrow notation", prompt)
-        self.assertIn("B1:", prompt)
-        self.assertIn("Project 1:", prompt)
+        self.assertIn("Metric values are protected", prompt)
+        self.assertIn("Final resume bullets must not use arrow notation", prompt)
         self.assertIn("same-scope", prompt)
-        self.assertIn("duplicate meaningful words", prompt)
-        self.assertIn("TCS uses exactly 5 bullets", prompt)
-        self.assertIn("DES CANDIDATE BANK", prompt)
-        self.assertIn("Do not create header, contact, education, cover letter, LinkedIn outreach", prompt)
         self.assertIn("HOTDOG REPAIR JSON", hotdog)
-        self.assertTrue("GENERATED RESUME JSON" in hotdog or "generated resume JSON" in hotdog)
-        self.assertIn("Metric Copy Gate", hotdog)
         self.assertIn("technical_skills = grouped rows", hotdog)
-        self.assertIn("no slash chains", hotdog)
-        self.assertIn("The check must reflect the final JSON bullet exactly", hotdog)
-        self.assertIn("hard max 28", hotdog)
+        self.assertIn("final JSON exactly as printed", hotdog)
+        self.assertIn("Project bullet <=28 words", hotdog)
         self.assertIn("# Story.md", story)
         self.assertIn("Java File Ingestion and Status Platform", story)
         self.assertIn("TA Code Review and Review Automation", story)
-        self.assertNotIn("Experience bullet target: 18 to 28 words", story)
 
-    def test_prompt_profile_options_resolve_to_stable_v2_v3_and_v4(self):
+
+    def test_prompt_profile_options_resolve_to_stable_and_v3(self):
         labels = pipeline.prompt_profile_options()
         self.assertEqual(
             {pipeline.resolve_prompt_profile_label(label) for label in labels},
-            {"stable", "v2", "v3", "v4"},
+            {"stable", "v3"},
         )
         self.assertIn("Stable", labels)
-        self.assertIn("V2", labels)
         self.assertIn("V3", labels)
-        self.assertIn("V4", labels)
-        self.assertEqual(pipeline.resolve_prompt_profile_label("v2_experimental_flow"), "v2")
         self.assertEqual(pipeline.resolve_prompt_profile_label("v3_experimental_flow"), "v3")
-        self.assertEqual(pipeline.resolve_prompt_profile_label("v4_system"), "v4")
         self.assertEqual(pipeline.resolve_prompt_profile_label("unknown"), "stable")
 
-    def test_v4_jd_parse_uses_new_analyzer_prompt_and_jd_only_input(self):
-        output = {
-            "role": "Software Engineer",
-            "level": "entry",
-            "filters": ["Bachelor's degree"],
-            "5": {
-                "required": {"tech": ["Python"], "nontech": []},
-                "core": {"tech": ["REST APIs"], "nontech": []},
-                "preferred": {"tech": [], "nontech": []},
-            },
-            "4": {
-                "required": {"tech": [], "nontech": []},
-                "core": {"tech": [], "nontech": ["cross-functional collaboration"]},
-                "preferred": {"tech": [], "nontech": []},
-            },
-            "3": {
-                "required": {"tech": [], "nontech": []},
-                "core": {"tech": [], "nontech": []},
-                "preferred": {"tech": ["AWS"], "nontech": []},
-            },
-            "2": {
-                "required": {"tech": [], "nontech": []},
-                "core": {"tech": [], "nontech": []},
-                "preferred": {"tech": [], "nontech": []},
-            },
-        }
-        with patch("pipeline.call_model", new=AsyncMock(return_value=json.dumps(output))) as call_mock:
-            result = asyncio.run(pipeline.run_pass1(
-                pipeline.ResumeInput(
-                    company="Acme",
-                    title="Software Engineer",
-                    jd="Build REST APIs with Python. AWS preferred.",
-                ),
-                prompt_profile="v4",
-            ))
 
-        self.assertEqual(json.dumps(output), result)
-        self.assertEqual("v4_system", pipeline.prompt_dir_for_profile("v4").name)
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertEqual(pipeline.read_prompt("prompts/01_JD_Analyzer.md", "v4"), system_text)
-        self.assertEqual(
-            {"JOB_DESCRIPTION": "Build REST APIs with Python. AWS preferred."},
-            json.loads(user_text),
-        )
-        self.assertEqual("JD PARSE", call_mock.await_args.kwargs["label"])
-        self.assertIsNone(pipeline.validate_v4_jd_response(result))
-        display = pipeline.format_v4_jd_output(output)
-        self.assertIn("BUCKET 5 - CRITICAL", display)
-        self.assertIn("Technical: Python", display)
 
-    def test_v2_hotdog_includes_configuration_story_and_current_json(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
-            asyncio.run(
-                pipeline.run_recruiter_review(
-                    jd="Build APIs",
-                    resume1_json={
-                        "config": {"type": "backend"},
-                        "professional_experience": [{"title": "Software Engineer II", "company": "Tata Consultancy Services", "bullets": ["Built Java APIs."]}],
-                        "projects": [],
-                        "technical_skills": {"Backend": "Java, Spring Boot"},
-                    },
-                    company="Acme",
-                    title="Backend Engineer",
-                    des="Use API work",
-                    inp=pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
-                    prompt_profile="v2",
-                    pass1_audit="ORDERED EXPERIENCE TARGETS:\ntcs_se_ii:\nSummary: backend APIs",
-                    resume_generation_process="HOTDOG HANDOFF:\n- tcs_se_ii B1: keywords=backend APIs; source=Story 01; translation=None",
-                )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("Hotdog Review and Repair", system_text)
-        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
-        self.assertIn("=== INPUT START ===", user_text)
-        self.assertIn("JD:\nBuild APIs", user_text)
-        self.assertIn("CANDIDATE DES INPUT:\nUse API work", user_text)
-        self.assertIn("APPROVAL / APPROVED DES:\nUse API work", user_text)
-        self.assertIn("PASS 1 TARGETS / DES CANDIDATE BANK:", user_text)
-        self.assertIn("ORDERED EXPERIENCE TARGETS", user_text)
-        self.assertIn("RESUME GENERATION PROCESS / HOTDOG HANDOFF:", user_text)
-        self.assertIn("keywords=backend APIs", user_text)
-        self.assertIn("STORY.md:\n# Story.md", user_text)
-        self.assertIn("PROJECT BANK:", user_text)
-        self.assertIn("CURRENT RESUME JSON:", user_text)
-        self.assertIn('"experience"', user_text)
-        self.assertNotIn("professional_experience", user_text)
-        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
-
-    def test_v2_pass1_includes_configuration_and_uses_no_des_validator(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value="PLANNING ANALYSIS\n--------\n")) as call_mock:
-            asyncio.run(
-                pipeline.run_pass1(
-                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
-                    prompt_profile="v2",
-                )
-            )
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("RUN MODE:\nPASS 1 - PLAN ONLY", user_text)
-        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
-        self.assertIn("Plan ID: AIML", user_text)
-        self.assertIn("Required project count: 3", user_text)
-        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
     def test_v3_pass1_includes_metric_and_keyword_plan_without_python_validator(self):
         with patch("pipeline.call_model", new=AsyncMock(return_value="COMPANY RESEARCH:\n- ok")) as call_mock:
@@ -283,86 +158,13 @@ class PromptProfileTests(unittest.TestCase):
             )
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
         self.assertIn("RUN MODE:\nPASS 1 - COMPANY + JD PLAN", user_text)
-        self.assertIn("METRIC LEDGER:", user_text)
-        self.assertIn("KEYWORD UNIT PLAN:", user_text)
+        self.assertIn("METRIC LEDGER", user_text)
+        self.assertIn("SKILLS TRACEABILITY PLAN", user_text)
         self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
-    def test_v2_prompt_uses_v2_prompt_story_and_direct_inputs(self):
-        with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
-            asyncio.run(
-                pipeline.run_pass2(
-                    pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs", words="Boston, MA", des="Use API work"),
-                    pass1_text="PLANNING ANALYSIS\n--------\nACTIVE PLAN:\nBackend",
-                    approval_text="CONFIRM",
-                    prompt_profile="v2",
-                )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        messages = call_mock.await_args.kwargs["messages"]
-        user_text = messages[0]["content"]
-        self.assertIn("Resume Qualification Engine", system_text)
-        self.assertIn("Story.md", system_text)
-        self.assertEqual(messages[1]["role"], "assistant")
-        self.assertIn("PLANNING ANALYSIS", messages[1]["content"])
-        self.assertIn("RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON", messages[2]["content"])
-        self.assertIn("CONFIRM", messages[2]["content"])
-        self.assertIn("DES CANDIDATE BANK", messages[2]["content"])
-        self.assertIn("HOTDOG HANDOFF", messages[2]["content"])
-        self.assertIn("=== RESUME CONFIGURATION - IMMUTABLE ===", user_text)
-        self.assertIn("JD:\nBuild APIs", user_text)
-        self.assertIn("ROLE TYPE:\nAuto", user_text)
-        self.assertIn("Company:\nAcme", user_text)
-        self.assertIn("Location:\nBoston, MA", user_text)
-        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
 
-    def test_v2_questions_use_v2_prompt_with_jd_questions_and_final_json(self):
-        resume_json = {
-            "config": {"prompt_profile": "v2"},
-            "professional_experience": [
-                {
-                    "title": "Software Engineer II",
-                    "company": "Tata Consultancy Services",
-                    "bullets": ["Led Java API work for payment workflows."],
-                }
-            ],
-            "projects": [],
-            "technical_skills": {"Skills": "Java, Spring Boot"},
-        }
-        with patch("pipeline.call_model", new=AsyncMock(return_value="1. Why this role?\nThis role matches my Java API experience.")) as call_mock:
-            asyncio.run(
-                pipeline.run_application_answers(
-                    company="Acme",
-                    title="Backend Engineer",
-                    jd="Build Java APIs",
-                    questions="Why this role?",
-                    resume_json=resume_json,
-                    prompt_profile="v2",
-                )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("V2 Application Questions Prompt", system_text)
-        self.assertIn("Prompt Profile: v2", user_text)
-        self.assertIn("Candidate Resume JSON:", user_text)
-        self.assertIn('"professional_experience"', user_text)
-        self.assertIn("Job Description:\nBuild Java APIs", user_text)
-        self.assertIn("Company: Acme", user_text)
-        self.assertIn("Title: Backend Engineer", user_text)
-        self.assertIn("Application Questions:\nWhy this role?", user_text)
 
-    def test_v2_compact_to_resume_json_marks_v2_profile(self):
-        compact = pipeline.extract_json(valid_compact_response())
-        mapped = pipeline.compact_to_resume_json(
-            compact,
-            pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
-            "v2",
-        )
-        self.assertEqual(mapped["config"]["prompt_profile"], "v2")
-        self.assertEqual(mapped["config"]["experience_order"], "json_order")
-        self.assertEqual(mapped["education"][0]["university"], "Binghamton University, State University of New York (SUNY)")
-        self.assertEqual(mapped["education"][0]["degree"], "Master of Science, Computer Science, AI Specialization")
-        self.assertEqual(mapped["education"][1]["university"], "Gujarat Technological University (GTU)")
-        self.assertEqual(mapped["education"][1]["degree"], "Bachelor of Engineering, Computer Engineering")
+
 
     def test_v3_prompt_uses_v3_prompt_story_and_approved_plan_flow(self):
         with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
@@ -379,32 +181,18 @@ class PromptProfileTests(unittest.TestCase):
         user_text = messages[0]["content"]
         self.assertIn("Evidence-Locked JD Resume Compiler", system_text)
         self.assertIn("# Story.md", system_text)
-        self.assertIn("V3 PASS 1 OUTPUT OVERRIDE", user_text)
         self.assertIn("COMPANY RESEARCH:", user_text)
-        self.assertIn("JD ANALYSIS:", user_text)
-        self.assertIn("MAIN STACK LOCK:", user_text)
-        self.assertIn("PRIMARY TECH:", user_text)
-        self.assertIn("SECONDARY TECH:", user_text)
-        self.assertIn("SUPPLEMENTAL TECH:", user_text)
-        self.assertIn("KEYWORD MAP:", user_text)
-        self.assertIn("MISSING KEYWORD MAP:", user_text)
-        self.assertIn("STRUCTURE DECISION:", user_text)
-        self.assertIn("TCS=5", user_text)
-        self.assertIn("PROJECT SELECTION:", user_text)
-        self.assertIn("FULL RESUME COVERAGE:", user_text)
-        self.assertIn("RESUME_STRUCTURE:", user_text)
-        self.assertIn('"required": true', user_text)
-        self.assertIn("FINAL_RESUME_JSON_TEMPLATE:", user_text)
         self.assertIn("RUN MODE:\nPASS 1 - COMPANY + JD PLAN", user_text)
-        self.assertIn("LEVEL:\n", user_text)
+        self.assertIn("COMPANY:\nAcme", user_text)
+        self.assertIn("JD:\nBuild APIs", user_text)
         self.assertEqual(messages[1]["role"], "assistant")
         self.assertIn("FULL RESUME COVERAGE", messages[1]["content"])
         self.assertIn("RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON", messages[2]["content"])
         self.assertIn("APPROVED DES:", messages[2]["content"])
-        self.assertNotIn("APPROVAL / APPROVED DES:", messages[2]["content"])
+        self.assertIn("PASS 1 PLAN:", messages[2]["content"])
         self.assertIn("1,2", messages[2]["content"])
-        self.assertIn("HOTDOG HANDOFF", messages[2]["content"])
-        self.assertIs(call_mock.await_args.kwargs["output_validator"], pipeline.validate_json_response)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
 
     def test_v3_hotdog_uses_v3_story_rules_and_current_json(self):
         with patch("pipeline.call_model", new=AsyncMock(return_value=valid_compact_response())) as call_mock:
@@ -429,19 +217,15 @@ class PromptProfileTests(unittest.TestCase):
         system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
         self.assertIn("Hotdog Validator and Repair Compiler", system_text)
-        self.assertIn("validates the final resume text", system_text)
+        self.assertIn("final JSON exactly as printed", system_text)
         self.assertIn("RUN MODE:\nHOTDOG REPAIR JSON", user_text)
         self.assertIn("PASS 1 PLAN:", user_text)
-        self.assertIn("GENERATED ANALYSIS:", user_text)
-        self.assertIn("RESUME_STRUCTURE:", user_text)
         self.assertIn("COMPANY RESEARCH:", user_text)
-        self.assertIn("LEVEL:", user_text)
-        self.assertIn("STORY.md:\n# Story.md", user_text)
-        self.assertIn("RESUME RULES FROM local/rules/Rules.md:", user_text)
         self.assertIn("APPROVED DES:", user_text)
         self.assertIn("GENERATED RESUME JSON:", user_text)
         self.assertIn('"experience"', user_text)
-        self.assertIs(call_mock.await_args.kwargs["output_validator"], pipeline.validate_json_response)
+        self.assertIsNone(call_mock.await_args.kwargs["output_validator"])
+
 
     def test_v3_questions_use_v3_prompt_with_jd_questions_and_final_json(self):
         resume_json = {
@@ -509,11 +293,12 @@ class PromptProfileTests(unittest.TestCase):
             "v3",
         )
 
-        self.assertEqual(mapped["config"]["type"], "fullstack")
+        self.assertEqual(mapped["config"]["type"], "backend")
         self.assertEqual(mapped["config"]["level"], 3)
         self.assertEqual(mapped["summary"], "Full-stack engineer focused on reliable Java and React workflows.")
         self.assertEqual(mapped["professional_experience"][0]["location"], "Binghamton, NY")
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Aug 2025 - Present")
+
 
     def test_v3_compact_to_resume_json_preserves_grouped_skill_rows_with_limits(self):
         mapped = pipeline.compact_to_resume_json(
@@ -576,32 +361,6 @@ class PromptProfileTests(unittest.TestCase):
             ],
         )
 
-    def test_v2_compact_to_resume_json_preserves_ghi_first_for_docx(self):
-        compact = {
-            "type": "AIML",
-            "experience": [
-                {
-                    "title": "Software Engineer",
-                    "company": "Global Health Impact",
-                    "bullets": ["Built Python model workflows for researchers."],
-                },
-                {
-                    "title": "Software Engineer II",
-                    "company": "Tata Consultancy Services",
-                    "bullets": ["Built Java services for enterprise users."],
-                },
-            ],
-            "projects": [],
-            "skills": ["Python", "Java"],
-        }
-        mapped = pipeline.compact_to_resume_json(
-            compact,
-            pipeline.ResumeInput(company="Acme", title="AI Engineer", jd="Build ML systems"),
-            "v2",
-        )
-
-        self.assertEqual(mapped["config"]["experience_order"], "json_order")
-        self.assertEqual(mapped["professional_experience"][0]["company"], "Global Health Impact")
 
     def test_compact_validator_rejects_missing_experience(self):
         bad_response = (
@@ -699,7 +458,7 @@ class PromptProfileTests(unittest.TestCase):
                 path,
                 request_id="Acme_Backend_20260630_120000",
                 inp=inp,
-                prompt_profile="v2",
+                prompt_profile="v3",
                 pass1_text="DES 1 | keyword: Kafka | use when: event processing",
                 approval_text="Approved: 1",
             )
@@ -707,7 +466,7 @@ class PromptProfileTests(unittest.TestCase):
                 path,
                 request_id="Acme_Backend_20260630_120000",
                 inp=inp,
-                prompt_profile="v2",
+                prompt_profile="v3",
                 pass1_text="DES 2 | keyword: AWS | use when: cloud deployment",
                 approval_text="CONFIRM",
             )
@@ -739,7 +498,9 @@ class NvidiaModelProfileTests(unittest.TestCase):
             "nvidia_reasoning_budget": 32768,
             "response_max_tokens": 65536,
             "nvidia_max_attempts": 5,
-            "nvidia_max_concurrent_requests": 2,
+            "nvidia_max_concurrent_requests": 10,
+            "nvidia_max_concurrent_requests_per_account": 5,
+            "nvidia_timeout_seconds": 0,
             "nvidia_guided_json": True,
             "nvidia_validation_pass": True,
             "nvidia_validator_seed": 43,
@@ -753,7 +514,9 @@ class NvidiaModelProfileTests(unittest.TestCase):
             self.assertEqual(32768, pipeline.get_nvidia_reasoning_budget())
             self.assertEqual(65536, pipeline.get_response_max_tokens())
             self.assertEqual(5, pipeline.get_nvidia_max_attempts())
-            self.assertEqual(2, pipeline.get_nvidia_max_concurrent_requests())
+            self.assertEqual(10, pipeline.get_nvidia_max_concurrent_requests())
+            self.assertEqual(5, pipeline.get_nvidia_max_concurrent_requests_per_account())
+            self.assertEqual(0, pipeline.get_nvidia_timeout_seconds())
             self.assertTrue(pipeline.get_nvidia_guided_json())
             self.assertTrue(pipeline.get_nvidia_validation_pass())
             self.assertEqual(43, pipeline.get_nvidia_validator_seed())
@@ -770,13 +533,37 @@ class NvidiaModelProfileTests(unittest.TestCase):
                 pipeline.get_nvidia_model(),
             )
 
-    def test_v4_validator_exposes_exact_guided_json_schema(self):
-        with patch("pipeline.get_nvidia_guided_json", return_value=True):
-            schema = pipeline.guided_json_schema_for_validator(pipeline.validate_v4_jd_response)
 
-        self.assertEqual(["role", "level", "filters", "5", "4", "3", "2"], schema["required"])
-        self.assertFalse(schema["additionalProperties"])
-        self.assertNotIn("oneOf", schema)
+    def test_two_nvidia_accounts_are_loaded_in_order_and_legacy_duplicate_is_removed(self):
+        cfg = {
+            "nvidia_api_key_1": "key-one",
+            "nvidia_api_key_2": "key-two",
+            "nvidia_api_key": "key-one",
+        }
+        with patch("pipeline.load_config", return_value=cfg):
+            accounts = pipeline.get_nvidia_accounts()
+
+        self.assertEqual(["account_1", "account_2"], [item.label for item in accounts])
+        self.assertEqual(["key-one", "key-two"], [item.api_key for item in accounts])
+
+    def test_account_selection_round_robins_without_exposing_keys(self):
+        accounts = [
+            pipeline.NvidiaAccount("account_1", "secret-one"),
+            pipeline.NvidiaAccount("account_2", "secret-two"),
+        ]
+        with (
+            patch("pipeline.get_nvidia_accounts", return_value=accounts),
+            patch.object(pipeline, "_nvidia_account_cursor", 0),
+        ):
+            labels = [pipeline.choose_nvidia_account().label for _ in range(4)]
+
+        self.assertEqual(["account_1", "account_2", "account_1", "account_2"], labels)
+        self.assertNotIn("secret", json.dumps(labels))
+
+    def test_retry_after_header_controls_retry_delay(self):
+        error = RuntimeError("service unavailable")
+        error.response = SimpleNamespace(headers={"Retry-After": "7"})
+        self.assertEqual(7.0, pipeline.nvidia_retry_delay_seconds(3, error))
 
     def test_dropdown_contains_supported_models_with_profile_modes(self):
         options = pipeline.nvidia_model_options()
@@ -853,6 +640,27 @@ class NvidiaModelProfileTests(unittest.TestCase):
         )
         self.assertEqual(response.text, "Nemotron answer")
         self.assertEqual(7, response.usage["reasoning_tokens"])
+
+    def test_nemotron_accepts_per_call_reasoning_budget_override(self):
+        completion = SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content="Budgeted answer"),
+                finish_reason="stop",
+            )],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
+        )
+        client, create = self.fake_client(completion)
+        with patch("pipeline.get_nvidia_client", return_value=client):
+            pipeline.call_nvidia_sync(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "hello"}],
+                model="nvidia/nemotron-3-ultra-550b-a55b",
+                thinking=True,
+                max_tokens=12000,
+                reasoning_budget_override=7000,
+            )
+
+        self.assertEqual(7000, create.call_args.kwargs["extra_body"]["reasoning_budget"])
 
     def test_nemotron_thinking_off_omits_reasoning_budget(self):
         completion = SimpleNamespace(

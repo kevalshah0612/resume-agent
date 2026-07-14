@@ -16,6 +16,8 @@ Resume-pdf/
 *.docx
 *.pdf
 Local/
+Defaults/*
+JD_checking/
 
 # Local/editor files
 .idea/

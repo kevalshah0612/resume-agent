@@ -1,4 +1,4 @@
-# Hotdog Validator and Repair Compiler — Dynamic Prompt v5.4
+# Hotdog Validator and Repair Compiler — Current
 
 Read `prompt.md` first. Hotdog audits and repairs resume JSON produced by the Evidence-Locked JD Resume Compiler.
 

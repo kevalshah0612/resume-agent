@@ -19,7 +19,8 @@ NVIDIA setup:
 
 ```text
 PROVIDER_MODE=1
-NVIDIA_API_KEY=your_nvidia_api_key
+NVIDIA_API_KEY_1=your_first_nvidia_api_key
+NVIDIA_API_KEY_2=your_second_nvidia_api_key
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 NVIDIA_THINKING=true
@@ -31,6 +32,9 @@ NVIDIA_STREAM=false
 NVIDIA_REASONING_BUDGET=32768
 RESPONSE_MAX_TOKENS=65536
 NVIDIA_MAX_ATTEMPTS=5
+NVIDIA_MAX_CONCURRENT_REQUESTS=10
+NVIDIA_MAX_CONCURRENT_REQUESTS_PER_ACCOUNT=5
+NVIDIA_TIMEOUT_SECONDS=0
 NVIDIA_GUIDED_JSON=true
 NVIDIA_VALIDATION_PASS=false
 NVIDIA_VALIDATOR_SEED=43
@@ -38,7 +42,7 @@ FALLBACK_TO_ANTHROPIC=false
 ANTHROPIC_API_KEY=your_key
 ```
 
-NVIDIA retries are artifact-based. PASS 1 retries only when parseable DES candidates are missing. PASS 2 and recruiter review retry only when valid JSON is missing. Application-question calls run once. Recruiter and hiring-manager LinkedIn messages are each limited to 300 characters; overlong messages are shortened locally and do not rerun the resume request. Use the per-tab **Stop** button to cancel the current NVIDIA stream or retry chain, then start that step again manually. Claude remains available through `PROVIDER_MODE=2`, but automatic NVIDIA-to-Claude fallback is disabled by default.
+NVIDIA retries are artifact-based. PASS 1 retries only when parseable DES candidates are missing. PASS 2 and recruiter review retry only when valid JSON is missing. Application-question calls run once. Recruiter and hiring-manager LinkedIn messages are each limited to 300 characters; overlong messages are shortened locally and do not rerun the resume request. `NVIDIA_TIMEOUT_SECONDS=0` disables the HTTP timeout; a stalled non-streaming provider request can therefore remain blocked indefinitely and cannot be released by a timeout. Use the per-tab **Stop** button to cancel retry waits and streaming work; it cannot forcibly terminate a blocking non-streaming network call. Claude remains available through `PROVIDER_MODE=2`, but automatic NVIDIA-to-Claude fallback is disabled by default.
 
 The per-tab model dropdown contains these NVIDIA-hosted models:
 
@@ -46,7 +50,7 @@ The per-tab model dropdown contains these NVIDIA-hosted models:
 - `deepseek-ai/deepseek-v4-pro`
 - `minimaxai/minimax-m3`
 
-Nemotron and DeepSeek have `Thinking ON` and `Thinking OFF` options. NVIDIA generation uses the configured temperature, top-p, seed, stream mode, response limit, and reasoning budget. `NVIDIA_MEDIUM_EFFORT=true` is sent to Nemotron through its chat-template settings; false omits the field. JSON-bound calls use `nvext.guided_json` when a complete schema is available. When `NVIDIA_VALIDATION_PASS=true`, a locally valid response receives one independent correction pass using `NVIDIA_VALIDATOR_SEED`; false keeps a successful request to one model call. The same `NVIDIA_API_KEY` and base URL are used for every option. Selection is per application tab and is locked while that tab is running, so concurrent tabs can safely use different profiles.
+Nemotron and DeepSeek have `Thinking ON` and `Thinking OFF` options. NVIDIA generation uses the configured temperature, top-p, seed, stream mode, response limit, and reasoning budget. `NVIDIA_MEDIUM_EFFORT=true` is sent to Nemotron through its chat-template settings; false omits the field. JSON-bound calls use `nvext.guided_json` when a complete schema is available. When `NVIDIA_VALIDATION_PASS=true`, a locally valid response receives one independent correction pass using `NVIDIA_VALIDATOR_SEED`; false keeps a successful request to one model call. Distinct `NVIDIA_API_KEY_1` and `NVIDIA_API_KEY_2` accounts are selected by least-busy round robin, with one in-flight call per account by default. The legacy `NVIDIA_API_KEY` remains a deduplicated fallback. Retryable 429/5xx failures rotate through the available accounts, honor `Retry-After` when supplied, and otherwise use exponential backoff with jitter. Selection is per application tab and is locked while that tab is running, so concurrent tabs can safely use different profiles.
 
 `NVIDIA_MODEL` and `NVIDIA_THINKING` define the initial dropdown choice. To add another model later, add one `NvidiaModelSpec` entry in `pipeline.py`; the ON/OFF dropdown choices are generated automatically.
 
@@ -77,17 +81,9 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 
 The prompt dropdown is per tab:
 
-- `V4` is the default evidence-grounded resume system defined by `v4_system/SYSTEM_DESIGN_FOR_CODEX.md`.
-- `Stable` uses `main_flow/`.
-- `V2` uses `v2_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
+- `Stable` is the default and uses `main_flow/`.
 - `V3` uses `v3_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
-- In V4, paste Company, Title, and the complete JD, then click `Run V4`. The app runs JD Analyzer, Story Mapper, concurrent Experience/Project Writers, and Validator/Repair in fresh NVIDIA contexts.
-- If V4 displays numbered DES questions, approve only evidence you can support. For one item, enter `DES 1: Used Kubernetes in the proposed closest story to deploy the Spring Boot service.` For several correct proposed mappings, enter `DES 1, 3, 5 Confirmed for each proposed closest story.` Use separate runs when each item needs a different note, then click `Continue V4`.
-- `Continue V4` parses the DES reply locally, persists approved evidence, and reruns Story Mapper, both Writers, and Validator/Repair in new model contexts. The completed JD Analyzer checkpoint is reused.
-- V4 preserves stage checkpoints, resumes automatically after transient recovery, and keeps prompt/config hashes, raw stage outputs, and diagnostics under `requests/<request_id>/v4_checkpoints/`.
-- After V4 reaches `valid` or `repaired`, click `DOCX` to render through `v3_experimental_flow/manager_Updated.py`. Review the document, then click `PDF` to use the same V3 conversion and archive flow. The adapter is saved as `06_v4_renderer_input.json`; the validated `05_resume_output.json` is not modified.
-- V4 is not production-ready until the complete pipeline passes the release validation defined in `system_config.json` against at least 48 current official JDs.
-- In V2/V3, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
+- In V3, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
 
 LinkedIn outreach is role-specific rather than generic:
 

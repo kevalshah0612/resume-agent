@@ -1,4 +1,4 @@
-# Evidence-Locked JD Resume Compiler — Dynamic Prompt v5.4
+# Evidence-Locked JD Resume Compiler — Current
 
 Use this prompt to generate JD-specific resume JSON for Keval Shah from verified evidence only.
 

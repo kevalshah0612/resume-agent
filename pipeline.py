@@ -18,6 +18,7 @@ import asyncio
 import copy
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -48,9 +49,7 @@ from manager import build_render_profile
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
-PROMPT_V2_DIR = ROOT / "v2_experimental_flow"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
-PROMPT_V4_DIR = ROOT / "v4_system"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
 CFG_FILE = ROOT / "pipeline_config.json"
@@ -60,6 +59,8 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 DEFAULT_NVIDIA_MAX_ATTEMPTS = 5
 DEFAULT_NVIDIA_MAX_CONCURRENT_REQUESTS = 2
+DEFAULT_NVIDIA_MAX_CONCURRENT_REQUESTS_PER_ACCOUNT = 1
+DEFAULT_NVIDIA_TIMEOUT_SECONDS = 0.0
 DEFAULT_NVIDIA_TEMPERATURE = 1.0
 DEFAULT_NVIDIA_TOP_P = 0.95
 DEFAULT_NVIDIA_SEED = 42
@@ -71,6 +72,9 @@ _log_cb = None
 _nvidia_gate_lock = threading.Lock()
 _nvidia_gate: threading.BoundedSemaphore | None = None
 _nvidia_gate_limit: int | None = None
+_nvidia_account_lock = threading.Lock()
+_nvidia_account_cursor = 0
+_nvidia_account_gates: dict[str, tuple[int, threading.BoundedSemaphore]] = {}
 
 PROMPT_PROFILES = dict(PROMPT_PROFILE_LABELS)
 
@@ -97,39 +101,6 @@ Rules:
 - Do not output tables.
 - Do not output final JSON.
 - End with: APPROVAL: Reply Approved: DES 1 to 3, or Approved: 1,2,3, or Confirm with no DES.
-"""
-
-V2_PASS1_COMPACT_INSTRUCTION = """
-V2 PASS 1 OUTPUT OVERRIDE FOR THIS APP:
-Return a compact keyword plan only. Do not print long audits, tables, scratch work, scoring signals, draft bullets, or JSON.
-
-Output exactly these sections:
-
-COVERAGE SNAPSHOT:
-- Plan: <plan id> | <Backend / Fullstack / AIML> | <Entry / Mid / Intern>
-- Minimum in Experience: <X/Y>, <NN%>
-- First-half-page target: <keywords that must appear in Skills plus first Experience Summary/Bullet 2/Bullet 3>
-- Project-only minimums: <comma-separated list or None>
-- Risk: LOW | MEDIUM | HIGH
-
-ORDERED EXPERIENCE TARGETS:
-<Experience ID>:
-Summary: <3 to 6 highest-priority JD keywords or capability terms, highest to lowest>
-Bullet 2: <3 to 6 next JD keywords or capability terms, highest to lowest>
-Bullet 3: <3 to 6 next JD keywords or capability terms, highest to lowest>
-
-PROJECT TARGETS - SUPPLEMENTAL ONLY:
-<canonical Project name>: Bullet 1: <preferred/supplemental proof slice>; Bullet 2: <different proof slice>
-
-DES CANDIDATE BANK:
-DES 1 | scope: <Experience ID or Project ID> | keyword: <exact JD keyword> | story match: <closest evidence or no direct match> | short story: <candidate-confirmable fact, 18 words or fewer> | use when: <why it matters> | approve text: 1
-
-Rules:
-- Keep PASS 1 compact enough to read quickly.
-- Usually create 3 to 8 DES candidates, only for high-value gaps.
-- For both TCS entries, rank each entry's Summary, Bullet 2, and Bullet 3 from strongest JD minimum cluster to lower-priority proof.
-- If a first-page or first-experience keyword needs user confirmation, mark it FIRST EXPERIENCE DES NEEDED.
-- End with: APPROVAL: Reply 1,2 or 1 to 4, optional explanation.
 """
 
 PASS2_COMPACT_INSTRUCTION = """
@@ -257,6 +228,15 @@ class NvidiaResponse:
     text: str
     usage: dict[str, int]
     finish_reason: str
+    queue_wait_seconds: float = 0.0
+    provider_response_seconds: float = 0.0
+    account_label: str = ""
+
+
+@dataclass(frozen=True)
+class NvidiaAccount:
+    label: str
+    api_key: str
 
 
 @dataclass(frozen=True)
@@ -312,10 +292,13 @@ def raise_if_cancelled(cancel_event: threading.Event | None) -> None:
         raise OperationCancelled("Operation stopped by user.")
 
 
-async def wait_before_retry(seconds: int, cancel_event: threading.Event | None) -> None:
-    for _ in range(seconds * 10):
+async def wait_before_retry(seconds: float, cancel_event: threading.Event | None) -> None:
+    remaining = max(0.0, float(seconds))
+    while remaining > 0:
         raise_if_cancelled(cancel_event)
-        await asyncio.sleep(0.1)
+        interval = min(0.1, remaining)
+        await asyncio.sleep(interval)
+        remaining -= interval
 
 
 MODEL_PRICING_PER_MTOK = {
@@ -354,6 +337,8 @@ def load_config() -> dict[str, Any]:
         "PROVIDER_MODE": "provider_mode",
         "RESUME_AGENT_PROVIDER": "provider",
         "NVIDIA_API_KEY": "nvidia_api_key",
+        "NVIDIA_API_KEY_1": "nvidia_api_key_1",
+        "NVIDIA_API_KEY_2": "nvidia_api_key_2",
         "NVIDIA_MODEL": "model_nvidia",
         "NVIDIA_THINKING": "nvidia_thinking",
         "NVIDIA_MEDIUM_EFFORT": "nvidia_medium_effort",
@@ -365,6 +350,8 @@ def load_config() -> dict[str, Any]:
         "NVIDIA_BASE_URL": "nvidia_base_url",
         "NVIDIA_MAX_ATTEMPTS": "nvidia_max_attempts",
         "NVIDIA_MAX_CONCURRENT_REQUESTS": "nvidia_max_concurrent_requests",
+        "NVIDIA_MAX_CONCURRENT_REQUESTS_PER_ACCOUNT": "nvidia_max_concurrent_requests_per_account",
+        "NVIDIA_TIMEOUT_SECONDS": "nvidia_timeout_seconds",
         "NVIDIA_GUIDED_JSON": "nvidia_guided_json",
         "NVIDIA_VALIDATION_PASS": "nvidia_validation_pass",
         "NVIDIA_VALIDATOR_SEED": "nvidia_validator_seed",
@@ -425,6 +412,26 @@ def get_nvidia_max_concurrent_requests() -> int:
     )
 
 
+def get_nvidia_max_concurrent_requests_per_account() -> int:
+    cfg = load_config()
+    return config_int(
+        cfg.get("nvidia_max_concurrent_requests_per_account"),
+        DEFAULT_NVIDIA_MAX_CONCURRENT_REQUESTS_PER_ACCOUNT,
+        1,
+        16,
+    )
+
+
+def get_nvidia_timeout_seconds() -> float:
+    """Return zero when the NVIDIA HTTP client should have no timeout."""
+    return config_float(
+        load_config().get("nvidia_timeout_seconds"),
+        DEFAULT_NVIDIA_TIMEOUT_SECONDS,
+        0.0,
+        1800.0,
+    )
+
+
 def nvidia_request_gate() -> threading.BoundedSemaphore:
     global _nvidia_gate, _nvidia_gate_limit
     limit = get_nvidia_max_concurrent_requests()
@@ -433,6 +440,16 @@ def nvidia_request_gate() -> threading.BoundedSemaphore:
             _nvidia_gate = threading.BoundedSemaphore(limit)
             _nvidia_gate_limit = limit
         return _nvidia_gate
+
+
+def nvidia_account_gate(label: str) -> threading.BoundedSemaphore:
+    limit = get_nvidia_max_concurrent_requests_per_account()
+    with _nvidia_gate_lock:
+        current = _nvidia_account_gates.get(label)
+        if current is None or current[0] != limit:
+            current = (limit, threading.BoundedSemaphore(limit))
+            _nvidia_account_gates[label] = current
+        return current[1]
 
 
 def get_response_max_tokens() -> int:
@@ -508,7 +525,7 @@ def get_provider() -> str:
     provider = str(cfg.get("provider", "") or os.environ.get("RESUME_AGENT_PROVIDER", "")).lower().strip()
     if provider in {"anthropic", "nvidia"}:
         return provider
-    if cfg.get("model_nvidia") or os.environ.get("NVIDIA_API_KEY"):
+    if cfg.get("model_nvidia") or get_nvidia_accounts():
         return "nvidia"
     return "anthropic"
 
@@ -563,17 +580,13 @@ def get_default_nvidia_model_option() -> str:
 
 def normalize_prompt_profile(value: str | None) -> str:
     raw = (value or "").strip().lower()
-    if raw in {"v2", "prompt_v2", "v2_experimental_flow", "v2 experimental"}:
-        return "v2"
     if raw in {"v3", "prompt_v3", "v3_experimental_flow", "v3 experimental"}:
         return "v3"
-    if raw in {"v4", "prompt_v4", "v4_system", "v4 system"}:
-        return "v4"
     return "stable"
 
 
 def is_experimental_prompt_profile(value: str | None) -> bool:
-    return normalize_prompt_profile(value) in {"v2", "v3"}
+    return normalize_prompt_profile(value) == "v3"
 
 
 def prompt_profile_label(profile: str) -> str:
@@ -591,18 +604,80 @@ def resolve_prompt_profile_label(label: str) -> str:
     return normalize_prompt_profile(label)
 
 
-def get_nvidia_client():
+def get_nvidia_accounts() -> list[NvidiaAccount]:
+    """Return configured NVIDIA credentials without exposing them to logs or diagnostics."""
+    cfg = load_config()
+    configured = [
+        ("account_1", cfg.get("nvidia_api_key_1") or os.environ.get("NVIDIA_API_KEY_1", "")),
+        ("account_2", cfg.get("nvidia_api_key_2") or os.environ.get("NVIDIA_API_KEY_2", "")),
+    ]
+    legacy = cfg.get("nvidia_api_key") or os.environ.get("NVIDIA_API_KEY", "")
+    if legacy:
+        configured.append(("account_default", legacy))
+
+    accounts: list[NvidiaAccount] = []
+    seen: set[str] = set()
+    for label, raw_key in configured:
+        key = str(raw_key or "").strip()
+        if not key or key in seen:
+            continue
+        accounts.append(NvidiaAccount(label=label, api_key=key))
+        seen.add(key)
+    return accounts
+
+
+def choose_nvidia_account() -> NvidiaAccount:
+    global _nvidia_account_cursor
+    accounts = get_nvidia_accounts()
+    if not accounts:
+        raise RuntimeError(
+            "NVIDIA provider selected but no API key is configured. Set "
+            "NVIDIA_API_KEY_1 and/or NVIDIA_API_KEY_2."
+        )
+    with _nvidia_account_lock:
+        account = accounts[_nvidia_account_cursor % len(accounts)]
+        _nvidia_account_cursor = (_nvidia_account_cursor + 1) % len(accounts)
+    return account
+
+
+def acquire_nvidia_account(
+    cancel_event: threading.Event | None = None,
+) -> tuple[NvidiaAccount, threading.BoundedSemaphore]:
+    """Lease the next available account, using round-robin only to break ties."""
+    global _nvidia_account_cursor
+    while True:
+        raise_if_cancelled(cancel_event)
+        accounts = get_nvidia_accounts()
+        if not accounts:
+            return choose_nvidia_account(), threading.BoundedSemaphore(1)
+        with _nvidia_account_lock:
+            start = _nvidia_account_cursor % len(accounts)
+        for offset in range(len(accounts)):
+            index = (start + offset) % len(accounts)
+            account = accounts[index]
+            gate = nvidia_account_gate(account.label)
+            if gate.acquire(blocking=False):
+                with _nvidia_account_lock:
+                    _nvidia_account_cursor = (index + 1) % len(accounts)
+                return account, gate
+        time.sleep(0.05)
+
+
+def get_nvidia_client(account: NvidiaAccount | None = None):
     try:
         from openai import OpenAI
     except ImportError as exc:
         raise RuntimeError("openai is required for NVIDIA provider. Run: pip install openai") from exc
 
     cfg = load_config()
-    key = cfg.get("nvidia_api_key", "") or os.environ.get("NVIDIA_API_KEY", "")
-    if not key:
-        raise RuntimeError("NVIDIA provider selected but NVIDIA_API_KEY is missing.")
+    selected = account or choose_nvidia_account()
     base_url = cfg.get("nvidia_base_url") or os.environ.get("NVIDIA_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-    return OpenAI(base_url=base_url, api_key=key)
+    return OpenAI(
+        base_url=base_url,
+        api_key=selected.api_key,
+        timeout=(get_nvidia_timeout_seconds() or None),
+        max_retries=0,
+    )
 
 
 def estimate_cost_usd(
@@ -648,6 +723,7 @@ def build_nvidia_request_payload(
     max_tokens: int,
     seed_override: int | None = None,
     guided_json_schema: dict[str, Any] | None = None,
+    reasoning_budget_override: int | None = None,
 ) -> dict[str, Any]:
     spec = get_nvidia_model_spec(model)
     extra_body: dict[str, Any] = {}
@@ -657,7 +733,12 @@ def build_nvidia_request_payload(
         if get_nvidia_medium_effort():
             extra_body.setdefault("chat_template_kwargs", {})["medium_effort"] = True
         if thinking:
-            budget = min(get_nvidia_reasoning_budget(), max(0, max_tokens - 1))
+            configured_budget = (
+                get_nvidia_reasoning_budget()
+                if reasoning_budget_override is None
+                else max(0, int(reasoning_budget_override))
+            )
+            budget = min(configured_budget, max(0, max_tokens - 1))
             if budget:
                 extra_body["reasoning_budget"] = budget
     if guided_json_schema:
@@ -700,6 +781,21 @@ def is_retryable_nvidia_error(exc: Exception) -> bool:
     )
 
 
+def nvidia_retry_delay_seconds(attempt: int, exc: Exception | None = None) -> float:
+    """Honor provider Retry-After when available, otherwise back off with jitter."""
+    response = getattr(exc, "response", None) if exc is not None else None
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        retry_after = headers.get("retry-after") or headers.get("Retry-After")
+        try:
+            if retry_after is not None:
+                return min(60.0, max(0.0, float(retry_after)))
+        except (TypeError, ValueError):
+            pass
+    exponential = min(60.0, float(2 ** max(0, attempt - 1)))
+    return exponential + random.uniform(0.0, min(1.0, exponential * 0.25))
+
+
 def call_nvidia_sync(
     *,
     system_blocks: list[dict[str, Any]],
@@ -709,10 +805,13 @@ def call_nvidia_sync(
     max_tokens: int,
     seed_override: int | None = None,
     guided_json_schema: dict[str, Any] | None = None,
+    reasoning_budget_override: int | None = None,
     cancel_event: threading.Event | None = None,
 ) -> NvidiaResponse:
     raise_if_cancelled(cancel_event)
-    client = get_nvidia_client()
+    queue_started = time.monotonic()
+    account, account_gate = acquire_nvidia_account(cancel_event)
+    client = get_nvidia_client(account)
     payload = build_nvidia_request_payload(
         system_blocks=system_blocks,
         messages=messages,
@@ -721,15 +820,23 @@ def call_nvidia_sync(
         max_tokens=max_tokens,
         seed_override=seed_override,
         guided_json_schema=guided_json_schema,
+        reasoning_budget_override=reasoning_budget_override,
     )
     stream = bool(payload["stream"])
     gate = nvidia_request_gate()
-    while not gate.acquire(timeout=0.25):
-        raise_if_cancelled(cancel_event)
+    try:
+        while not gate.acquire(timeout=0.25):
+            raise_if_cancelled(cancel_event)
+    except Exception:
+        account_gate.release()
+        raise
+    queue_wait_seconds = time.monotonic() - queue_started
+    provider_started = time.monotonic()
     try:
         completion = client.chat.completions.create(**payload)
     except Exception:
         gate.release()
+        account_gate.release()
         raise
     usage_data = {
         "input_tokens": 0,
@@ -753,9 +860,13 @@ def call_nvidia_sync(
                 text=(getattr(choice.message, "content", None) or "").strip(),
                 usage=usage_data,
                 finish_reason=str(getattr(choice, "finish_reason", "") or ""),
+                queue_wait_seconds=queue_wait_seconds,
+                provider_response_seconds=time.monotonic() - provider_started,
+                account_label=account.label,
             )
         finally:
             gate.release()
+            account_gate.release()
 
     parts: list[str] = []
     finish_reason = ""
@@ -788,19 +899,19 @@ def call_nvidia_sync(
             text="".join(parts).strip(),
             usage=usage_data,
             finish_reason=finish_reason,
+            queue_wait_seconds=queue_wait_seconds,
+            provider_response_seconds=time.monotonic() - provider_started,
+            account_label=account.label,
         )
     finally:
         gate.release()
+        account_gate.release()
 
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v2":
-        return PROMPT_V2_DIR / "prompts"
     if profile == "v3":
         return PROMPT_V3_DIR / "prompts"
-    if profile == "v4":
-        return PROMPT_V4_DIR
     return PROMPT_DIR
 
 
@@ -1593,7 +1704,7 @@ def compact_project_url(name: str) -> str:
     return ""
 
 
-def v2_header_location(inp: ResumeInput) -> str:
+def header_location(inp: ResumeInput) -> str:
     target = str(inp.words or "").strip()
     if target and target.lower() != CURRENT_LOCATION.lower():
         return f"{CURRENT_LOCATION} | Moving to {target}"
@@ -1677,10 +1788,10 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         config["experience_order"] = "json_order"
     elif normalized_order in {"tcs", "tcs_first", "ghi", "ghi_first", "json", "json_order"}:
         config["experience_order"] = {"tcs": "tcs_first", "ghi": "ghi_first", "json": "json_order"}.get(normalized_order, normalized_order)
-    elif profile in {"v2", "v3"}:
+    elif profile == "v3":
         config["experience_order"] = "json_order"
 
-    header_location = v2_header_location(inp)
+    resume_header_location = header_location(inp)
     binghamton_degree = "Master of Science, Computer Science, AI Specialization"
     gujarat_degree = "Bachelor of Engineering, Computer Engineering"
     binghamton_university = "Binghamton University, State University of New York (SUNY)"
@@ -1693,7 +1804,7 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         "config": config,
         "name": CANDIDATE_NAME,
         "contact": candidate_contact_line(),
-        "location": header_location,
+        "location": resume_header_location,
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
         "summary": summary_text,
@@ -1938,6 +2049,7 @@ async def call_model(
     provider_override: str | None = None,
     model_override: str | None = None,
     nvidia_thinking_override: bool | None = None,
+    nvidia_reasoning_budget_override: int | None = None,
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
     diagnostics: dict[str, Any] | None = None,
     guided_json_schema_override: dict[str, Any] | None = None,
@@ -1962,6 +2074,8 @@ async def call_model(
     cache_create = 0
     cache_read = 0
     reasoning_tokens = 0
+    queue_wait_seconds = 0.0
+    provider_response_seconds = 0.0
     attempts_used = 1
     finish_reason = ""
     last_error: Exception | None = None
@@ -1981,8 +2095,11 @@ async def call_model(
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "reasoning_tokens": 0,
+            "queue_wait_seconds": 0.0,
+            "provider_response_seconds": 0.0,
             "total_response_time_seconds": 0.0,
             "schema_validation_result": "NOT_RUN",
+            "nvidia_accounts": [],
         })
 
     if provider == "nvidia":
@@ -1996,7 +2113,7 @@ async def call_model(
             if guided_json_schema_override is not None
             else guided_json_schema_for_validator(output_validator)
         )
-        max_attempts = get_nvidia_max_attempts() if output_validator else 1
+        max_attempts = get_nvidia_max_attempts()
         if diagnostics is not None:
             diagnostics["guided_json_enabled"] = guided_json_schema is not None
             diagnostics["validation_enabled"] = bool(output_validator and nvidia_validation_pass)
@@ -2006,7 +2123,10 @@ async def call_model(
             if attempt > 1:
                 if diagnostics is not None:
                     diagnostics["retries"] += 1
-                await wait_before_retry(min(2 ** (attempt - 2), 8), cancel_event)
+                await wait_before_retry(
+                    nvidia_retry_delay_seconds(attempt - 1, last_error),
+                    cancel_event,
+                )
             attempt_messages = list(messages)
             if attempt > 1:
                 detail = f"Rejection reason: {rejection_reason}" if rejection_reason else ""
@@ -2025,6 +2145,7 @@ async def call_model(
                             thinking=nvidia_thinking,
                             max_tokens=resolved_max_tokens,
                             guided_json_schema=guided_json_schema,
+                            reasoning_budget_override=nvidia_reasoning_budget_override,
                         )
                     )
                 response = await asyncio.to_thread(
@@ -2035,6 +2156,7 @@ async def call_model(
                     thinking=nvidia_thinking,
                     max_tokens=resolved_max_tokens,
                     guided_json_schema=guided_json_schema,
+                    reasoning_budget_override=nvidia_reasoning_budget_override,
                     cancel_event=cancel_event,
                 )
             except OperationCancelled:
@@ -2054,6 +2176,10 @@ async def call_model(
             cache_create += response.usage["cache_creation_input_tokens"]
             cache_read += response.usage["cache_read_input_tokens"]
             reasoning_tokens += response.usage.get("reasoning_tokens", 0)
+            queue_wait_seconds += response.queue_wait_seconds
+            provider_response_seconds += response.provider_response_seconds
+            if diagnostics is not None and response.account_label:
+                diagnostics["nvidia_accounts"].append(response.account_label)
 
             problems: list[str] = []
             if finish_reason.lower() in {"length", "max_tokens"}:
@@ -2088,6 +2214,7 @@ async def call_model(
                         max_tokens=resolved_max_tokens,
                         seed_override=get_nvidia_validator_seed(),
                         guided_json_schema=guided_json_schema,
+                        reasoning_budget_override=nvidia_reasoning_budget_override,
                         cancel_event=cancel_event,
                     )
                     input_tokens += validated_response.usage["input_tokens"]
@@ -2095,6 +2222,10 @@ async def call_model(
                     cache_create += validated_response.usage["cache_creation_input_tokens"]
                     cache_read += validated_response.usage["cache_read_input_tokens"]
                     reasoning_tokens += validated_response.usage.get("reasoning_tokens", 0)
+                    queue_wait_seconds += validated_response.queue_wait_seconds
+                    provider_response_seconds += validated_response.provider_response_seconds
+                    if diagnostics is not None and validated_response.account_label:
+                        diagnostics["nvidia_accounts"].append(validated_response.account_label)
                     validation_error = output_validator(validated_response.text)
                     if validation_error:
                         problems.append(f"validation pass rejected: {validation_error}")
@@ -2159,6 +2290,14 @@ async def call_model(
     elapsed = time.monotonic() - t0
     if diagnostics is not None:
         final_validation_error = output_validator(text) if output_validator else None
+        if finish_reason.lower() in {"length", "max_tokens"}:
+            schema_validation_result = "TRUNCATED"
+        elif output_validator:
+            schema_validation_result = (
+                "PASS" if not final_validation_error else f"FAIL: {final_validation_error}"
+            )
+        else:
+            schema_validation_result = "NOT_RUN"
         diagnostics.update({
             "effective_provider": provider,
             "effective_model": model,
@@ -2166,16 +2305,28 @@ async def call_model(
             "prompt_tokens": input_tokens,
             "completion_tokens": output_tokens,
             "reasoning_tokens": reasoning_tokens,
+            "queue_wait_seconds": round(queue_wait_seconds, 3),
+            "provider_response_seconds": round(provider_response_seconds, 3),
             "total_response_time_seconds": round(elapsed, 3),
-            "schema_validation_result": "PASS" if not final_validation_error else f"FAIL: {final_validation_error}",
+            "schema_validation_result": schema_validation_result,
         })
     thinking_log = f" thinking={'on' if nvidia_thinking else 'off'}" if provider == "nvidia" else ""
+    timing_log = (
+        f" queue={queue_wait_seconds:.1f}s provider_time={provider_response_seconds:.1f}s"
+        if provider == "nvidia"
+        else ""
+    )
+    account_log = ""
+    if provider == "nvidia" and diagnostics is not None:
+        used_accounts = list(dict.fromkeys(diagnostics.get("nvidia_accounts", [])))
+        if used_accounts:
+            account_log = f" accounts={','.join(used_accounts)}"
     log(
         f"{label}: provider={provider} model={model}{thinking_log} "
         f"in={input_tokens} out={output_tokens} "
         f"cache_read={cache_read} cache_create={cache_create} "
         f"attempts={attempts_used} finish_reason={finish_reason or 'unknown'} "
-        f"cost=${estimated_cost:.4f} elapsed={elapsed:.1f}s"
+        f"cost=${estimated_cost:.4f} elapsed={elapsed:.1f}s{timing_log}{account_log}"
     )
     if cost_cb:
         cost_cb(CostEvent(
@@ -2216,16 +2367,12 @@ def pass2_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
 
 def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v4":
-        return [cached_text_block(read_prompt("linkedin.md", profile))]
     if profile == "v3":
         return [
             cached_text_block(read_prompt("prompt.md", profile)),
             cached_text_block(read_prompt("Story.md", profile)),
             cached_text_block(read_prompt("hotdog.md", profile)),
         ]
-    if profile == "v2":
-        return [cached_text_block(read_prompt("hotdog.md", prompt_profile))]
     return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
 
@@ -2266,88 +2413,14 @@ def v3_runtime_input(
     return "\n\n".join(parts)
 
 
-def v4_jd_input(inp: ResumeInput) -> str:
-    return json.dumps({"JOB_DESCRIPTION": inp.jd.strip()}, ensure_ascii=False)
-
-
-V4_JD_RETRY_INSTRUCTION = """
-The previous JD Parse response did not match the required JSON contract.
-Return the complete corrected JSON object only. Do not return Markdown, commentary, evidence, or additional keys.
-"""
-
-
-def validate_v4_jd_response(text: str) -> str | None:
-    try:
-        data = extract_json(text)
-    except Exception as exc:
-        return f"Could not extract valid JD Parse JSON: {exc}"
-    expected_top = {"role", "level", "filters", "5", "4", "3", "2"}
-    if set(data) != expected_top:
-        return f"JD Parse top-level keys must be exactly {sorted(expected_top)}"
-    if not isinstance(data["role"], str) or not data["role"].strip():
-        return "JD Parse role must be a non-empty string"
-    if data["level"] not in {"entry", "mid", "out_of_scope", "unclear"}:
-        return "JD Parse level is invalid"
-    if not isinstance(data["filters"], list) or not all(isinstance(item, str) for item in data["filters"]):
-        return "JD Parse filters must be an array of strings"
-
-    expected_statuses = {"required", "core", "preferred"}
-    expected_types = {"tech", "nontech"}
-    for bucket in ("5", "4", "3", "2"):
-        bucket_data = data[bucket]
-        if not isinstance(bucket_data, dict) or set(bucket_data) != expected_statuses:
-            return f"JD Parse bucket {bucket} must contain required, core, and preferred"
-        for status in ("required", "core", "preferred"):
-            status_data = bucket_data[status]
-            if not isinstance(status_data, dict) or set(status_data) != expected_types:
-                return f"JD Parse bucket {bucket}.{status} must contain tech and nontech"
-            for item_type in ("tech", "nontech"):
-                values = status_data[item_type]
-                if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
-                    return f"JD Parse bucket {bucket}.{status}.{item_type} must be an array of strings"
-    return None
-
-
-def v4_jd_guided_json_schema() -> dict[str, Any]:
-    path = PROMPT_V4_DIR / "schemas" / "01_jd_analyzer.schema.json"
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def guided_json_schema_for_validator(
     validator: Callable[[str], str | None] | None,
 ) -> dict[str, Any] | None:
     if not validator or not get_nvidia_guided_json():
         return None
-    if validator is validate_v4_jd_response:
-        return v4_jd_guided_json_schema()
     if validator in {validate_json_response, validate_compact_resume_response}:
         return {"type": "object"}
     return None
-
-
-def format_v4_jd_output(data: dict[str, Any]) -> str:
-    lines = [
-        "JD PARSE RESULT",
-        "",
-        f"Role: {data.get('role', '')}",
-        f"Level: {str(data.get('level', '')).replace('_', ' ').title()}",
-        "",
-        "FILTERS",
-    ]
-    filters = data.get("filters") or []
-    lines.extend([f"- {item}" for item in filters] or ["- None"])
-    for bucket, label in (("5", "CRITICAL"), ("4", "HIGH"), ("3", "RELEVANT"), ("2", "OPTIONAL")):
-        lines.extend(["", f"BUCKET {bucket} - {label}"])
-        for status in ("required", "core", "preferred"):
-            status_data = (data.get(bucket) or {}).get(status) or {}
-            tech = ", ".join(status_data.get("tech") or []) or "None"
-            nontech = ", ".join(status_data.get("nontech") or []) or "None"
-            lines.extend([
-                f"{status.upper()}",
-                f"  Technical: {tech}",
-                f"  Nontechnical: {nontech}",
-            ])
-    return "\n".join(lines)
 
 
 async def run_pass1(
@@ -2361,32 +2434,8 @@ async def run_pass1(
     diagnostics: dict[str, Any] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v4":
-        user_message = v4_jd_input(inp)
-    elif profile == "v3":
+    if profile == "v3":
         user_message = v3_runtime_input(inp, run_mode="PASS 1 - COMPANY + JD PLAN")
-    elif profile == "v2":
-        pass1_run_mode = (
-            "RUN MODE:\nPASS 1 - COMPANY + JD PLAN"
-            if profile == "v3"
-            else "RUN MODE:\nPASS 1 - PLAN ONLY"
-        )
-        parts = [
-            read_prompt("prompt_short.md", profile),
-            V2_PASS1_COMPACT_INSTRUCTION,
-            pass1_run_mode,
-            experimental_resume_configuration(inp, profile),
-        ]
-        parts += [
-            f"Company:\n{inp.company.strip()}",
-            "COMPANY RESEARCH:\nNot provided. Use the JD company signals only; do not invent culture.",
-            f"JD:\n{inp.jd.strip()}",
-            f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
-            f"LEVEL:\n{experimental_level_label(inp)}",
-            f"Location:\n{inp.words.strip()}",
-            f"DES (optional):\n{inp.des.strip()}",
-        ]
-        user_message = "\n\n".join(parts)
     else:
         user_message = "\n\n".join([
             read_prompt("prompt_short.md", profile),
@@ -2394,28 +2443,15 @@ async def run_pass1(
             input_to_text(inp),
         ])
     return await call_model(
-        system_blocks=(
-            [cached_text_block(read_prompt("prompts/01_JD_Analyzer.md", "v4"))]
-            if profile == "v4"
-            else pass1_system(profile)
-        ),
+        system_blocks=pass1_system(profile),
         messages=[{"role": "user", "content": user_message}],
-        label=labeled_step(request_label, "JD PARSE" if profile == "v4" else "PASS 1"),
+        label=labeled_step(request_label, "PASS 1"),
         cost_cb=cost_cb,
-        output_validator=(
-            validate_v4_jd_response
-            if profile == "v4"
-            else (None if profile in {"v2", "v3"} else validate_pass1_response)
-        ),
-        retry_instruction=(
-            V4_JD_RETRY_INSTRUCTION
-            if profile == "v4"
-            else (
-                None if profile in {"v2", "v3"} else (
-                    NVIDIA_RETRY_INSTRUCTION
-                    + "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
-                )
-            )
+        output_validator=None if profile == "v3" else validate_pass1_response,
+        retry_instruction=(None if profile == "v3" else (
+            NVIDIA_RETRY_INSTRUCTION +
+            "\nReturn the required DES CANDIDATE BANK with parseable lines starting DES 1 |."
+        )
         ),
         cancel_event=cancel_event,
         model_override=nvidia_model,
@@ -2451,49 +2487,6 @@ async def run_pass2(
             {"role": "assistant", "content": pass1_text.strip()},
             {"role": "user", "content": second_user},
         ]
-    elif profile == "v2":
-        pass1_run_mode = (
-            "RUN MODE:\nPASS 1 - COMPANY + JD PLAN"
-            if profile == "v3"
-            else "RUN MODE:\nPASS 1 - PLAN ONLY"
-        )
-        first_user = "\n\n".join([
-            read_prompt("prompt_short.md", profile),
-            V2_PASS1_COMPACT_INSTRUCTION,
-            pass1_run_mode,
-            experimental_resume_configuration(inp, profile),
-            f"Company:\n{inp.company.strip()}",
-            "COMPANY RESEARCH:\nNot provided. Use the JD company signals only; do not invent culture.",
-            f"JD:\n{inp.jd.strip()}",
-            f"ROLE TYPE:\n{experimental_role_label(inp.mode)}",
-            f"LEVEL:\n{experimental_level_label(inp)}",
-            f"Location:\n{inp.words.strip()}",
-            f"DES (optional):\n{inp.des.strip()}",
-            f"RESUME RULES FROM local/rules/Rules.md:\n{read_resume_rules()}",
-        ])
-        second_user = "\n\n".join([
-            "RUN MODE:\nPASS 2 - WRITE APPROVED RESUME JSON",
-            "APPROVED DES:" if profile == "v3" else "APPROVAL / APPROVED DES:",
-            normalized_approval.strip() or "Use current evidence only. No DES IDs approved.",
-            (
-                "Use the approved PASS 1 plan. If approval says 1 to 4, 1,2,3, or names DES IDs, "
-                "use the matching PASS 1 DES CANDIDATE BANK lines as current-run DES evidence "
-                "only for their named scopes. If approval includes explanation after the IDs, "
-                "use it as current-run evidence only when it is tied to the approved DES scope "
-                "or a clear Experience ID or Project ID. If no IDs are approved, add no new DES evidence. "
-                "Approved scoped DES should be preserved by hotdog and final repair when it is JD-relevant; "
-                "do not discard it only because it was not originally in Story.md. "
-                "In ANALYSIS, include a compact HOTDOG HANDOFF section that maps each Experience and Project "
-                "bullet slot to its kept JD keywords, source scope, and any safe capability translation used "
-                "from Story.md or approved DES. Keep the handoff concise and do not include draft bullets, "
-                "word counts, or hidden audit math. Then write ANALYSIS and the final JSON."
-            ),
-        ])
-        messages = [
-            {"role": "user", "content": first_user},
-            {"role": "assistant", "content": pass1_text.strip()},
-            {"role": "user", "content": second_user},
-        ]
     else:
         first_user = "\n\n".join([
             read_prompt("prompt_short.md", profile),
@@ -2510,7 +2503,7 @@ async def run_pass2(
         messages=messages,
         label=labeled_step(request_label, "PASS 2"),
         cost_cb=cost_cb,
-        output_validator=None if profile in {"v2", "v3"} else validate_json_response,
+        output_validator=None if profile == "v3" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
@@ -2538,25 +2531,7 @@ async def run_recruiter_review(
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
-    if profile == "v4":
-        resume_input = inp or ResumeInput(company=company, title=title, jd=jd)
-        parts = [
-            "TARGET COMPANY:",
-            (resume_input.company or company).strip(),
-            "",
-            "EXACT TARGET TITLE:",
-            (resume_input.title or title).strip(),
-            "",
-            "TARGET LOCATION:",
-            resume_input.words.strip() or "Not provided.",
-            "",
-            "JOB DESCRIPTION:",
-            (resume_input.jd or jd).strip(),
-            "",
-            "FINAL V4 RESUME JSON:",
-            json.dumps(resume1_json, ensure_ascii=False, indent=2),
-        ]
-    elif profile == "v3":
+    if profile == "v3":
         resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
         if not resume_input.company.strip():
             resume_input.company = company
@@ -2572,54 +2547,6 @@ async def run_recruiter_review(
                 pass1_text=pass1_audit,
                 resume_json=resume1_json,
             )
-        ]
-    elif profile == "v2":
-        resume_input = inp or ResumeInput(company=company, title=title, jd=jd, des=des)
-        parts = [
-            experimental_resume_configuration(resume_input, profile),
-            "",
-            "=== INPUT START ===",
-            "",
-            "COMPANY:",
-            company.strip(),
-            "",
-            "COMPANY RESEARCH:",
-            "Not provided. Use the JD company signals only; do not invent culture.",
-            "",
-            "JD:",
-            jd.strip(),
-            "",
-            "ROLE TYPE:",
-            experimental_role_label(resume_input.mode),
-            "",
-            "LEVEL:",
-            experimental_level_label(resume_input),
-            "",
-            "CANDIDATE DES INPUT:",
-            resume_input.des.strip(),
-            "",
-            "APPROVAL / APPROVED DES:",
-            des.strip(),
-            "",
-            "PASS 1 TARGETS / DES CANDIDATE BANK:",
-            pass1_audit.strip() or "Not provided.",
-            "",
-            "RESUME GENERATION PROCESS / HOTDOG HANDOFF:",
-            resume_generation_process.strip() or "Not provided.",
-            "",
-            "RESUME RULES FROM local/rules/Rules.md:",
-            read_resume_rules(),
-            "",
-            "STORY.md:",
-            read_prompt("Story.md", profile),
-            "",
-            "PROJECT BANK:",
-            "",
-            "",
-            "CURRENT RESUME JSON:",
-            json.dumps(resume_json_to_compact(resume1_json), indent=2),
-            "",
-            "=== INPUT END ===",
         ]
     else:
         parts = [
@@ -2647,12 +2574,11 @@ async def run_recruiter_review(
         messages=[{"role": "user", "content": "\n".join(parts)}],
         label=labeled_step(
             request_label,
-            "LINKEDIN OUTREACH" if profile == "v4"
-            else "FINAL CHECK" if is_experimental_prompt_profile(profile)
+            "FINAL CHECK" if is_experimental_prompt_profile(profile)
             else "RECRUITER REVIEW",
         ),
         cost_cb=cost_cb,
-        output_validator=None if profile in {"v2", "v3", "v4"} else validate_json_response,
+        output_validator=None if profile == "v3" else validate_json_response,
         cancel_event=cancel_event,
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,

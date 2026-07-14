@@ -48,11 +48,9 @@ DES_FACTS_PATH = ROOT / DES_FACTS_FILE_NAME
 
 PROMPT_PROFILE_LABELS = {
     "stable": "Stable",
-    "v2": "V2",
     "v3": "V3",
-    "v4": "V4",
 }
-DEFAULT_PROMPT_PROFILE = "v4"
+DEFAULT_PROMPT_PROFILE = "stable"
 
 
 def candidate_contact_line() -> str:
