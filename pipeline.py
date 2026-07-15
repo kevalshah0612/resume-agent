@@ -34,15 +34,13 @@ import anthropic
 from app_properties import (
     CANDIDATE_NAME,
     CURRENT_LOCATION,
-    DEFAULT_BINGHAMTON_GRADUATION,
-    GHI_EMPLOYMENT_NOTE,
     GITHUB_URL,
-    GUJARAT_GRADUATION,
     LINKEDIN_URL,
     PROMPT_PROFILE_LABELS,
-    TCS_II_EMPLOYMENT_NOTE,
     PROJECT_URLS,
     candidate_contact_line,
+    candidate_education_profile,
+    candidate_experience_profile,
 )
 from manager import build_render_profile
 
@@ -1779,18 +1777,8 @@ def compact_model_skills_to_technical_skills(skills: Any) -> list[list[Any]]:
     return [["Skills", terms[:6]]] if terms else []
 
 
-def compact_experience_lock(company: str, title: str) -> dict[str, str]:
-    company_key = company.strip().lower()
-    title_key = title.strip().lower()
-    if "binghamton university" in company_key or "teaching assistant" in title_key:
-        return {"location": "Binghamton, NY", "dates": "Aug 2025 - Present", "employment_note": ""}
-    if "global health impact" in company_key:
-        return {"location": "New York, NY", "dates": "Jun 2025 - Aug 2025", "employment_note": GHI_EMPLOYMENT_NOTE}
-    if "tata consultancy services" in company_key and "ii" in title_key:
-        return {"location": "", "dates": "Oct 2022 - Dec 2024", "employment_note": TCS_II_EMPLOYMENT_NOTE}
-    if "tata consultancy services" in company_key:
-        return {"location": "Gandhinagar, India", "dates": "Mar 2021 - Sep 2022", "employment_note": ""}
-    return {"location": "", "dates": "", "employment_note": ""}
+def compact_experience_lock(role_id: str, company: str, title: str) -> dict[str, Any] | None:
+    return candidate_experience_profile(role_id, company, title)
 
 
 def compact_project_url(name: str) -> str:
@@ -1848,20 +1836,34 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
     for item in source_experience:
         if not isinstance(item, dict):
             continue
+        role_id = str(
+            item.get("id")
+            or item.get("ID")
+            or item.get("role_id")
+            or item.get("story_id")
+            or ""
+        ).strip()
         title = str(item.get("title") or item.get("Title") or "").strip()
         company = str(item.get("company") or item.get("Company") or "").strip()
-        if "binghamton university" in company.lower() or "teaching assistant" in title.lower():
-            title = "Teaching Assistant"
-            company = company or "Binghamton University"
-        lock = compact_experience_lock(company, title)
+        lock = compact_experience_lock(role_id, company, title)
+        if lock:
+            title = str(lock["title"])
+            company = str(lock["company"])
+            location = str(lock["location"])
+            dates = str(lock["dates"])
+            employment_note = str(lock.get("employment_note") or "")
+        else:
+            location = str(item.get("location") or item.get("Location") or "").strip()
+            dates = str(item.get("dates") or item.get("Dates") or "").strip()
+            employment_note = str(item.get("employment_note") or "").strip()
         jobs.append({
-            "id": str(item.get("id") or item.get("ID") or "").strip(),
+            "id": role_id,
             "title": title,
             "company": company,
-            "location": str(item.get("location") or item.get("Location") or lock["location"]).strip(),
-            "dates": str(item.get("dates") or item.get("Dates") or lock["dates"]).strip(),
+            "location": location,
+            "dates": dates,
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
-            "employment_note": lock["employment_note"],
+            "employment_note": employment_note,
         })
 
     if requested_order:
@@ -1912,11 +1914,6 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         config["experience_order"] = "json_order"
 
     resume_header_location = header_location(inp)
-    binghamton_degree = "Master of Science, Computer Science, AI Specialization"
-    gujarat_degree = "Bachelor of Engineering, Computer Engineering"
-    binghamton_university = "Binghamton University, State University of New York (SUNY)"
-    gujarat_university = "Gujarat Technological University (GTU)"
-
     return normalize_resume_json({
         "type": strategy_type,
         "section_order": section_order,
@@ -1928,20 +1925,7 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
         "summary": summary_text,
-        "education": [
-            {
-                "university": binghamton_university,
-                "degree": binghamton_degree,
-                "location": "Binghamton, NY",
-                "graduation": DEFAULT_BINGHAMTON_GRADUATION,
-            },
-            {
-                "university": gujarat_university,
-                "degree": gujarat_degree,
-                "location": "Ahmedabad, India",
-                "graduation": GUJARAT_GRADUATION,
-            },
-        ],
+        "education": candidate_education_profile(),
         "professional_experience": jobs,
         "projects": projects,
         "technical_skills": compact_model_skills_to_technical_skills(
@@ -2581,7 +2565,16 @@ def v1_composer_input(inp: ResumeInput) -> list[str]:
 
 
 def v1_short_controller(run_mode: str) -> str:
-    return f"RUN MODE\n{run_mode}\n\n{read_prompt('prompt_short.md', 'v1')}"
+    prompt_files = {
+        "JD_INTELLIGENCE": "prompt_short_jd.md",
+        "EVIDENCE_MAPPING": "prompt_short_mapper.md",
+        "RESUME_COMPOSITION": "prompt_short_composer.md",
+    }
+    try:
+        prompt_file = prompt_files[run_mode]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported V1 run mode: {run_mode}") from exc
+    return f"RUN MODE: {run_mode}\n\n{read_prompt(prompt_file, 'v1')}"
 
 
 def v1_pass1_bundle(text: str) -> tuple[dict[str, Any], dict[str, Any]]:

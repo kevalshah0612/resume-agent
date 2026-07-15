@@ -467,32 +467,40 @@ Use no more than three total JD keyword units in a bullet, including named techn
 
 Use the inventory test before finalizing each bullet: if removing the technology names leaves no clear action, system, or result, the sentence is a technology inventory and must be rewritten around the achievement.
 
+## Exact JD Alignment Anchor
+
+For each bullet, read its `primary_requirement_ids` and the matching `requirement_evidence` entries before drafting.
+
+Select one visible primary alignment anchor in this order:
+
+1. Use the exact nonempty `jd_term`, with the same words, when the slot's locked evidence directly supports it.
+2. For an alternative or example group, use the exact supported `selected_member`.
+3. When the exact JD term is empty or unsupported, use the closest truthful term explicitly allowed by the slot and do not claim the unsupported JD wording.
+
+The bullet must contain its selected anchor naturally and within the three-keyword maximum. Do not replace `version control` with only a tool name when the evidence packet explicitly supports the JD phrase. Do not replace `unit testing` with only framework names when the packet supports the JD phrase. Do not paraphrase an exact supported primary term into broader or weaker language.
+
+After drafting each bullet, compare the finished sentence with its primary requirement before moving to the next bullet. If the exact supported alignment anchor is missing, awkward, unsupported, or buried in a technology list, rewrite the bullet.
+
 ## Opening Verb Quality
 
 Use verbs that reflect both the packet's planned JD action intent and the slot's allowed actual action.
 
-Prefer accurate verbs such as:
+Opening verbs must name the concrete engineering, analysis, leadership, or teaching action. Do not use a broad completion or participation word when the evidence supports a more precise action.
 
-- Built
-- Designed
-- Engineered
-- Developed
-- Implemented
-- Integrated
-- Automated
-- Standardized
-- Migrated
-- Restored
-- Diagnosed
-- Instrumented
-- Optimized
-- Delivered
-- Guided
-- Reviewed
-- Evaluated
-- Coordinated
+Preferred engineering and evidence verbs:
 
-Avoid repeating an opening verb when an equally accurate alternative exists. Never force a unique synonym that changes meaning or inflates ownership. Accuracy is more important than perfect verb uniqueness.
+`Architected, Automated, Benchmarked, Built, Configured, Consolidated, Containerized, Created, Debugged, Decomposed, Deployed, Designed, Developed, Diagnosed, Engineered, Established, Evaluated, Hardened, Implemented, Indexed, Instrumented, Integrated, Launched, Led, Mentored, Migrated, Modernized, Monitored, Optimized, Orchestrated, Parallelized, Profiled, Provisioned, Rebuilt, Redesigned, Refactored, Resolved, Restored, Reviewed, Scaled, Secured, Simplified, Spearheaded, Stabilized, Standardized, Streamlined, Tested, Tuned, Unified, Validated, Versioned`
+
+Control rules:
+
+1. Allocate a unique opening verb to every experience and project bullet before finalizing the resume.
+2. Never repeat an opening verb anywhere across experience and projects.
+3. Use the strongest accurate ownership or engineering verb for the first bullet of each role.
+4. Do not open with `Achieved`, `Assisted`, `Contributed`, `Delivered`, `Drove`, `Enabled`, `Executed`, `Helped`, `Improved`, `Participated`, `Supported`, `Utilized`, or `Worked` when a concrete action in the locked facts can lead the sentence.
+5. Use `Led`, `Owned`, `Spearheaded`, `Directed`, or `Championed` only when the packet proves the corresponding ownership scope.
+6. Use `Collaborated`, `Coordinated`, or `Partnered` only when cross-team action is central to the achievement and the sentence immediately names the concrete technical work.
+7. Do not open a project result bullet with `Self-tested`. Use an accurate action such as `Benchmarked`, `Evaluated`, `Profiled`, `Tested`, or `Validated`, then preserve `self-tested` later in the sentence when needed to distinguish project evidence from production evidence.
+8. If the preferred verb is already used, choose a different truthful action from that slot's allowed facts; never invent ownership or use an inaccurate synonym merely for variety.
 
 ## Prime Technology and Bullet Order
 
@@ -580,15 +588,19 @@ Perform these steps silently in one call:
 
 1. Resolve the configured mode.
 2. Resolve every DES branch.
-3. Create every configured experience row and slot from the mapper plan.
-4. Create every selected project with exactly two bullets.
-5. Write or omit the summary according to mode.
-6. Build Technical Skills from the locked plan.
-7. Audit every claim against its slot-local evidence-packet allowlist.
-8. Audit grammar, tense, voice, word count, verb accuracy, punctuation, and readability.
-9. Audit role order, role identity, bullet counts, project count, and Skills categories.
-10. Correct any problem silently without changing stories or adding evidence.
-11. Return the final compact resume JSON only.
+3. Create a resume-wide opening-verb ledger and reserve one unique, evidence-supported verb for every experience and project slot.
+4. Create every configured experience row and every selected project shell from the mapper plan.
+5. Draft and validate exactly one bullet at a time. Do not move to the next bullet until the current bullet passes its complete alignment loop.
+6. For the current bullet, verify the selected story, primary requirement, exact supported JD alignment anchor, action, method, technology, result or scope, and verified metric when available.
+7. Verify that the opening verb is precise, evidence-supported, appropriately strong for its position, and unused elsewhere in the ledger.
+8. Count the current bullet's words. Target 18 to 24 words; compress every bullet above 24 words; reject and rewrite every bullet above 28 words.
+9. Verify active past tense, one coherent achievement, no more than three visible JD keyword units, natural grammar, punctuation, and recruiter readability.
+10. Rewrite the current bullet until all applicable checks pass, record its accepted verb and alignment anchor, and only then continue to the next slot.
+11. Write or omit the summary according to mode and build Technical Skills from the locked plan.
+12. Audit every claim against its slot-local evidence-packet allowlist.
+13. Audit role order, role identity, bullet counts, project count, and Skills categories.
+14. Correct any problem silently without changing stories or adding evidence.
+15. Return the final compact resume JSON only.
 
 Do not expose this internal process in the response. Provider-returned reasoning, when available, is stored separately by the request runtime and must not appear inside the JSON.
 
@@ -622,13 +634,15 @@ Before returning JSON, silently verify:
 24. Every bullet remains a clear achievement after its technology names are mentally removed.
 25. Every bullet above 24 words was compressed once and kept longer only to preserve essential meaning.
 26. No achievement is duplicated.
-27. Opening verbs and sentence structures vary when accurate alternatives exist.
+27. Every opening verb is precise, evidence-supported, and unique across all experience and project bullets.
 28. Technical Skills uses no more than five nonempty categories.
 29. Every Skills term exists in the mapper plan and is current-JD-relevant.
 30. No Skills term is duplicated.
 31. No slash-separated alternative term appears.
 32. No Markdown, comments, placeholders, or explanations appear in the JSON.
 33. Every string and array is complete before output ends.
+34. Every bullet with a primary requirement contains one exact supported JD alignment anchor or a truthful close-match replacement when the exact term is unsupported.
+35. The strongest accurate evidence and opening verb lead each role.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 

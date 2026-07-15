@@ -7,6 +7,64 @@ import gui
 
 class RequestCombinerTests(unittest.TestCase):
 
+    def test_reads_v1_json_request_inputs_without_generated_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            request_dir = Path(tmp)
+            (request_dir / "00_request.json").write_text(
+                '{"request_id":"old","company":"Acme","title":"Backend Engineer",'
+                '"location":"New York, NY","initial_des":"Kafka evidence",'
+                '"prompt_profile":"v1","nvidia_model":"z-ai/glm-5.2",'
+                '"nvidia_thinking":false}',
+                encoding="utf-8",
+            )
+            (request_dir / "01_job_description.txt").write_text(
+                "Build reliable backend services and distributed systems.",
+                encoding="utf-8",
+            )
+            (request_dir / "05_resume_v3.json").write_text(
+                '{"must_not_be_loaded":true}',
+                encoding="utf-8",
+            )
+
+            metadata, jd = gui.read_saved_request_inputs(request_dir)
+
+            self.assertEqual("Acme", metadata["company"])
+            self.assertEqual("Backend Engineer", metadata["title"])
+            self.assertEqual("New York, NY", metadata["location"])
+            self.assertEqual("Kafka evidence", metadata["initial des"])
+            self.assertEqual("False", metadata["nvidia thinking"])
+            self.assertFalse(gui.saved_setting_enabled(metadata["nvidia thinking"]))
+            self.assertEqual(
+                "Build reliable backend services and distributed systems.",
+                jd,
+            )
+            self.assertNotIn("must_not_be_loaded", jd)
+
+    def test_reads_legacy_text_request_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            request_dir = Path(tmp)
+            (request_dir / "00_request_details.txt").write_text(
+                "Request ID: old\nCompany: Acme\nTitle: Software Engineer\n"
+                "Words: Java, SQL\nDES: Existing proof\nPrompt Profile: stable\n",
+                encoding="utf-8",
+            )
+            (request_dir / "01_job_description.txt").write_text(
+                "A sufficiently long saved job description for the re-run workflow.",
+                encoding="utf-8",
+            )
+
+            metadata, jd = gui.read_saved_request_inputs(request_dir)
+
+            self.assertEqual("Acme", metadata["company"])
+            self.assertEqual("Java, SQL", metadata["words"])
+            self.assertEqual("Existing proof", metadata["des"])
+            self.assertIn("saved job description", jd)
+
+    def test_saved_request_inputs_require_metadata_and_jd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "request details and a job description"):
+                gui.read_saved_request_inputs(Path(tmp))
+
 
 
     def test_combines_existing_02_to_07_request_artifacts_in_order(self):

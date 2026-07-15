@@ -567,8 +567,29 @@ Use JD action intents to choose relevant story actions, but the story controls t
 
 - If the JD says `lead` and the story proves leadership, plan `led`.
 - If the JD says `lead` but the story proves only implementation, plan `built`, `implemented`, or another accurate verb.
-- Avoid repeating planned opening verbs when an equally accurate alternative exists.
-- Never force a unique synonym that exaggerates ownership or changes meaning.
+- For every slot, put two or three distinct, evidence-supported action intents in `planned_action_intents`, ranked from strongest accurate opening to safe fallback.
+- Plan opening verbs across all experience and project slots as one resume-wide set. Do not assign the same preferred opening to multiple slots.
+- Reserve the strongest evidence-supported ownership or engineering verb for the first bullet of each role. Later bullets must not sound stronger than the evidence in the first bullet.
+- Prefer verbs that name the actual engineering contribution, such as `architect`, `automate`, `build`, `design`, `diagnose`, `engineer`, `implement`, `instrument`, `integrate`, `migrate`, `optimize`, `refactor`, `restore`, `scale`, `secure`, `stabilize`, or `standardize`.
+- Do not plan vague wrapper verbs such as `achieve`, `assist`, `contribute`, `deliver`, `drive`, `enable`, `execute`, `help`, `participate`, `support`, or `work` when a more precise story action exists.
+- Plan `lead`, `own`, `spearhead`, `direct`, or `champion` only when the story proves that ownership level.
+- Plan `collaborate`, `coordinate`, or `partner` only when cross-team work is itself material evidence; also include the concrete technical action the bullet must communicate.
+- For project evaluation bullets, plan precise verbs such as `benchmarked`, `evaluated`, `profiled`, `tested`, or `validated`. Preserve `self-tested` as provenance inside the bullet, not as the opening verb.
+- Never force a unique synonym that exaggerates ownership or changes meaning. Instead, choose a different truthful action already present in that slot's allowed facts.
+
+## Exact JD Alignment Anchor Planning
+
+Every bullet slot with a primary requirement must be able to carry one visible alignment anchor from that primary requirement.
+
+Use this order:
+
+1. The exact nonempty `jd_term` when the selected story directly supports it.
+2. The exact `selected_member` for an alternative or example group.
+3. A directly supported truthful resume term when the exact JD term is empty or unsupported.
+
+Place that anchor in `allowed_technology_terms` or preserve it explicitly in `allowed_fact_fragments`. Do not replace a supported exact JD phrase with a looser synonym. Do not copy an unsupported exact JD technology into a close-match slot. The anchor is one of the maximum three visible JD keyword units, not an additional fourth term.
+
+Before accepting each slot, silently verify that the composer can identify its primary requirement, exact supported alignment anchor, strongest accurate opening-verb candidates, one coherent achievement, and a wording plan that can fit within 18 to 24 words or the 28-word hard maximum.
 
 ## Silent Self-Check
 
@@ -598,6 +619,10 @@ Before returning JSON, silently verify:
 22. No bullet slot plans more than three visible JD keyword units.
 23. No slot treats its technology, fact, or metric allowlists as mandatory inclusion lists.
 24. Every slot has one primary achievement rather than a collection of loosely related requirements.
+25. Every slot with a primary requirement carries one exact supported JD alignment anchor or a truthful close-match replacement when the exact term is unsupported.
+26. Every slot has two or three ranked, evidence-supported action intents unless the story genuinely supports only one accurate action.
+27. Preferred opening verbs are unique across all planned experience and project slots.
+28. Every slot can produce a natural bullet within the 18-to-24-word target or the 28-word hard maximum.
 
 If any check fails, correct it silently before returning the object.
 

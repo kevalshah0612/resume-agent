@@ -111,6 +111,34 @@ def existing_request_file_for_key(request_dir: Path, key: str) -> Path | None:
     return None
 
 
+def read_saved_request_inputs(request_dir: Path) -> tuple[dict[str, str], str]:
+    metadata_path = existing_request_file_for_key(request_dir, "request")
+    jd_path = existing_request_file_for_key(request_dir, "jd")
+    if not metadata_path or not jd_path:
+        raise ValueError("Choose a request folder containing request details and a job description.")
+
+    metadata: dict[str, str] = {}
+    if metadata_path.suffix.lower() == ".json":
+        raw_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata = {
+            str(key).replace("_", " ").lower(): "" if value is None else str(value)
+            for key, value in raw_metadata.items()
+        }
+    else:
+        for line in metadata_path.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition(":")
+            if separator:
+                metadata[key.strip().lower()] = value.strip()
+    return metadata, jd_path.read_text(encoding="utf-8")
+
+
+def saved_setting_enabled(value: str, default: bool = True) -> bool:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return default
+    return normalized not in {"0", "false", "no", "off"}
+
+
 def combine_request_02_to_07(request_dir: Path) -> Path | None:
     if not request_dir.exists():
         return None
@@ -181,7 +209,7 @@ class JobTab(ttk.Frame):
 
         toolbar = ttk.Frame(self)
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        toolbar.columnconfigure(13, weight=1)
+        toolbar.columnconfigure(14, weight=1)
 
         self.pass1_btn = ttk.Button(toolbar, text="PASS 1", command=self.on_pass1)
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
@@ -212,15 +240,16 @@ class JobTab(ttk.Frame):
         self.stop_btn = ttk.Button(toolbar, text="Stop", command=self.on_stop_ai, state="disabled")
         self.stop_btn.grid(row=0, column=8, padx=(0, 6))
         ttk.Button(toolbar, text="Load Request", command=self.on_open_request).grid(row=0, column=9, padx=(0, 6))
-        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=10, padx=(0, 6))
-        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=11, padx=(0, 6))
+        ttk.Button(toolbar, text="Load Re-run", command=self.on_load_rerun).grid(row=0, column=10, padx=(0, 6))
+        ttk.Button(toolbar, text="Open Folder", command=self.on_open_folder).grid(row=0, column=11, padx=(0, 6))
+        ttk.Button(toolbar, text="Clear", command=self.on_clear_tab).grid(row=0, column=12, padx=(0, 6))
         ttk.Button(toolbar, text="Paste JSON DOCX", command=self.on_paste_json_docx).grid(
-            row=0, column=12, padx=(0, 6)
+            row=0, column=13, padx=(0, 6)
         )
         self.cost_label = ttk.Label(toolbar, text="$0.0000")
-        self.cost_label.grid(row=0, column=14, sticky="e", padx=(8, 8))
+        self.cost_label.grid(row=0, column=15, sticky="e", padx=(8, 8))
         self.status = ttk.Label(toolbar, text="Ready", width=28, anchor="e")
-        self.status.grid(row=0, column=15, sticky="e")
+        self.status.grid(row=0, column=16, sticky="e")
 
         left = ttk.Frame(self)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
@@ -2047,28 +2076,30 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Open request failed", str(exc), parent=self)
 
 
+    def on_load_rerun(self) -> None:
+        REQUESTS_DIR.mkdir(exist_ok=True)
+        selected = filedialog.askdirectory(
+            title="Load saved inputs into a new re-run request",
+            initialdir=str(self.request_dir.parent if self.request_dir else REQUESTS_DIR),
+            mustexist=True,
+        )
+        if not selected:
+            return
+        source_dir = Path(selected)
+        try:
+            read_saved_request_inputs(source_dir)
+            rerun_tab = self.app.add_tab()
+            rerun_tab.load_rerun_request(source_dir)
+        except Exception as exc:
+            messagebox.showerror("Load re-run failed", str(exc), parent=self)
+
+
     def on_open_folder(self) -> None:
         REQUESTS_DIR.mkdir(exist_ok=True)
         open_path(self.request_dir if self.request_dir and self.request_dir.exists() else REQUESTS_DIR)
 
     def load_request(self, request_dir: Path) -> None:
-        metadata_path = self.existing_request_file("request", request_dir)
-        jd_path = self.existing_request_file("jd", request_dir)
-        if not metadata_path or not jd_path:
-            raise ValueError("Choose a request folder containing request details and a job description.")
-
-        metadata: dict[str, str] = {}
-        if metadata_path.suffix.lower() == ".json":
-            raw_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            metadata = {
-                str(key).replace("_", " ").lower(): str(value)
-                for key, value in raw_metadata.items()
-            }
-        else:
-            for line in metadata_path.read_text(encoding="utf-8").splitlines():
-                key, separator, value = line.partition(":")
-                if separator:
-                    metadata[key.strip().lower()] = value.strip()
+        metadata, saved_jd = read_saved_request_inputs(request_dir)
 
         def replace(box: tk.Text, value: str) -> None:
             box.delete("1.0", "end")
@@ -2082,13 +2113,13 @@ class JobTab(ttk.Frame):
         self.prompt_selector.set(prompt_profile_label(saved_profile))
         self.on_prompt_profile_selected()
         saved_model = metadata.get("nvidia model", "")
-        saved_thinking = metadata.get("nvidia thinking", "ON").upper() != "OFF"
+        saved_thinking = saved_setting_enabled(metadata.get("nvidia thinking", "ON"))
         if saved_model:
             try:
                 self.model_selector.set(nvidia_model_option_label(saved_model, saved_thinking))
             except ValueError:
                 self.model_selector.set(get_default_nvidia_model_option())
-        self.show_job_description(jd_path.read_text(encoding="utf-8"))
+        self.show_job_description(saved_jd)
         self.mode_value = ""
 
         approval_path = self.existing_request_file("approval", request_dir)
@@ -2153,6 +2184,59 @@ class JobTab(ttk.Frame):
 
         source_name = self.final_json_path.name if self.final_json_path else "inputs only"
         self.set_stage(f"Loaded: {source_name}")
+
+    def load_rerun_request(self, source_dir: Path) -> Path:
+        metadata, saved_jd = read_saved_request_inputs(source_dir)
+
+        def replace(box: tk.Text, value: str) -> None:
+            box.delete("1.0", "end")
+            box.insert("1.0", value)
+
+        self.request_dir = None
+        self.request_id = self.name
+        self.final_json_path = None
+        self.recruiter_json_path = None
+        self.final_qa_json_path = None
+        self.docx_path = None
+        self.pass1_raw = ""
+        self.cost_events = []
+        self.cost_usd = 0.0
+        self.cost_label.config(text="$0.0000")
+        self.output_selector.configure(values=())
+        self.output_selector.set("")
+        replace(self.output, "")
+        replace(self.approval, "")
+        replace(self.app_questions, "")
+
+        saved_profile = metadata.get("prompt profile", DEFAULT_PROMPT_PROFILE)
+        self.prompt_selector.set(prompt_profile_label(saved_profile))
+        self.on_prompt_profile_selected()
+        replace(self.company, metadata.get("company", ""))
+        replace(self.title_text, metadata.get("title", "") or "Software Engineer")
+        replace(self.words, metadata.get("location", metadata.get("words", "")))
+        replace(self.des, metadata.get("initial des", metadata.get("des", "")))
+        self.mode_value = metadata.get("mode", "")
+        self.show_job_description(saved_jd)
+
+        saved_model = metadata.get("nvidia model", "")
+        saved_thinking = saved_setting_enabled(metadata.get("nvidia thinking", "ON"))
+        if saved_model:
+            try:
+                self.model_selector.set(nvidia_model_option_label(saved_model, saved_thinking))
+            except ValueError:
+                self.model_selector.set(get_default_nvidia_model_option())
+        else:
+            self.model_selector.set(get_default_nvidia_model_option())
+
+        new_request_dir = self.ensure_request_dir(self.make_input())
+        self.refresh_output_choices()
+        self.show_output(
+            "Re-run",
+            "Loaded original input fields only. No analysis, mapping, DES approval, resume, "
+            "reasoning, questions, costs, or generated artifacts were copied. Start from Analyze + Map.",
+        )
+        self.set_stage("Re-run ready")
+        return new_request_dir
 
     def on_clear_tab(self) -> None:
         for box in (
@@ -2260,12 +2344,13 @@ class ResumeApp(tk.Tk):
         widget = self.nametowidget(tab_id)
         return widget if isinstance(widget, JobTab) else None
 
-    def add_tab(self) -> None:
+    def add_tab(self) -> JobTab:
         self.tab_counter += 1
         tab = JobTab(self, f"Job {self.tab_counter}")
         self.notebook.add(tab, text=tab.name)
         self.notebook.select(tab)
         self.update_tab_status(tab)
+        return tab
 
     def rename_current_tab(self, name: str) -> None:
         tab_id = self.notebook.select()

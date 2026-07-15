@@ -134,15 +134,34 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("TA Code Review and Review Automation", story)
 
     def test_v1_short_controller_preserves_existing_bullet_contract(self):
-        controller = pipeline.read_prompt("prompt_short.md", "v1")
-        self.assertIn("The matching long V1 system prompt remains authoritative", controller)
-        self.assertIn("JD_INTELLIGENCE", controller)
-        self.assertIn("EVIDENCE_MAPPING", controller)
-        self.assertIn("RESUME_COMPOSITION", controller)
-        self.assertIn("Target 18 to 24 words", controller)
-        self.assertIn("never exceed 28", controller)
-        self.assertIn("no more than three visible JD keyword units", controller)
-        self.assertIn("For every bullet, silently repeat this loop", controller)
+        jd_controller = pipeline.read_prompt("prompt_short_jd.md", "v1")
+        mapper_controller = pipeline.read_prompt("prompt_short_mapper.md", "v1")
+        composer_controller = pipeline.read_prompt("prompt_short_composer.md", "v1")
+        mapper = pipeline.read_prompt("02_Evidence_Mapper_DES_Planner.md", "v1")
+        composer = pipeline.read_prompt("03_Evidence_Locked_Resume_Composer.md", "v1")
+        self.assertIn("JD_INTELLIGENCE", jd_controller)
+        self.assertIn("Do not write resume bullets", jd_controller)
+        self.assertNotIn("Preferred engineering and evidence verb bank", jd_controller)
+        self.assertNotIn("RESUME_COMPOSITION", jd_controller)
+        self.assertIn("EVIDENCE_MAPPING", mapper_controller)
+        self.assertIn("Do not write final resume bullets", mapper_controller)
+        self.assertNotIn("Preferred engineering and evidence verb bank", mapper_controller)
+        self.assertNotIn("RESUME_COMPOSITION", mapper_controller)
+        self.assertIn("RESUME_COMPOSITION", composer_controller)
+        self.assertIn("Target 18 to 24 words", composer_controller)
+        self.assertIn("never accept a bullet above 28 words", composer_controller)
+        self.assertIn("no more than three visible JD keyword units", composer_controller)
+        self.assertIn("For every bullet, silently repeat this loop", composer_controller)
+        self.assertIn("exact supported JD alignment anchor", composer_controller)
+        self.assertIn("resume-wide ledger", composer_controller)
+        self.assertIn("Exact JD Alignment Anchor Planning", mapper)
+        self.assertIn("two or three distinct, evidence-supported action intents", mapper)
+        self.assertIn("Preferred opening verbs are unique", mapper)
+        self.assertIn("Exact JD Alignment Anchor", composer)
+        self.assertIn("Never repeat an opening verb", composer)
+        self.assertIn("Draft and validate exactly one bullet at a time", composer)
+        self.assertIn("reject and rewrite every bullet above 28 words", composer)
+        self.assertIn("Do not open a project result bullet with `Self-tested`", composer)
 
     def test_v1_short_controller_is_sent_to_all_three_stages(self):
         inp = pipeline.ResumeInput(
@@ -159,10 +178,14 @@ class PromptProfileTests(unittest.TestCase):
 
         analyzer_text = pass1_call.await_args_list[0].kwargs["messages"][0]["content"]
         mapper_text = pass1_call.await_args_list[1].kwargs["messages"][0]["content"]
-        self.assertIn("RUN MODE\nJD_INTELLIGENCE", analyzer_text)
-        self.assertIn("RUN MODE\nEVIDENCE_MAPPING", mapper_text)
-        self.assertIn("# V1 Short Stage Controller", analyzer_text)
-        self.assertIn("# V1 Short Stage Controller", mapper_text)
+        self.assertIn("RUN MODE: JD_INTELLIGENCE", analyzer_text)
+        self.assertIn("RUN MODE: EVIDENCE_MAPPING", mapper_text)
+        self.assertIn("# V1 JD Intelligence Stage Controller", analyzer_text)
+        self.assertNotIn("Resume Composition Stage Controller", analyzer_text)
+        self.assertNotIn("Preferred engineering and evidence verb bank", analyzer_text)
+        self.assertIn("# V1 Evidence Mapping Stage Controller", mapper_text)
+        self.assertNotIn("Resume Composition Stage Controller", mapper_text)
+        self.assertNotIn("Preferred engineering and evidence verb bank", mapper_text)
 
         pass1_text = json.dumps({"jd_analysis": {}, "evidence_map": {}})
         with patch(
@@ -172,10 +195,16 @@ class PromptProfileTests(unittest.TestCase):
             asyncio.run(pipeline.run_v1_pass2(inp, pass1_text, "No DES"))
 
         composer_text = composer_call.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("RUN MODE\nRESUME_COMPOSITION", composer_text)
-        self.assertIn("# V1 Short Stage Controller", composer_text)
+        self.assertIn("RUN MODE: RESUME_COMPOSITION", composer_text)
+        self.assertIn("# V1 Resume Composition Stage Controller", composer_text)
+        self.assertNotIn("JD Intelligence Stage Controller", composer_text)
+        self.assertNotIn("Evidence Mapping Stage Controller", composer_text)
         self.assertIsNone(composer_call.await_args.kwargs["output_validator"])
         self.assertEqual(1, composer_call.await_args.kwargs["nvidia_max_attempts_override"])
+
+    def test_v1_short_controller_rejects_unknown_stage(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported V1 run mode"):
+            pipeline.v1_short_controller("UNKNOWN")
 
 
     def test_prompt_profile_options_resolve_to_stable_and_v3(self):
@@ -342,6 +371,99 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["summary"], "Full-stack engineer focused on reliable Java and React workflows.")
         self.assertEqual(mapped["professional_experience"][0]["location"], "Binghamton, NY")
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Aug 2025 - Present")
+
+    def test_candidate_profile_locks_experience_identity_and_education(self):
+        mapped = pipeline.compact_to_resume_json(
+            {
+                "type": "entry_swe",
+                "experience": [
+                    {
+                        "id": "TA",
+                        "title": "Wrong TA Title",
+                        "company": "Wrong University",
+                        "location": "Wrong Location",
+                        "dates": "Wrong Dates",
+                        "bullets": ["Reviewed Java assignments using the approved rubric."],
+                    },
+                    {
+                        "id": "GHI",
+                        "title": "Wrong GHI Title",
+                        "company": "Wrong GHI Company",
+                        "location": "Wrong Location",
+                        "dates": "Wrong Dates",
+                        "bullets": ["Validated research data for analyst dashboards."],
+                    },
+                    {
+                        "id": "TCS_SWE_II",
+                        "title": "Wrong TCS II Title",
+                        "company": "Wrong TCS Company",
+                        "location": "Wrong Location",
+                        "dates": "Wrong Dates",
+                        "bullets": ["Designed Java services for verified workflows."],
+                    },
+                    {
+                        "id": "TCS_SWE_I",
+                        "title": "Wrong TCS I Title",
+                        "company": "Wrong TCS Company",
+                        "location": "Wrong Location",
+                        "dates": "Wrong Dates",
+                        "bullets": ["Implemented Java APIs for verified workflows."],
+                    },
+                ],
+                "education": [{"university": "Wrong University"}],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(company="Acme", title="Software Engineer", jd="Build APIs"),
+            "v1",
+        )
+
+        jobs = {item["id"]: item for item in mapped["professional_experience"]}
+        self.assertEqual(
+            (jobs["TA"]["title"], jobs["TA"]["company"], jobs["TA"]["location"], jobs["TA"]["dates"]),
+            ("Teaching Assistant", "Binghamton University", "Binghamton, NY", "Aug 2025 - Present"),
+        )
+        self.assertEqual(
+            (jobs["GHI"]["title"], jobs["GHI"]["company"], jobs["GHI"]["location"], jobs["GHI"]["dates"]),
+            ("Software Engineering Intern", "Global Health Impact", "New York, NY", "May 2025 - Jun 2025"),
+        )
+        self.assertEqual(
+            (jobs["TCS_SWE_II"]["title"], jobs["TCS_SWE_II"]["company"], jobs["TCS_SWE_II"]["location"], jobs["TCS_SWE_II"]["dates"]),
+            ("Software Engineer II", "Tata Consultancy Services", "Gandhinagar, India", "Oct 2022 - Dec 2024"),
+        )
+        self.assertEqual(
+            (jobs["TCS_SWE_I"]["title"], jobs["TCS_SWE_I"]["company"], jobs["TCS_SWE_I"]["location"], jobs["TCS_SWE_I"]["dates"]),
+            ("Software Engineer I", "Tata Consultancy Services", "Gandhinagar, India", "Mar 2021 - Sep 2022"),
+        )
+        self.assertEqual(jobs["TA"]["bullets"], ["Reviewed Java assignments using the approved rubric."])
+        self.assertEqual(mapped["education"], app_properties.CANDIDATE_PROFILE["education"])
+
+    def test_candidate_profile_locks_combined_tcs_identity(self):
+        mapped = pipeline.compact_to_resume_json(
+            {
+                "type": "entry_aiml",
+                "experience": [
+                    {
+                        "id": "TCS_COMBINED",
+                        "title": "Wrong Combined Title",
+                        "company": "Wrong Combined Company",
+                        "location": "Wrong Location",
+                        "dates": "Wrong Dates",
+                        "bullets": ["Automated a verified engineering workflow."],
+                    }
+                ],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(company="Acme", title="AI Engineer", jd="Build AI systems"),
+            "v1",
+        )
+
+        job = mapped["professional_experience"][0]
+        self.assertEqual(job["title"], "Software Engineer II")
+        self.assertEqual(job["company"], "Tata Consultancy Services")
+        self.assertEqual(job["location"], "Gandhinagar, India")
+        self.assertEqual(job["dates"], "Mar 2021 - Dec 2024")
 
 
     def test_v3_compact_to_resume_json_preserves_grouped_skill_rows_with_limits(self):
