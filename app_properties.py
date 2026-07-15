@@ -8,7 +8,7 @@ ROOT = Path(__file__).parent
 CANDIDATE_NAME = "Keval Shah"
 RESUME_STEM = "Keval_Shah"
 
-PRIMARY_PHONE = "(518) 328-3697"
+PRIMARY_PHONE = "(607) 235-1181"
 PRIMARY_EMAIL = "keval.shah098@gmail.com"
 PREVIOUS_PHONE = "(607) 235-1181"
 PREVIOUS_EMAIL = "keval.shah61298@gmail.com"
@@ -47,10 +47,11 @@ PDF_DIR = ROOT / PDF_DIR_NAME
 DES_FACTS_PATH = ROOT / DES_FACTS_FILE_NAME
 
 PROMPT_PROFILE_LABELS = {
+    "v1": "V1",
     "stable": "Stable",
     "v3": "V3",
 }
-DEFAULT_PROMPT_PROFILE = "stable"
+DEFAULT_PROMPT_PROFILE = "v1"
 
 
 def candidate_contact_line() -> str:

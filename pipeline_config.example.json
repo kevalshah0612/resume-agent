@@ -7,7 +7,6 @@
   "nvidia_temperature": 1.0,
   "nvidia_top_p": 0.95,
   "nvidia_seed": 42,
-  "nvidia_stream": false,
   "nvidia_base_url": "https://integrate.api.nvidia.com/v1",
   "nvidia_max_attempts": 5,
   "nvidia_max_concurrent_requests": 2,

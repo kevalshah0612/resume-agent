@@ -28,7 +28,6 @@ NVIDIA_MEDIUM_EFFORT=false
 NVIDIA_TEMPERATURE=1.0
 NVIDIA_TOP_P=0.95
 NVIDIA_SEED=42
-NVIDIA_STREAM=false
 NVIDIA_REASONING_BUDGET=32768
 RESPONSE_MAX_TOKENS=65536
 NVIDIA_MAX_ATTEMPTS=5
@@ -42,7 +41,7 @@ FALLBACK_TO_ANTHROPIC=false
 ANTHROPIC_API_KEY=your_key
 ```
 
-NVIDIA retries are artifact-based. PASS 1 retries only when parseable DES candidates are missing. PASS 2 and recruiter review retry only when valid JSON is missing. Application-question calls run once. Recruiter and hiring-manager LinkedIn messages are each limited to 300 characters; overlong messages are shortened locally and do not rerun the resume request. `NVIDIA_TIMEOUT_SECONDS=0` disables the HTTP timeout; a stalled non-streaming provider request can therefore remain blocked indefinitely and cannot be released by a timeout. Use the per-tab **Stop** button to cancel retry waits and streaming work; it cannot forcibly terminate a blocking non-streaming network call. Claude remains available through `PROVIDER_MODE=2`, but automatic NVIDIA-to-Claude fallback is disabled by default.
+V1 model stages run once with no Python quality validator, validation-pass call, automatic retry, or provider fallback. Stable and V3 retain their existing behavior. Streaming is model-specific: Nemotron Ultra streams, while the supported non-streaming profiles remain non-streaming. `NVIDIA_TIMEOUT_SECONDS=0` disables the HTTP timeout; a stalled non-streaming provider request can therefore remain blocked indefinitely and cannot be released by a timeout. Use the per-tab **Stop** button for cancellable streaming work; it cannot forcibly terminate a blocking non-streaming network call.
 
 The per-tab model dropdown contains these NVIDIA-hosted models:
 
@@ -81,7 +80,10 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 
 The prompt dropdown is per tab:
 
-- `Stable` is the default and uses `main_flow/`.
+- `V1` is the default and uses the three prompts in `V1/Prompts/`. Only Evidence Mapping receives the complete `story.md`; the Resume Composer receives the locked, self-contained evidence packet instead of rereading Story.
+- V1 `Analyze + Map` runs JD Intelligence and Evidence Mapping, then pauses once for DES approval. If mapping fails after analysis was saved, `Resume Mapping` reruns only Evidence Mapping. `Compose Resume` runs the evidence-locked composer and returns compact V3 JSON.
+- V1 does not assign stage-specific token or reasoning budgets; it inherits the same configured model limits as the main flow.
+- `Stable` uses `main_flow/`.
 - `V3` uses `v3_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
 - In V3, `Prompt` sends company, JD, location, role type, and optional DES and accepts compact resume JSON. Python adds locked contact, education, dates, links, and renderer fields. `Hotdog` sends JD plus the generated JSON for a blind cleanup pass.
 
@@ -93,18 +95,17 @@ LinkedIn outreach is role-specific rather than generic:
 
 `Load Request` selects an existing `requests/<request_id>/` folder and restores its company, title, JD, DES, approval, questions, PASS 1 output, cost, and available JSON artifacts into the current tab. Recruiter, Final QA, Questions, DOCX, and PDF can then continue from the best saved artifact without rerunning earlier steps. `Open Folder` opens the active request folder in File Explorer.
 
-Manual path:
+Default V1 path:
 
-1. Paste company, title, JD, words, and optional DES evidence.
-2. Click `PASS 1`.
-3. Review the organized DES Candidate Bank.
-4. Approve DES with `Approved: DES 1 to 6`, `1,2,3`, or `Confirm`.
-5. Click `Generate JSON`.
-6. Optional: click `Recruiter`.
-7. Optional: click `Final QA` for the three-stage evidence-safe final review.
-8. Click `DOCX`.
-9. Review the DOCX.
-10. Click `PDF`.
+1. Paste company, title, JD, location, and optional existing evidence.
+2. Click `Analyze + Map`.
+   - If JD Intelligence succeeds but Evidence Mapping encounters a provider or JSON failure, click `Resume Mapping`; Prompt 1 is not repeated.
+3. Review the organized exact matches, close matches, and DES questions.
+4. Approve exact DES IDs such as `Approved: DES001, DES002`, or enter `No DES`.
+5. Click `Compose Resume`.
+6. Click `DOCX`.
+7. Review the DOCX.
+8. Click `PDF`.
 
 Fast path:
 
@@ -140,6 +141,22 @@ Application questions:
 2. Click `Answer Questions`.
 3. The app uses Final QA JSON when available, then recruiter JSON, then the PASS 2 final JSON.
 4. Answers are short, human, and grounded in the JD plus resume JSON.
+
+## V1 Request Artifacts
+
+V1 saves parsed stage JSON and keeps provider-returned reasoning in one request-level file with a separate section for each prompt:
+
+```text
+00_request.json
+01_job_description.txt
+02_jd_intelligence.json
+03_evidence_map.json
+04_des_approval.txt
+05_resume_v3.json
+06_reasoning.txt
+```
+
+No duplicate raw file is saved for a valid V1 JSON response. Renderer input is derived temporarily from `05_resume_v3.json` when DOCX is requested. An unparseable response or provider failure is preserved for diagnosis without an automatic retry.
 
 ## DES Display
 

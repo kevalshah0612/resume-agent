@@ -7,9 +7,9 @@ Flow 1:
 Flow 2:
   recruiter review -> final JSON for DOCX
 
-The Markdown prompt files are loaded as-is from main_flow. The provider layer is
-kept intentionally small: NVIDIA first when configured, direct Claude fallback
-when enabled.
+V1 is the default three-prompt flow. Stable and V3 remain available as explicit
+profiles. The provider layer uses NVIDIA first when configured, with direct
+Claude fallback only for profiles that allow it.
 """
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ from manager import build_render_profile
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
+PROMPT_V1_DIR = ROOT / "V1" / "Prompts"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
@@ -226,6 +227,7 @@ class CostEvent:
 @dataclass
 class NvidiaResponse:
     text: str
+    reasoning: str
     usage: dict[str, int]
     finish_reason: str
     queue_wait_seconds: float = 0.0
@@ -345,7 +347,6 @@ def load_config() -> dict[str, Any]:
         "NVIDIA_TEMPERATURE": "nvidia_temperature",
         "NVIDIA_TOP_P": "nvidia_top_p",
         "NVIDIA_SEED": "nvidia_seed",
-        "NVIDIA_STREAM": "nvidia_stream",
         "NVIDIA_REASONING_BUDGET": "nvidia_reasoning_budget",
         "NVIDIA_BASE_URL": "nvidia_base_url",
         "NVIDIA_MAX_ATTEMPTS": "nvidia_max_attempts",
@@ -483,10 +484,6 @@ def get_nvidia_validator_seed() -> int:
     return config_int(load_config().get("nvidia_validator_seed"), DEFAULT_NVIDIA_VALIDATOR_SEED, 0, 2_147_483_647)
 
 
-def get_nvidia_stream() -> bool:
-    return config_bool(load_config().get("nvidia_stream"), False)
-
-
 def get_nvidia_reasoning_budget() -> int:
     return config_int(load_config().get("nvidia_reasoning_budget"), DEFAULT_NVIDIA_REASONING_BUDGET, 0, 32768)
 
@@ -580,6 +577,8 @@ def get_default_nvidia_model_option() -> str:
 
 def normalize_prompt_profile(value: str | None) -> str:
     raw = (value or "").strip().lower()
+    if raw in {"v1", "prompt_v1", "v1_flow", "v1 flow"}:
+        return "v1"
     if raw in {"v3", "prompt_v3", "v3_experimental_flow", "v3 experimental"}:
         return "v3"
     return "stable"
@@ -750,11 +749,64 @@ def build_nvidia_request_payload(
         "top_p": get_nvidia_top_p(),
         "seed": get_nvidia_seed() if seed_override is None else seed_override,
         "max_tokens": max_tokens,
-        "stream": get_nvidia_stream(),
+        "stream": spec.stream,
     }
     if extra_body:
         payload["extra_body"] = extra_body
     return payload
+
+
+def compact_json(data: Any) -> str:
+    """Serialize model handoffs without whitespace while preserving saved JSON readability."""
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def model_error_diagnostics(exc: Exception, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    """Build a credential-free diagnostic record for a failed provider call."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    safe_headers: dict[str, str] = {}
+    if headers is not None:
+        for name in (
+            "date",
+            "server",
+            "retry-after",
+            "x-request-id",
+            "request-id",
+            "nvidia-request-id",
+            "cf-ray",
+        ):
+            value = headers.get(name) or headers.get(name.title())
+            if value:
+                safe_headers[name] = str(value)
+    request_id = (
+        getattr(exc, "request_id", None)
+        or safe_headers.get("x-request-id")
+        or safe_headers.get("request-id")
+        or safe_headers.get("nvidia-request-id")
+        or ""
+    )
+    response_text = ""
+    if response is not None:
+        try:
+            response_text = str(getattr(response, "text", "") or "")[:4000]
+        except Exception:
+            response_text = ""
+    return {
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+        "status_code": getattr(exc, "status_code", None),
+        "request_id": str(request_id),
+        "response_headers": safe_headers,
+        "response_body": response_text,
+        "partial_response": str(getattr(exc, "nvidia_partial_response", "") or "")[:12000],
+        "partial_reasoning": str(getattr(exc, "nvidia_partial_reasoning", "") or "")[:12000],
+        "effective_provider": diagnostics.get("effective_provider", ""),
+        "effective_model": diagnostics.get("effective_model", ""),
+        "nvidia_accounts": list(diagnostics.get("nvidia_accounts") or []),
+        "elapsed_seconds": round(float(diagnostics.get("total_response_time_seconds") or 0.0), 3),
+        "sanitized_request_payload": diagnostics.get("sanitized_request_payload", {}),
+    }
 
 
 def sanitize_nvidia_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -834,7 +886,13 @@ def call_nvidia_sync(
     provider_started = time.monotonic()
     try:
         completion = client.chat.completions.create(**payload)
-    except Exception:
+    except Exception as exc:
+        try:
+            setattr(exc, "nvidia_account_label", account.label)
+            setattr(exc, "nvidia_queue_wait_seconds", queue_wait_seconds)
+            setattr(exc, "nvidia_provider_response_seconds", time.monotonic() - provider_started)
+        except Exception:
+            pass
         gate.release()
         account_gate.release()
         raise
@@ -858,6 +916,7 @@ def call_nvidia_sync(
             choice = completion.choices[0]
             return NvidiaResponse(
                 text=(getattr(choice.message, "content", None) or "").strip(),
+                reasoning=(getattr(choice.message, "reasoning_content", None) or "").strip(),
                 usage=usage_data,
                 finish_reason=str(getattr(choice, "finish_reason", "") or ""),
                 queue_wait_seconds=queue_wait_seconds,
@@ -869,6 +928,7 @@ def call_nvidia_sync(
             account_gate.release()
 
     parts: list[str] = []
+    reasoning_parts: list[str] = []
     finish_reason = ""
     try:
         for chunk in completion:
@@ -895,14 +955,28 @@ def call_nvidia_sync(
             content = getattr(choice.delta, "content", None)
             if content is not None:
                 parts.append(content)
+            reasoning_content = getattr(choice.delta, "reasoning_content", None)
+            if reasoning_content is not None:
+                reasoning_parts.append(reasoning_content)
         return NvidiaResponse(
             text="".join(parts).strip(),
+            reasoning="".join(reasoning_parts).strip(),
             usage=usage_data,
             finish_reason=finish_reason,
             queue_wait_seconds=queue_wait_seconds,
             provider_response_seconds=time.monotonic() - provider_started,
             account_label=account.label,
         )
+    except Exception as exc:
+        try:
+            setattr(exc, "nvidia_account_label", account.label)
+            setattr(exc, "nvidia_queue_wait_seconds", queue_wait_seconds)
+            setattr(exc, "nvidia_provider_response_seconds", time.monotonic() - provider_started)
+            setattr(exc, "nvidia_partial_response", "".join(parts))
+            setattr(exc, "nvidia_partial_reasoning", "".join(reasoning_parts))
+        except Exception:
+            pass
+        raise
     finally:
         gate.release()
         account_gate.release()
@@ -910,6 +984,8 @@ def call_nvidia_sync(
 
 def prompt_dir_for_profile(prompt_profile: str | None = None) -> Path:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        return PROMPT_V1_DIR
     if profile == "v3":
         return PROMPT_V3_DIR / "prompts"
     return PROMPT_DIR
@@ -1215,11 +1291,9 @@ def strategy_from_order(order: list[str], fallback: Any = "") -> str:
 
 
 def canonical_strategy_section_order(strategy_type: str) -> list[str]:
-    if strategy_type == "NewGrad":
-        return ["summary", "technical_skills", "education", "projects", "professional_experience"]
     if strategy_type == "Mid":
-        return ["summary", "technical_skills", "professional_experience", "projects", "education"]
-    return ["summary", "technical_skills", "professional_experience", "education", "projects"]
+        return ["summary", "professional_experience", "projects", "education", "technical_skills"]
+    return ["education", "professional_experience", "projects", "technical_skills"]
 
 
 def canonical_strategy_experience_order(strategy_type: str) -> list[str]:
@@ -1714,15 +1788,30 @@ def header_location(inp: ResumeInput) -> str:
 def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v3") -> dict[str, Any]:
     profile = normalize_prompt_profile(prompt_profile)
     type_value = compact.get("type") or compact.get("Type")
+    v1_mode = str(type_value or "").strip().lower() if profile == "v1" else ""
     summary_text = str(compact.get("summary") or compact.get("Summary") or "").strip()
     raw_order_value = compact.get("experience_order") or compact.get("Experience_Order")
     provided_section_order = normalize_section_order_value(compact.get("section_order") or compact.get("Section_Order"))
     provided_experience_order = normalize_experience_order_value(raw_order_value)
-    strategy_type = strategy_from_order(provided_experience_order, type_value)
-    section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
-    requested_order = provided_experience_order or canonical_strategy_experience_order(strategy_type)
-    level_value = compact.get("level") or compact.get("Level") or strategy_type
-    level, layout_profile = compact_strategy_level(strategy_type) if str(type_value or "").strip().lower().replace("-", "").replace(" ", "") in {"newgrad", "entry", "mid"} and not (compact.get("level") or compact.get("Level")) else compact_level_config(level_value)
+    if v1_mode in {"entry_swe", "entry_aiml", "mid_swe"}:
+        strategy_type = "Mid" if v1_mode == "mid_swe" else "Entry"
+        requested_order = provided_experience_order or [
+            str(item.get("id") or "").strip()
+            for item in compact.get("experience") or []
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        ]
+        section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
+        level, layout_profile = {
+            "entry_swe": (2, "professional_entry"),
+            "entry_aiml": (2, "aiml_entry"),
+            "mid_swe": (3, "mid"),
+        }[v1_mode]
+    else:
+        strategy_type = strategy_from_order(provided_experience_order, type_value)
+        section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
+        requested_order = provided_experience_order or canonical_strategy_experience_order(strategy_type)
+        level_value = compact.get("level") or compact.get("Level") or strategy_type
+        level, layout_profile = compact_strategy_level(strategy_type) if str(type_value or "").strip().lower().replace("-", "").replace(" ", "") in {"newgrad", "entry", "mid"} and not (compact.get("level") or compact.get("Level")) else compact_level_config(level_value)
     jobs: list[dict[str, Any]] = []
     source_experience = (
         compact.get("experience")
@@ -1760,8 +1849,10 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
             continue
         name = str(item.get("name") or item.get("Name") or item.get("title") or item.get("Title") or "").strip()
         projects.append({
+            "story_id": str(item.get("story_id") or "").strip(),
             "title": name,
             "name": name,
+            "tech": item.get("tech") or [],
             "location": "",
             "dates": "",
             "github_url": compact_project_url(name),
@@ -1769,7 +1860,11 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         })
 
     config = {
-        "type": compact_config_type(compact.get("role_type") or compact.get("Role_Type") or compact.get("role_family") or compact.get("Role_Family")),
+        "type": (
+            "aiml"
+            if v1_mode == "entry_aiml"
+            else compact_config_type(compact.get("role_type") or compact.get("Role_Type") or compact.get("role_family") or compact.get("Role_Family"))
+        ),
         "level": level,
         "layout_profile": layout_profile,
         "output": "",
@@ -2054,6 +2149,8 @@ async def call_model(
     diagnostics: dict[str, Any] | None = None,
     guided_json_schema_override: dict[str, Any] | None = None,
     nvidia_validation_pass_override: bool | None = None,
+    nvidia_max_attempts_override: int | None = None,
+    provider_fallback_override: bool | None = None,
 ) -> str:
     provider = provider_override or get_provider()
     if provider == "nvidia":
@@ -2074,6 +2171,7 @@ async def call_model(
     cache_create = 0
     cache_read = 0
     reasoning_tokens = 0
+    provider_reasoning_parts: list[str] = []
     queue_wait_seconds = 0.0
     provider_response_seconds = 0.0
     attempts_used = 1
@@ -2095,6 +2193,7 @@ async def call_model(
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "reasoning_tokens": 0,
+            "reasoning": "",
             "queue_wait_seconds": 0.0,
             "provider_response_seconds": 0.0,
             "total_response_time_seconds": 0.0,
@@ -2113,7 +2212,11 @@ async def call_model(
             if guided_json_schema_override is not None
             else guided_json_schema_for_validator(output_validator)
         )
-        max_attempts = get_nvidia_max_attempts()
+        max_attempts = (
+            max(1, int(nvidia_max_attempts_override))
+            if nvidia_max_attempts_override is not None
+            else get_nvidia_max_attempts()
+        )
         if diagnostics is not None:
             diagnostics["guided_json_enabled"] = guided_json_schema is not None
             diagnostics["validation_enabled"] = bool(output_validator and nvidia_validation_pass)
@@ -2162,6 +2265,18 @@ async def call_model(
             except OperationCancelled:
                 raise
             except Exception as exc:
+                if diagnostics is not None:
+                    account_label = str(getattr(exc, "nvidia_account_label", "") or "")
+                    if account_label:
+                        diagnostics["nvidia_accounts"].append(account_label)
+                    diagnostics["queue_wait_seconds"] = round(
+                        float(getattr(exc, "nvidia_queue_wait_seconds", 0.0) or 0.0), 3
+                    )
+                    diagnostics["provider_response_seconds"] = round(
+                        float(getattr(exc, "nvidia_provider_response_seconds", 0.0) or 0.0), 3
+                    )
+                    diagnostics["total_response_time_seconds"] = round(time.monotonic() - t0, 3)
+                    diagnostics["provider_error"] = model_error_diagnostics(exc, diagnostics)
                 if not is_retryable_nvidia_error(exc):
                     raise
                 last_error = exc
@@ -2176,6 +2291,8 @@ async def call_model(
             cache_create += response.usage["cache_creation_input_tokens"]
             cache_read += response.usage["cache_read_input_tokens"]
             reasoning_tokens += response.usage.get("reasoning_tokens", 0)
+            if response.reasoning:
+                provider_reasoning_parts.append(response.reasoning)
             queue_wait_seconds += response.queue_wait_seconds
             provider_response_seconds += response.provider_response_seconds
             if diagnostics is not None and response.account_label:
@@ -2222,6 +2339,8 @@ async def call_model(
                     cache_create += validated_response.usage["cache_creation_input_tokens"]
                     cache_read += validated_response.usage["cache_read_input_tokens"]
                     reasoning_tokens += validated_response.usage.get("reasoning_tokens", 0)
+                    if validated_response.reasoning:
+                        provider_reasoning_parts.append(validated_response.reasoning)
                     queue_wait_seconds += validated_response.queue_wait_seconds
                     provider_response_seconds += validated_response.provider_response_seconds
                     if diagnostics is not None and validated_response.account_label:
@@ -2248,12 +2367,18 @@ async def call_model(
             )
 
         if rejection_reason or (last_error and not text):
-            fallback_enabled = config_bool(load_config().get("fallback_to_anthropic"), False)
+            fallback_enabled = (
+                bool(provider_fallback_override)
+                if provider_fallback_override is not None
+                else config_bool(load_config().get("fallback_to_anthropic"), False)
+            )
             if fallback_enabled:
                 log(f"{label}: NVIDIA attempts exhausted; falling back to direct Anthropic.")
                 provider = "anthropic"
                 model = get_model()
             elif not text:
+                if diagnostics is not None:
+                    diagnostics["total_response_time_seconds"] = round(time.monotonic() - t0, 3)
                 raise RuntimeError(
                     f"{label}: NVIDIA failed after {attempts_used} attempts: {last_error}"
                 ) from last_error
@@ -2272,7 +2397,18 @@ async def call_model(
             system=system_blocks,
             messages=messages,
         )
-        text = resp.content[0].text.strip()
+        text_parts: list[str] = []
+        for block in resp.content:
+            block_type = str(getattr(block, "type", "") or "")
+            if block_type == "thinking":
+                thinking_text = str(getattr(block, "thinking", "") or "").strip()
+                if thinking_text:
+                    provider_reasoning_parts.append(thinking_text)
+            else:
+                block_text = str(getattr(block, "text", "") or "").strip()
+                if block_text:
+                    text_parts.append(block_text)
+        text = "\n\n".join(text_parts).strip()
         cancel_after_accounting = bool(cancel_event and cancel_event.is_set())
         usage = resp.usage
         input_tokens = usage.input_tokens
@@ -2305,6 +2441,7 @@ async def call_model(
             "prompt_tokens": input_tokens,
             "completion_tokens": output_tokens,
             "reasoning_tokens": reasoning_tokens,
+            "reasoning": "\n\n".join(provider_reasoning_parts).strip(),
             "queue_wait_seconds": round(queue_wait_seconds, 3),
             "provider_response_seconds": round(provider_response_seconds, 3),
             "total_response_time_seconds": round(elapsed, 3),
@@ -2376,6 +2513,254 @@ def recruiter_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     return [cached_text_block(read_prompt("recruiter.md", prompt_profile))]
 
 
+def v1_reasoning_text(diagnostics: dict[str, Any]) -> str:
+    reasoning = str(diagnostics.get("reasoning") or "").strip()
+    return reasoning or "Reasoning was not returned by the selected model."
+
+
+def v1_api_error_data(exc: Exception, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    provider_error = diagnostics.get("provider_error")
+    if isinstance(provider_error, dict):
+        result = dict(provider_error)
+        result["message"] = str(exc)
+        return result
+    return model_error_diagnostics(exc, diagnostics)
+
+
+def v1_api_error_reasoning(diagnostics: dict[str, Any], fallback: str) -> str:
+    provider_error = diagnostics.get("provider_error")
+    if isinstance(provider_error, dict):
+        partial = str(provider_error.get("partial_reasoning") or "").strip()
+        if partial:
+            return partial
+    return fallback
+
+
+def v1_common_input(inp: ResumeInput) -> list[str]:
+    return [
+        f"CURRENT COMPANY\n{inp.company.strip()}",
+        f"CURRENT JOB TITLE\n{(inp.title or 'Software Engineer').strip()}",
+        f"CURRENT JOB LOCATION\n{inp.words.strip() or 'Not provided.'}",
+        f"USER MODE OVERRIDE\n{inp.mode.strip() or 'Not provided.'}",
+        f"CURRENT INITIAL DES, IF PROVIDED\n{inp.des.strip() or 'Not provided.'}",
+        f"CURRENT JOB DESCRIPTION\n{inp.jd.strip()}",
+    ]
+
+
+def v1_composer_input(inp: ResumeInput) -> list[str]:
+    return [
+        f"CURRENT COMPANY\n{inp.company.strip()}",
+        f"CURRENT JOB TITLE\n{(inp.title or 'Software Engineer').strip()}",
+        f"CURRENT JOB LOCATION\n{inp.words.strip() or 'Not provided.'}",
+    ]
+
+
+def v1_pass1_bundle(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    data = extract_json(text)
+    analysis = data.get("jd_analysis")
+    mapper = data.get("evidence_map")
+    if not isinstance(analysis, dict) or not isinstance(mapper, dict):
+        raise ValueError("V1 PASS 1 bundle must contain jd_analysis and evidence_map objects.")
+    return analysis, mapper
+
+
+async def run_v1_pass1(
+    inp: ResumeInput,
+    *,
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+    stage_artifact_cb: Callable[[str, dict[str, Any], str], None] | None = None,
+) -> str:
+    analysis_diagnostics: dict[str, Any] = {}
+    try:
+        analysis_raw = await call_model(
+            system_blocks=[cached_text_block(read_prompt("01_JD_Intelligence_Analyzer.md", "v1"))],
+            messages=[{"role": "user", "content": "\n\n".join(v1_common_input(inp))}],
+            label=labeled_step(request_label, "V1 JD INTELLIGENCE"),
+            cost_cb=cost_cb,
+            output_validator=None,
+            retry_instruction="",
+            cancel_event=cancel_event,
+            model_override=nvidia_model,
+            nvidia_thinking_override=nvidia_thinking,
+            diagnostics=analysis_diagnostics,
+            nvidia_validation_pass_override=False,
+            nvidia_max_attempts_override=1,
+            provider_fallback_override=False,
+        )
+    except Exception as exc:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "jd_intelligence_api_error",
+                v1_api_error_data(exc, analysis_diagnostics),
+                v1_api_error_reasoning(
+                    analysis_diagnostics,
+                    "Provider request failed before JD Intelligence reasoning was returned.",
+                ),
+            )
+        raise
+    try:
+        analysis = extract_json(analysis_raw)
+    except Exception:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "jd_intelligence_parse_error",
+                {"raw": analysis_raw},
+                v1_reasoning_text(analysis_diagnostics),
+            )
+        raise
+    if stage_artifact_cb:
+        stage_artifact_cb("jd_intelligence", analysis, v1_reasoning_text(analysis_diagnostics))
+
+    mapper = await run_v1_evidence_mapping(
+        inp,
+        analysis,
+        cost_cb=cost_cb,
+        request_label=request_label,
+        cancel_event=cancel_event,
+        nvidia_model=nvidia_model,
+        nvidia_thinking=nvidia_thinking,
+        stage_artifact_cb=stage_artifact_cb,
+    )
+
+    return json.dumps(
+        {
+            "schema_version": "v1",
+            "stage": "v1_pass1",
+            "jd_analysis": analysis,
+            "evidence_map": mapper,
+        },
+        indent=2,
+    )
+
+
+async def run_v1_evidence_mapping(
+    inp: ResumeInput,
+    analysis: dict[str, Any],
+    *,
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+    stage_artifact_cb: Callable[[str, dict[str, Any], str], None] | None = None,
+) -> dict[str, Any]:
+    mapper_diagnostics: dict[str, Any] = {}
+    mapper_input = [
+        *v1_common_input(inp),
+        "JD ANALYSIS FROM PROMPT 1\n" + compact_json(analysis),
+    ]
+    try:
+        mapper_raw = await call_model(
+            system_blocks=[
+                cached_text_block(read_prompt("02_Evidence_Mapper_DES_Planner.md", "v1")),
+                cached_text_block(read_prompt("story.md", "v1")),
+            ],
+            messages=[{"role": "user", "content": "\n\n".join(mapper_input)}],
+            label=labeled_step(request_label, "V1 EVIDENCE MAPPING"),
+            cost_cb=cost_cb,
+            output_validator=None,
+            retry_instruction="",
+            cancel_event=cancel_event,
+            model_override=nvidia_model,
+            nvidia_thinking_override=nvidia_thinking,
+            diagnostics=mapper_diagnostics,
+            nvidia_validation_pass_override=False,
+            nvidia_max_attempts_override=1,
+            provider_fallback_override=False,
+        )
+    except Exception as exc:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "evidence_map_api_error",
+                v1_api_error_data(exc, mapper_diagnostics),
+                v1_api_error_reasoning(
+                    mapper_diagnostics,
+                    "Provider request failed before Evidence Mapping reasoning was returned.",
+                ),
+            )
+        raise
+    try:
+        mapper = extract_json(mapper_raw)
+    except Exception:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "evidence_map_parse_error",
+                {"raw": mapper_raw},
+                v1_reasoning_text(mapper_diagnostics),
+            )
+        raise
+    if stage_artifact_cb:
+        stage_artifact_cb("evidence_map", mapper, v1_reasoning_text(mapper_diagnostics))
+    return mapper
+
+
+async def run_v1_pass2(
+    inp: ResumeInput,
+    pass1_text: str,
+    approval_text: str,
+    *,
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+    stage_artifact_cb: Callable[[str, dict[str, Any], str], None] | None = None,
+) -> str:
+    analysis, mapper = v1_pass1_bundle(pass1_text)
+    composer_input = [
+        *v1_composer_input(inp),
+        "LOCKED EVIDENCE PACKET FROM PROMPT 2\n" + compact_json(mapper),
+        f"USER DES APPROVAL\n{approval_text.strip() or 'No DES'}",
+    ]
+    composer_diagnostics: dict[str, Any] = {}
+    try:
+        composer_raw = await call_model(
+            system_blocks=[
+                cached_text_block(read_prompt("03_Evidence_Locked_Resume_Composer.md", "v1")),
+            ],
+            messages=[{"role": "user", "content": "\n\n".join(composer_input)}],
+            label=labeled_step(request_label, "V1 RESUME COMPOSITION"),
+            cost_cb=cost_cb,
+            output_validator=None,
+            retry_instruction="",
+            cancel_event=cancel_event,
+            model_override=nvidia_model,
+            nvidia_thinking_override=nvidia_thinking,
+            diagnostics=composer_diagnostics,
+            nvidia_validation_pass_override=False,
+            nvidia_max_attempts_override=1,
+            provider_fallback_override=False,
+        )
+    except Exception as exc:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "resume_composer_api_error",
+                v1_api_error_data(exc, composer_diagnostics),
+                v1_api_error_reasoning(
+                    composer_diagnostics,
+                    "Provider request failed before Resume Composer reasoning was returned.",
+                ),
+            )
+        raise
+    try:
+        resume = extract_json(composer_raw)
+    except Exception:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "resume_composer_parse_error",
+                {"raw": composer_raw},
+                v1_reasoning_text(composer_diagnostics),
+            )
+        raise
+    if stage_artifact_cb:
+        stage_artifact_cb("resume_composer", resume, v1_reasoning_text(composer_diagnostics))
+    return json.dumps(resume, indent=2)
+
+
 def labeled_step(request_label: str, step: str) -> str:
     return f"{request_label} | {step}" if request_label else step
 
@@ -2430,10 +2815,21 @@ async def run_pass1(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
-    prompt_profile: str = "stable",
+    prompt_profile: str = "v1",
     diagnostics: dict[str, Any] | None = None,
+    stage_artifact_cb: Callable[[str, dict[str, Any], str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        return await run_v1_pass1(
+            inp,
+            cost_cb=cost_cb,
+            request_label=request_label,
+            cancel_event=cancel_event,
+            nvidia_model=nvidia_model,
+            nvidia_thinking=nvidia_thinking,
+            stage_artifact_cb=stage_artifact_cb,
+        )
     if profile == "v3":
         user_message = v3_runtime_input(inp, run_mode="PASS 1 - COMPANY + JD PLAN")
     else:
@@ -2469,10 +2865,23 @@ async def run_pass2(
     cancel_event: threading.Event | None = None,
     nvidia_model: str | None = None,
     nvidia_thinking: bool | None = None,
-    prompt_profile: str = "stable",
+    prompt_profile: str = "v1",
     rejected_response_cb: Callable[[int, str, str], None] | None = None,
+    stage_artifact_cb: Callable[[str, dict[str, Any], str], None] | None = None,
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        return await run_v1_pass2(
+            inp,
+            pass1_text,
+            approval_text,
+            cost_cb=cost_cb,
+            request_label=request_label,
+            cancel_event=cancel_event,
+            nvidia_model=nvidia_model,
+            nvidia_thinking=nvidia_thinking,
+            stage_artifact_cb=stage_artifact_cb,
+        )
     normalized_approval = approval_text.strip() if is_experimental_prompt_profile(profile) else normalize_approval(approval_text)
     if profile == "v3":
         first_user = v3_runtime_input(inp, run_mode="PASS 1 - COMPANY + JD PLAN")

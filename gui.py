@@ -31,6 +31,9 @@ from pipeline import (
     extract_linkedin_message,
     load_config,
     get_default_nvidia_model_option,
+    get_nvidia_model_spec,
+    get_nvidia_reasoning_budget,
+    get_response_max_tokens,
     nvidia_model_option_label,
     nvidia_model_options,
     normalize_approval,
@@ -43,6 +46,7 @@ from pipeline import (
     run_final_review,
     run_pass1,
     run_pass2,
+    run_v1_evidence_mapping,
     run_recruiter_review,
     save_json,
     save_text,
@@ -56,7 +60,7 @@ ROOT = Path(__file__).parent
 
 
 def manager_script_for_profile(prompt_profile: str) -> Path:
-    if prompt_profile == "v3":
+    if prompt_profile in {"v1", "v3"}:
         return ROOT / "v3_experimental_flow" / "manager_Updated.py"
     return ROOT / "manager.py"
 
@@ -64,13 +68,14 @@ def manager_script_for_profile(prompt_profile: str) -> Path:
 def is_experimental_profile(prompt_profile: str) -> bool:
     return prompt_profile == "v3"
 
+
 REQUEST_FILE_ALIASES = {
-    "request": ("00_request_details.txt", "00_request.txt"),
+    "request": ("00_request_details.txt", "00_request.txt", "00_request.json"),
     "jd": ("01_job_description.txt", "01_jd.txt"),
-    "des": ("02_pass1_des_process.txt", "02_pass1_des_bank.txt"),
-    "approval": ("03_des_approval.txt", "03_approval.txt"),
+    "des": ("02_pass1_des_process.txt", "02_pass1_des_bank.txt", "03_evidence_map.json"),
+    "approval": ("03_des_approval.txt", "03_approval.txt", "04_des_approval.txt"),
     "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
-    "resume_json": ("05_resume_output.json", "05_final_resume.json"),
+    "resume_json": ("05_resume_output.json", "05_final_resume.json", "05_resume_v3.json"),
     "recruiter_process": ("06_recruiter_review_process.txt", "06_recruiter_raw.txt"),
     "recruiter_json": ("07_recruiter_resume_output.json", "07_recruiter_final_resume.json"),
     "questions": ("08_application_questions.txt",),
@@ -84,6 +89,7 @@ REQUEST_FILE_ALIASES = {
     "docx_log": ("13_docx_build_log.txt", "06_docx_build.txt"),
     "docx_ghi_log": ("13_docx_ghi_build_log.txt",),
     "pdf_log": ("14_pdf_archive_log.txt", "07_pdf_archive.txt"),
+    "v1_reasoning": ("06_reasoning.txt",),
 }
 
 COMBINED_02_TO_07_FILE = "combined_02_to_07.txt"
@@ -179,6 +185,13 @@ class JobTab(ttk.Frame):
 
         self.pass1_btn = ttk.Button(toolbar, text="PASS 1", command=self.on_pass1)
         self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
+        self.resume_map_btn = ttk.Button(
+            toolbar,
+            text="Resume Mapping",
+            command=self.on_resume_v1_mapping,
+        )
+        self.resume_map_btn.grid(row=0, column=1, padx=(0, 6))
+        self.resume_map_btn.grid_remove()
         self.auto_btn = ttk.Button(toolbar, text="Auto JSON", command=self.on_auto_json)
         self.auto_btn.grid(row=0, column=1, padx=(0, 6))
         self.approve_des_btn = ttk.Button(toolbar, text="Approved DES", command=self.on_approve_all_des)
@@ -345,20 +358,41 @@ class JobTab(ttk.Frame):
         if not self.request_dir:
             return
         model, thinking = self.selected_nvidia_profile()
+        model_spec = get_nvidia_model_spec(model)
         self.update_request_metadata({
             "nvidia model": f"NVIDIA Model: {model}",
             "nvidia thinking": f"NVIDIA Thinking: {'ON' if thinking else 'OFF'}",
+            "nvidia stream": f"NVIDIA Stream: {'ON' if model_spec.stream else 'OFF'}",
         })
 
     def apply_prompt_profile_view(self) -> None:
         prompt_profile = self.selected_prompt_profile()
-        if prompt_profile == "v3":
+        if prompt_profile == "v1":
+            self.words.master.grid()
+            self.des.master.grid()
+            self.des.field_label.config(text="DES / Existing Evidence")
+            self.words.field_label.config(text="Location")
+            self.pass1_btn.config(text="Analyze + Map")
+            self.pass1_btn.grid()
+            self.auto_btn.grid_remove()
+            self.refresh_v1_mapping_actions()
+            self.json_btn.grid()
+            self.json_btn.config(text="Compose Resume")
+            self.recruiter_btn.grid_remove()
+            self.final_qa_btn.grid_remove()
+            self.questions_btn.grid_remove()
+            self.approval.master.grid()
+            self.app_questions.master.grid_remove()
+            self.docx_btn.grid()
+            self.pdf_btn.grid()
+        elif prompt_profile == "v3":
             self.words.master.grid()
             self.des.master.grid()
             self.des.field_label.config(text="DES / Existing Evidence")
             self.words.field_label.config(text="Location")
             self.pass1_btn.config(text="PASS 1")
             self.pass1_btn.grid()
+            self.resume_map_btn.grid_remove()
             self.auto_btn.grid_remove()
             self.approve_des_btn.grid()
             self.json_btn.grid()
@@ -380,6 +414,7 @@ class JobTab(ttk.Frame):
             self.words.field_label.config(text="Words / Keywords")
             self.pass1_btn.config(text="PASS 1")
             self.pass1_btn.grid()
+            self.resume_map_btn.grid_remove()
             self.auto_btn.grid()
             self.approve_des_btn.grid_remove()
             self.json_btn.grid()
@@ -393,8 +428,42 @@ class JobTab(ttk.Frame):
             self.approval.master.grid()
             self.app_questions.master.grid()
 
+    def refresh_v1_mapping_actions(self) -> None:
+        if self.selected_prompt_profile() != "v1":
+            self.resume_map_btn.grid_remove()
+            return
+        analysis_ready = bool(
+            self.request_dir and (self.request_dir / "02_jd_intelligence.json").exists()
+        )
+        mapping_ready = bool(
+            self.request_dir and (self.request_dir / "03_evidence_map.json").exists()
+        )
+        if analysis_ready and not mapping_ready:
+            self.resume_map_btn.grid()
+            self.approve_des_btn.grid_remove()
+        elif mapping_ready:
+            self.resume_map_btn.grid_remove()
+            self.approve_des_btn.grid()
+        else:
+            self.resume_map_btn.grid_remove()
+            self.approve_des_btn.grid_remove()
+
     def update_request_metadata(self, updates: dict[str, str]) -> None:
         metadata_path = self.existing_request_file("request") or self.request_file("request")
+        if metadata_path.suffix.lower() == ".json" and metadata_path.exists():
+            data = json.loads(metadata_path.read_text(encoding="utf-8"))
+            key_map = {
+                "prompt profile": "prompt_profile",
+                "nvidia model": "nvidia_model",
+                "nvidia thinking": "nvidia_thinking",
+                "nvidia stream": "nvidia_stream",
+            }
+            for key, rendered in updates.items():
+                value = rendered.partition(":")[2].strip() if ":" in rendered else rendered
+                target = key_map.get(key, key.replace(" ", "_"))
+                data[target] = value.upper() == "ON" if target in {"nvidia_thinking", "nvidia_stream"} else value
+            save_json(metadata_path, data)
+            return
         lines = metadata_path.read_text(encoding="utf-8").splitlines() if metadata_path.exists() else []
         found: set[str] = set()
         for index, line in enumerate(lines):
@@ -421,9 +490,71 @@ class JobTab(ttk.Frame):
             raise ValueError("Create or load a request first.")
         return folder / REQUEST_FILE_ALIASES[key][0]
 
+    def save_v1_stage_artifact(
+        self,
+        request_dir: Path,
+        stage: str,
+        data: dict,
+        reasoning: str,
+    ) -> None:
+        names = {
+            "jd_intelligence": "02_jd_intelligence.json",
+            "evidence_map": "03_evidence_map.json",
+            "resume_composer": "05_resume_v3.json",
+            "jd_intelligence_parse_error": "02_jd_intelligence_parse_error_raw.txt",
+            "evidence_map_parse_error": "03_evidence_map_parse_error_raw.txt",
+            "resume_composer_parse_error": "05_resume_composer_parse_error_raw.txt",
+            "jd_intelligence_api_error": "02_jd_intelligence_api_error.json",
+            "evidence_map_api_error": "03_evidence_map_api_error.json",
+            "resume_composer_api_error": "05_resume_composer_api_error.json",
+        }
+        if stage not in names:
+            raise ValueError(f"Unknown V1 stage artifact: {stage}")
+        artifact_name = names[stage]
+        if stage.endswith("_parse_error"):
+            save_text(request_dir / artifact_name, str(data.get("raw") or ""))
+        elif stage.endswith("_api_error"):
+            save_json(request_dir / artifact_name, data)
+        elif stage != "resume_composer":
+            save_json(request_dir / artifact_name, data)
+
+        base_stage = stage.removesuffix("_parse_error").removesuffix("_api_error")
+        labels = {
+            "jd_intelligence": "PROMPT 1 - JD INTELLIGENCE",
+            "evidence_map": "PROMPT 2 - EVIDENCE MAPPING",
+            "resume_composer": "PROMPT 3 - RESUME COMPOSER",
+        }
+        label = labels[base_stage]
+        start = f"===== {label} ====="
+        end = f"===== END {label} ====="
+        block = f"{start}\n{reasoning.strip()}\n{end}"
+        reasoning_path = request_dir / "06_reasoning.txt"
+        existing = reasoning_path.read_text(encoding="utf-8") if reasoning_path.exists() else ""
+        pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
+        if pattern.search(existing):
+            combined = pattern.sub(block, existing).strip()
+        else:
+            combined = "\n\n".join(part for part in (existing.strip(), block) if part)
+        save_text(reasoning_path, combined + "\n")
+
+    def load_v1_pass1_bundle(self, request_dir: Path) -> str:
+        analysis_path = request_dir / "02_jd_intelligence.json"
+        mapper_path = request_dir / "03_evidence_map.json"
+        if not analysis_path.exists() or not mapper_path.exists():
+            return ""
+        return json.dumps(
+            {
+                "schema_version": "v1",
+                "stage": "v1_pass1",
+                "jd_analysis": json.loads(analysis_path.read_text(encoding="utf-8")),
+                "evidence_map": json.loads(mapper_path.read_text(encoding="utf-8")),
+            },
+            separators=(",", ":"),
+        )
+
     def refresh_combined_02_to_07(self, request_dir: Path | None = None) -> None:
         folder = request_dir or self.request_dir
-        if folder:
+        if folder and self.selected_prompt_profile() != "v1":
             combine_request_02_to_07(folder)
 
     def show_des_in_jd(self, pass1_text: str) -> None:
@@ -435,7 +566,11 @@ class JobTab(ttk.Frame):
         self.jd.insert("1.0", self.format_pass1_display(pass1_text))
         self.jd.see("1.0")
         self.jd_showing_des = True
-        self.jd_title.set("PASS 1 - Missing Coverage / DES Suggestions")
+        self.jd_title.set(
+            "Evidence Mapping - Matches / DES Suggestions"
+            if self.selected_prompt_profile() == "v1"
+            else "PASS 1 - Missing Coverage / DES Suggestions"
+        )
 
     def show_job_description(self, jd: str) -> None:
         self.job_description = jd
@@ -466,6 +601,8 @@ class JobTab(ttk.Frame):
             ("Log | DOCX+GHI Build", "docx_ghi_log"),
             ("Log | PDF Archive", "pdf_log"),
         ]
+        if self.selected_prompt_profile() == "v1":
+            definitions.insert(0, ("Model Reasoning | V1 Prompts", "v1_reasoning"))
         choices: list[tuple[str, list[Path]]] = []
         for label, key in definitions:
             path = self.existing_request_file(key)
@@ -523,6 +660,39 @@ class JobTab(ttk.Frame):
             self.on_output_selected()
 
     def format_pass1_display(self, text: str) -> str:
+        try:
+            payload = json.loads(text)
+        except (TypeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict) and isinstance(payload.get("evidence_map"), dict):
+            mapper = payload["evidence_map"]
+            coverage = mapper.get("coverage") or {}
+            output = [
+                "V1 EVIDENCE MAP",
+                f"Status: {mapper.get('status', 'ready')}",
+                f"Mode: {mapper.get('resolved_mode', '')}",
+                f"Exact matches: {len(coverage.get('exact_requirement_ids') or [])}",
+                f"Close matches: {len(coverage.get('close_requirement_ids') or [])}",
+                f"DES items: {len(mapper.get('des_questions') or [])}",
+            ]
+            questions = mapper.get("des_questions") or []
+            if questions:
+                output.append("\nDES QUESTIONS")
+                for item in questions:
+                    fallback = item.get("if_rejected_or_unanswered") or {}
+                    output.extend([
+                        f"\n{item.get('id', 'DES')}: {item.get('exact_jd_term', '')}",
+                        f"  Closest story: {item.get('closest_story_id', '')}",
+                        f"  Verified evidence: {item.get('closest_verified_evidence', '')}",
+                        f"  Question: {item.get('question', '')}",
+                        f"  Safe fallback: {', '.join(fallback.get('safe_terms') or [])}",
+                    ])
+                output.append("\nApprove with: Approved: DES001, DES002")
+                output.append("Reject all with: No DES")
+            else:
+                output.append("\nNo DES confirmation is required. Use: No DES")
+            return "\n".join(output)
+
         lines = text.splitlines()
         coverage: list[str] = []
         des_blocks: list[str] = []
@@ -762,19 +932,38 @@ class JobTab(ttk.Frame):
         self.request_dir.mkdir(parents=True, exist_ok=True)
         nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         prompt_profile = self.selected_prompt_profile()
-        save_text(
-            self.request_file("request"),
-            "\n".join([
-                f"Request ID: {self.request_id}",
-                f"Company: {inp.company}",
-                f"Title: {inp.title}",
-                f"{'Location' if prompt_profile == 'v3' else 'Words'}: {inp.words}",
-                f"DES: {inp.des}",
-                f"Prompt Profile: {prompt_profile}",
-                f"NVIDIA Model: {nvidia_model}",
-                f"NVIDIA Thinking: {'ON' if nvidia_thinking else 'OFF'}",
-            ]),
-        )
+        if prompt_profile == "v1":
+            model_spec = get_nvidia_model_spec(nvidia_model)
+            save_json(
+                self.request_dir / "00_request.json",
+                {
+                    "request_id": self.request_id,
+                    "company": inp.company,
+                    "title": inp.title,
+                    "location": inp.words,
+                    "initial_des": inp.des,
+                    "prompt_profile": prompt_profile,
+                    "nvidia_model": nvidia_model,
+                    "nvidia_thinking": nvidia_thinking,
+                    "nvidia_stream": model_spec.stream,
+                    "response_max_tokens": get_response_max_tokens(),
+                    "nvidia_reasoning_budget": get_nvidia_reasoning_budget(),
+                },
+            )
+        else:
+            save_text(
+                self.request_file("request"),
+                "\n".join([
+                    f"Request ID: {self.request_id}",
+                    f"Company: {inp.company}",
+                    f"Title: {inp.title}",
+                    f"{'Location' if prompt_profile == 'v3' else 'Words'}: {inp.words}",
+                    f"DES: {inp.des}",
+                    f"Prompt Profile: {prompt_profile}",
+                    f"NVIDIA Model: {nvidia_model}",
+                    f"NVIDIA Thinking: {'ON' if nvidia_thinking else 'OFF'}",
+                ]),
+            )
         save_text(self.request_file("jd"), inp.jd)
         self.refresh_combined_02_to_07(self.request_dir)
         self.app.rename_tab(self, self.tab_caption())
@@ -785,6 +974,7 @@ class JobTab(ttk.Frame):
         state = "disabled" if busy else "normal"
         for button in (
             self.pass1_btn,
+            self.resume_map_btn,
             self.auto_btn,
             self.approve_des_btn,
             self.json_btn,
@@ -859,42 +1049,168 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Input needed", str(exc), parent=self)
             return
 
-        self.set_busy(True, "PASS 1 running...", cancellable=True)
+        self.set_busy(
+            True,
+            "JD Intelligence + Evidence Mapping running..." if prompt_profile == "v1" else "PASS 1 running...",
+            cancellable=True,
+        )
 
         def task():
             events: list[CostEvent] = []
-            result = asyncio.run(run_pass1(
-                inp,
-                cost_cb=events.append,
-                request_label=self.request_label(inp),
-                cancel_event=self.cancel_event,
-                nvidia_model=nvidia_model,
-                nvidia_thinking=nvidia_thinking,
-                prompt_profile=prompt_profile,
-            ))
-            return result, events
+            try:
+                result = asyncio.run(run_pass1(
+                    inp,
+                    cost_cb=events.append,
+                    request_label=self.request_label(inp),
+                    cancel_event=self.cancel_event,
+                    nvidia_model=nvidia_model,
+                    nvidia_thinking=nvidia_thinking,
+                    prompt_profile=prompt_profile,
+                    stage_artifact_cb=(
+                        lambda stage, data, reasoning: self.save_v1_stage_artifact(
+                            request_dir, stage, data, reasoning
+                        )
+                        if prompt_profile == "v1"
+                        else None
+                    ),
+                ))
+                return result, events, None
+            except OperationCancelled:
+                raise
+            except Exception as exc:
+                return "", events, exc
 
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            self.set_busy(False, "PASS 1 ready" if not err else "PASS 1 failed")
             if err:
+                self.set_busy(False, "PASS 1 failed")
                 messagebox.showerror("PASS 1 failed", str(err), parent=self)
                 return
-            result, events = result
+            result, events, stage_err = result
+            self.add_cost_events(events)
+            if stage_err:
+                if prompt_profile == "v1":
+                    analysis_ready = (request_dir / "02_jd_intelligence.json").exists()
+                    mapping_ready = (request_dir / "03_evidence_map.json").exists()
+                    if analysis_ready and not mapping_ready:
+                        status = (
+                            "Evidence Mapping provider failure"
+                            if (request_dir / "03_evidence_map_api_error.json").exists()
+                            else "Evidence Mapping JSON parse failure"
+                        )
+                        title = "Evidence Mapping failed"
+                    else:
+                        status = (
+                            "JD Intelligence provider failure"
+                            if (request_dir / "02_jd_intelligence_api_error.json").exists()
+                            else "JD Intelligence JSON parse failure"
+                        )
+                        title = "JD Intelligence failed"
+                    self.set_busy(False, status)
+                    self.refresh_v1_mapping_actions()
+                    messagebox.showerror(title, str(stage_err), parent=self)
+                else:
+                    self.set_busy(False, "PASS 1 failed")
+                    messagebox.showerror("PASS 1 failed", str(stage_err), parent=self)
+                return
+            self.set_busy(False, "Evidence Mapping ready" if prompt_profile == "v1" else "PASS 1 ready")
             self.pass1_raw = result
             self.show_des_in_jd(result)
-            save_text(self.request_file("des", request_dir), result)
+            if prompt_profile != "v1":
+                save_text(self.request_file("des", request_dir), result)
             self.refresh_combined_02_to_07(request_dir)
-            self.record_des_facts(
-                inp=inp,
-                prompt_profile=prompt_profile,
-                request_dir=request_dir,
-                pass1_text=result,
-                approval_text=self.text_value(self.approval),
+            if prompt_profile != "v1":
+                self.record_des_facts(
+                    inp=inp,
+                    prompt_profile=prompt_profile,
+                    request_dir=request_dir,
+                    pass1_text=result,
+                    approval_text=self.text_value(self.approval),
+                )
+            self.show_output(
+                "Evidence Mapping" if prompt_profile == "v1" else "PASS 1",
+                "Evidence Mapping complete. DES suggestions are pinned in the left panel."
+                if prompt_profile == "v1"
+                else "PASS 1 complete. DES suggestions are pinned in the left panel.",
             )
-            self.show_output("PASS 1", "PASS 1 complete. DES suggestions are pinned in the left panel.")
+            self.refresh_v1_mapping_actions()
+
+        run_bg(self.app, task, done)
+
+    def on_resume_v1_mapping(self) -> None:
+        try:
+            if self.selected_prompt_profile() != "v1":
+                raise ValueError("Resume Mapping is available only for V1 requests.")
+            inp = self.make_input()
+            request_dir = self.ensure_request_dir(inp)
+            analysis_path = request_dir / "02_jd_intelligence.json"
+            if not analysis_path.exists():
+                raise ValueError("Saved JD Intelligence is missing. Run Analyze + Map first.")
+            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+        except Exception as exc:
+            messagebox.showerror("Cannot resume mapping", str(exc), parent=self)
+            return
+
+        self.set_busy(True, "Evidence Mapping running...", cancellable=True)
+
+        def task():
+            events: list[CostEvent] = []
+            try:
+                mapper = asyncio.run(run_v1_evidence_mapping(
+                    inp,
+                    analysis,
+                    cost_cb=events.append,
+                    request_label=self.request_label(inp),
+                    cancel_event=self.cancel_event,
+                    nvidia_model=nvidia_model,
+                    nvidia_thinking=nvidia_thinking,
+                    stage_artifact_cb=lambda stage, data, reasoning: self.save_v1_stage_artifact(
+                        request_dir, stage, data, reasoning
+                    ),
+                ))
+                return mapper, events, None
+            except OperationCancelled:
+                raise
+            except Exception as exc:
+                return None, events, exc
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            if err:
+                self.set_busy(False, "Evidence Mapping failed")
+                messagebox.showerror("Evidence Mapping failed", str(err), parent=self)
+                return
+            mapper, events, stage_err = result
             self.add_cost_events(events)
+            if stage_err:
+                status = (
+                    "Evidence Mapping provider failure"
+                    if (request_dir / "03_evidence_map_api_error.json").exists()
+                    else "Evidence Mapping JSON parse failure"
+                )
+                self.set_busy(False, status)
+                self.refresh_v1_mapping_actions()
+                messagebox.showerror("Evidence Mapping failed", str(stage_err), parent=self)
+                return
+            self.pass1_raw = json.dumps(
+                {
+                    "schema_version": "v1",
+                    "stage": "v1_pass1",
+                    "jd_analysis": analysis,
+                    "evidence_map": mapper,
+                },
+                separators=(",", ":"),
+            )
+            self.show_des_in_jd(self.pass1_raw)
+            self.set_busy(False, "Evidence Mapping ready")
+            self.refresh_v1_mapping_actions()
+            self.show_output(
+                "Evidence Mapping",
+                "Evidence Mapping complete. Review the DES suggestions, record approval, then click Compose Resume.",
+            )
 
         run_bg(self.app, task, done)
 
@@ -907,7 +1223,7 @@ class JobTab(ttk.Frame):
             if not pass1_text:
                 raise ValueError("Run PASS 1 first.")
             approval_raw = self.text_value(self.approval)
-            if prompt_profile == "v3":
+            if prompt_profile in {"v1", "v3"}:
                 approval = approval_raw.strip()
             else:
                 approval = normalize_approval(approval_raw)
@@ -916,16 +1232,24 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Missing step", str(exc), parent=self)
             return
 
-        save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
+        if prompt_profile == "v1":
+            save_text(request_dir / "04_des_approval.txt", approval_raw or "No DES")
+        else:
+            save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
         self.refresh_combined_02_to_07(request_dir)
-        self.record_des_facts(
-            inp=inp,
-            prompt_profile=prompt_profile,
-            request_dir=request_dir,
-            pass1_text=pass1_text,
-            approval_text=approval_raw,
+        if prompt_profile != "v1":
+            self.record_des_facts(
+                inp=inp,
+                prompt_profile=prompt_profile,
+                request_dir=request_dir,
+                pass1_text=pass1_text,
+                approval_text=approval_raw,
+            )
+        self.set_busy(
+            True,
+            "Resume Composition running..." if prompt_profile == "v1" else "Generating JSON...",
+            cancellable=True,
         )
-        self.set_busy(True, "Generating JSON...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
@@ -946,8 +1270,16 @@ class JobTab(ttk.Frame):
                     text,
                     reason,
                 ),
+                stage_artifact_cb=(
+                    lambda stage, data, reasoning: self.save_v1_stage_artifact(
+                        request_dir, stage, data, reasoning
+                    )
+                    if prompt_profile == "v1"
+                    else None
+                ),
             ))
-            save_text(self.request_file("resume_process", request_dir), raw)
+            if prompt_profile != "v1":
+                save_text(self.request_file("resume_process", request_dir), raw)
             self.refresh_combined_02_to_07(request_dir)
             try:
                 data = extract_json(raw)
@@ -961,10 +1293,16 @@ class JobTab(ttk.Frame):
         def done(result, err):
             if self.handle_cancelled(err):
                 return
-            self.set_busy(False, "JSON ready" if not err else "Generate call failed")
             if err:
+                status = (
+                    "Resume Composition provider failure"
+                    if prompt_profile == "v1" and (request_dir / "05_resume_composer_api_error.json").exists()
+                    else "Generate call failed"
+                )
+                self.set_busy(False, status)
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
+            self.set_busy(False, "Resume JSON ready" if prompt_profile == "v1" else "JSON ready")
             raw, data, events, parse_error = result
             if is_experimental_profile(prompt_profile):
                 if not self.show_and_save_linkedin_outreach(request_dir, raw):
@@ -975,7 +1313,11 @@ class JobTab(ttk.Frame):
             if parse_error:
                 self.set_stage("Raw response saved; JSON not extracted")
                 return
-            self.final_json_path = self.request_file("resume_json", request_dir)
+            self.final_json_path = (
+                request_dir / "05_resume_v3.json"
+                if prompt_profile == "v1"
+                else self.request_file("resume_json", request_dir)
+            )
             save_json(self.final_json_path, data)
             self.refresh_combined_02_to_07(request_dir)
             self.recruiter_json_path = None
@@ -987,6 +1329,17 @@ class JobTab(ttk.Frame):
         run_bg(self.app, task, done)
 
     def approve_all_des_text(self, pass1_text: str) -> str:
+        try:
+            payload = json.loads(pass1_text)
+        except (TypeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict) and isinstance(payload.get("evidence_map"), dict):
+            ids = [
+                str(item.get("id") or "").strip()
+                for item in payload["evidence_map"].get("des_questions") or []
+                if str(item.get("id") or "").strip()
+            ]
+            return "Approved: " + ", ".join(ids) if ids else "No DES"
         numbers = [int(n) for n in re.findall(r"(?im)^\s*DES\s*-?\s*(\d+)\b", pass1_text)]
         if not numbers:
             numbers = [int(n) for n in re.findall(r"\bDES\s*-?\s*(\d+)\b", pass1_text, flags=re.IGNORECASE)]
@@ -1024,15 +1377,19 @@ class JobTab(ttk.Frame):
         self.pass1_raw = pass1_text
         self.approval.delete("1.0", "end")
         self.approval.insert("1.0", approval)
-        save_text(self.request_file("approval", request_dir), approval + "\n\nNormalized:\n" + approval)
+        if prompt_profile == "v1":
+            save_text(request_dir / "04_des_approval.txt", approval)
+        else:
+            save_text(self.request_file("approval", request_dir), approval + "\n\nNormalized:\n" + approval)
         self.refresh_combined_02_to_07(request_dir)
-        self.record_des_facts(
-            inp=inp,
-            prompt_profile=prompt_profile,
-            request_dir=request_dir,
-            pass1_text=pass1_text,
-            approval_text=approval,
-        )
+        if prompt_profile != "v1":
+            self.record_des_facts(
+                inp=inp,
+                prompt_profile=prompt_profile,
+                request_dir=request_dir,
+                pass1_text=pass1_text,
+                approval_text=approval,
+            )
         self.show_output("Approved DES", f"All DES candidates approved.\n\n{approval}")
         self.set_stage("Approved all DES")
 
@@ -1548,6 +1905,7 @@ class JobTab(ttk.Frame):
         manager_script: Path,
         *,
         ghi_first: bool = False,
+        renderer_data: dict | None = None,
     ) -> None:
         if not manager_script.exists():
             messagebox.showerror("Build DOCX failed", f"Renderer not found: {manager_script}", parent=self)
@@ -1557,8 +1915,11 @@ class JobTab(ttk.Frame):
         def task():
             with tempfile.TemporaryDirectory(prefix="resume_docx_") as tmp:
                 render_path = json_path
+                if renderer_data is not None:
+                    render_path = Path(tmp) / "renderer_input.json"
+                    save_json(render_path, renderer_data)
                 if ghi_first:
-                    render_path = self.ghi_first_json_copy(json_path, Path(tmp))
+                    render_path = self.ghi_first_json_copy(render_path, Path(tmp))
 
                 result = subprocess.run(
                     [sys.executable, str(manager_script), str(render_path), company],
@@ -1607,11 +1968,25 @@ class JobTab(ttk.Frame):
         company = self.text_value(self.company) or "Company"
         prompt_profile = self.selected_prompt_profile()
         manager_script = manager_script_for_profile(prompt_profile)
+        render_json_path = self.final_json_path
+        renderer_data = None
+        if prompt_profile == "v1":
+            if not self.request_dir:
+                messagebox.showerror("Build DOCX failed", "V1 request folder is unavailable.", parent=self)
+                return
+            try:
+                inp = self.make_input()
+                compact = json.loads(self.final_json_path.read_text(encoding="utf-8"))
+                renderer_data = compact_to_resume_json(compact, inp, "v1")
+            except Exception as exc:
+                messagebox.showerror("Build DOCX failed", str(exc), parent=self)
+                return
         self._start_docx_build(
-            self.final_json_path,
+            render_json_path,
             company,
             manager_script,
             ghi_first=ghi_first,
+            renderer_data=renderer_data,
         )
 
     def on_pdf_archive(self) -> None:
@@ -1683,10 +2058,17 @@ class JobTab(ttk.Frame):
             raise ValueError("Choose a request folder containing request details and a job description.")
 
         metadata: dict[str, str] = {}
-        for line in metadata_path.read_text(encoding="utf-8").splitlines():
-            key, separator, value = line.partition(":")
-            if separator:
-                metadata[key.strip().lower()] = value.strip()
+        if metadata_path.suffix.lower() == ".json":
+            raw_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata = {
+                str(key).replace("_", " ").lower(): str(value)
+                for key, value in raw_metadata.items()
+            }
+        else:
+            for line in metadata_path.read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition(":")
+                if separator:
+                    metadata[key.strip().lower()] = value.strip()
 
         def replace(box: tk.Text, value: str) -> None:
             box.delete("1.0", "end")
@@ -1695,8 +2077,8 @@ class JobTab(ttk.Frame):
         replace(self.company, metadata.get("company", ""))
         replace(self.title_text, metadata.get("title", "") or "Software Engineer")
         replace(self.words, metadata.get("location", metadata.get("words", "")))
-        replace(self.des, metadata.get("des", ""))
-        saved_profile = metadata.get("prompt profile", "stable")
+        replace(self.des, metadata.get("initial des", metadata.get("des", "")))
+        saved_profile = metadata.get("prompt profile", DEFAULT_PROMPT_PROFILE)
         self.prompt_selector.set(prompt_profile_label(saved_profile))
         self.on_prompt_profile_selected()
         saved_model = metadata.get("nvidia model", "")
@@ -1721,8 +2103,11 @@ class JobTab(ttk.Frame):
             questions_path.read_text(encoding="utf-8") if questions_path else "",
         )
 
-        pass1_path = self.existing_request_file("des", request_dir)
-        self.pass1_raw = pass1_path.read_text(encoding="utf-8") if pass1_path else ""
+        if saved_profile == "v1":
+            self.pass1_raw = self.load_v1_pass1_bundle(request_dir)
+        else:
+            pass1_path = self.existing_request_file("des", request_dir)
+            self.pass1_raw = pass1_path.read_text(encoding="utf-8") if pass1_path else ""
         self.request_dir = request_dir
         self.request_id = metadata.get("request id", request_dir.name) or request_dir.name
         self.apply_prompt_profile_view()

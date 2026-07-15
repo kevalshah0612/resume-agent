@@ -430,7 +430,7 @@ class PromptProfileTests(unittest.TestCase):
         )
         self.assertEqual(mapped["config"]["prompt_profile"], "v3")
         self.assertEqual(mapped["config"]["company"], "Acme")
-        self.assertIn("(518) 328-3697", mapped["contact"])
+        self.assertIn("(607) 235-1181", mapped["contact"])
         self.assertEqual(mapped["location"], "New York, NY | Moving to Boston, MA")
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Dec 2024")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
@@ -488,13 +488,27 @@ class NvidiaModelProfileTests(unittest.TestCase):
         )
         return client, create
 
+    def fake_stream(self, content="Nemotron answer", reasoning="", reasoning_tokens=0):
+        return [
+            SimpleNamespace(
+                choices=[SimpleNamespace(
+                    delta=SimpleNamespace(content=content, reasoning_content=reasoning),
+                    finish_reason="stop",
+                )],
+                usage=SimpleNamespace(
+                    prompt_tokens=10,
+                    completion_tokens=20,
+                    completion_tokens_details=SimpleNamespace(reasoning_tokens=reasoning_tokens),
+                ),
+            )
+        ]
+
     def test_generation_settings_load_from_config(self):
         cfg = {
             "nvidia_medium_effort": False,
             "nvidia_temperature": 1.0,
             "nvidia_top_p": 0.95,
             "nvidia_seed": 42,
-            "nvidia_stream": False,
             "nvidia_reasoning_budget": 32768,
             "response_max_tokens": 65536,
             "nvidia_max_attempts": 5,
@@ -510,7 +524,6 @@ class NvidiaModelProfileTests(unittest.TestCase):
             self.assertEqual(1.0, pipeline.get_nvidia_temperature())
             self.assertEqual(0.95, pipeline.get_nvidia_top_p())
             self.assertEqual(42, pipeline.get_nvidia_seed())
-            self.assertFalse(pipeline.get_nvidia_stream())
             self.assertEqual(32768, pipeline.get_nvidia_reasoning_budget())
             self.assertEqual(65536, pipeline.get_response_max_tokens())
             self.assertEqual(5, pipeline.get_nvidia_max_attempts())
@@ -605,18 +618,8 @@ class NvidiaModelProfileTests(unittest.TestCase):
         self.assertEqual(kwargs["extra_body"], {"chat_template_kwargs": {"thinking": False}})
         self.assertEqual(response.text, "DeepSeek answer")
 
-    def test_nemotron_uses_configured_non_streaming_reasoning_payload(self):
-        completion = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(content="Nemotron answer"),
-                finish_reason="stop",
-            )],
-            usage=SimpleNamespace(
-                prompt_tokens=10,
-                completion_tokens=20,
-                completion_tokens_details=SimpleNamespace(reasoning_tokens=7),
-            ),
-        )
+    def test_nemotron_uses_model_streaming_reasoning_payload(self):
+        completion = self.fake_stream(reasoning="Reasoning", reasoning_tokens=7)
         client, create = self.fake_client(completion)
         with patch("pipeline.get_nvidia_client", return_value=client):
             response = pipeline.call_nvidia_sync(
@@ -627,7 +630,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
                 max_tokens=65536,
             )
         kwargs = create.call_args.kwargs
-        self.assertFalse(kwargs["stream"])
+        self.assertTrue(kwargs["stream"])
         self.assertEqual(kwargs["temperature"], 1.0)
         self.assertEqual(kwargs["top_p"], 0.95)
         self.assertEqual(kwargs["seed"], 42)
@@ -642,13 +645,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
         self.assertEqual(7, response.usage["reasoning_tokens"])
 
     def test_nemotron_accepts_per_call_reasoning_budget_override(self):
-        completion = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(content="Budgeted answer"),
-                finish_reason="stop",
-            )],
-            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
-        )
+        completion = self.fake_stream(content="Budgeted answer")
         client, create = self.fake_client(completion)
         with patch("pipeline.get_nvidia_client", return_value=client):
             pipeline.call_nvidia_sync(
@@ -663,13 +660,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
         self.assertEqual(7000, create.call_args.kwargs["extra_body"]["reasoning_budget"])
 
     def test_nemotron_thinking_off_omits_reasoning_budget(self):
-        completion = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(content="Nemotron answer"),
-                finish_reason="stop",
-            )],
-            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
-        )
+        completion = self.fake_stream()
         client, create = self.fake_client(completion)
         with patch("pipeline.get_nvidia_client", return_value=client):
             pipeline.call_nvidia_sync(
@@ -685,13 +676,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
         )
 
     def test_guided_json_schema_is_sent_through_nvext(self):
-        completion = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(content='{"ok":true}'),
-                finish_reason="stop",
-            )],
-            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
-        )
+        completion = self.fake_stream(content='{"ok":true}')
         client, create = self.fake_client(completion)
         schema = {"type": "object", "required": ["ok"]}
         with patch("pipeline.get_nvidia_client", return_value=client):
@@ -707,13 +692,7 @@ class NvidiaModelProfileTests(unittest.TestCase):
         self.assertEqual(schema, create.call_args.kwargs["extra_body"]["nvext"]["guided_json"])
 
     def test_medium_effort_true_is_sent(self):
-        completion = SimpleNamespace(
-            choices=[SimpleNamespace(
-                message=SimpleNamespace(content="Nemotron answer"),
-                finish_reason="stop",
-            )],
-            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=20),
-        )
+        completion = self.fake_stream()
         client, create = self.fake_client(completion)
         with (
             patch("pipeline.get_nvidia_client", return_value=client),
