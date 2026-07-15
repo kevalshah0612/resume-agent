@@ -133,6 +133,50 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Java File Ingestion and Status Platform", story)
         self.assertIn("TA Code Review and Review Automation", story)
 
+    def test_v1_short_controller_preserves_existing_bullet_contract(self):
+        controller = pipeline.read_prompt("prompt_short.md", "v1")
+        self.assertIn("The matching long V1 system prompt remains authoritative", controller)
+        self.assertIn("JD_INTELLIGENCE", controller)
+        self.assertIn("EVIDENCE_MAPPING", controller)
+        self.assertIn("RESUME_COMPOSITION", controller)
+        self.assertIn("Target 18 to 24 words", controller)
+        self.assertIn("never exceed 28", controller)
+        self.assertIn("no more than three visible JD keyword units", controller)
+        self.assertIn("For every bullet, silently repeat this loop", controller)
+
+    def test_v1_short_controller_is_sent_to_all_three_stages(self):
+        inp = pipeline.ResumeInput(
+            company="Acme",
+            title="Backend Engineer",
+            jd="Build reliable APIs.",
+            words="Boston, MA",
+        )
+        with patch(
+            "pipeline.call_model",
+            new=AsyncMock(side_effect=["{}", "{}"]),
+        ) as pass1_call:
+            asyncio.run(pipeline.run_v1_pass1(inp))
+
+        analyzer_text = pass1_call.await_args_list[0].kwargs["messages"][0]["content"]
+        mapper_text = pass1_call.await_args_list[1].kwargs["messages"][0]["content"]
+        self.assertIn("RUN MODE\nJD_INTELLIGENCE", analyzer_text)
+        self.assertIn("RUN MODE\nEVIDENCE_MAPPING", mapper_text)
+        self.assertIn("# V1 Short Stage Controller", analyzer_text)
+        self.assertIn("# V1 Short Stage Controller", mapper_text)
+
+        pass1_text = json.dumps({"jd_analysis": {}, "evidence_map": {}})
+        with patch(
+            "pipeline.call_model",
+            new=AsyncMock(return_value="{}"),
+        ) as composer_call:
+            asyncio.run(pipeline.run_v1_pass2(inp, pass1_text, "No DES"))
+
+        composer_text = composer_call.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("RUN MODE\nRESUME_COMPOSITION", composer_text)
+        self.assertIn("# V1 Short Stage Controller", composer_text)
+        self.assertIsNone(composer_call.await_args.kwargs["output_validator"])
+        self.assertEqual(1, composer_call.await_args.kwargs["nvidia_max_attempts_override"])
+
 
     def test_prompt_profile_options_resolve_to_stable_and_v3(self):
         labels = pipeline.prompt_profile_options()
@@ -580,21 +624,55 @@ class NvidiaModelProfileTests(unittest.TestCase):
 
     def test_dropdown_contains_supported_models_with_profile_modes(self):
         options = pipeline.nvidia_model_options()
-        self.assertEqual(len(options), 5)
+        self.assertEqual(len(options), 4)
         self.assertIn("Nemo-on", options)
-        self.assertIn("Nemo-off", options)
+        self.assertNotIn("Nemo-off", options)
+        self.assertIn("DS-on", options)
+        self.assertNotIn("DS-off", options)
         self.assertIn("Minimax", options)
+        self.assertIn("GLM", options)
+        self.assertEqual(
+            "Nemo-on",
+            pipeline.nvidia_model_option_label(
+                "nvidia/nemotron-3-ultra-550b-a55b",
+                False,
+            ),
+        )
+        self.assertEqual(
+            "DS-on",
+            pipeline.nvidia_model_option_label("deepseek-ai/deepseek-v4-pro", False),
+        )
         resolved = {pipeline.resolve_nvidia_model_option(option) for option in options}
         self.assertEqual(
             resolved,
             {
                 ("nvidia/nemotron-3-ultra-550b-a55b", True),
-                ("nvidia/nemotron-3-ultra-550b-a55b", False),
                 ("deepseek-ai/deepseek-v4-pro", True),
-                ("deepseek-ai/deepseek-v4-pro", False),
                 ("minimaxai/minimax-m3", False),
+                ("z-ai/glm-5.2", False),
             },
         )
+
+    def test_glm_uses_official_streaming_generation_profile(self):
+        completion = self.fake_stream(content="GLM answer")
+        client, create = self.fake_client(completion)
+        with patch("pipeline.get_nvidia_client", return_value=client):
+            response = pipeline.call_nvidia_sync(
+                system_blocks=[],
+                messages=[{"role": "user", "content": "hello"}],
+                model="z-ai/glm-5.2",
+                thinking=False,
+                max_tokens=65536,
+            )
+
+        kwargs = create.call_args.kwargs
+        self.assertTrue(kwargs["stream"])
+        self.assertEqual(1.0, kwargs["temperature"])
+        self.assertEqual(1.0, kwargs["top_p"])
+        self.assertEqual(16384, kwargs["max_tokens"])
+        self.assertEqual(42, kwargs["seed"])
+        self.assertNotIn("extra_body", kwargs)
+        self.assertEqual("GLM answer", response.text)
 
     def test_deepseek_uses_non_streaming_thinking_parameter(self):
         completion = SimpleNamespace(

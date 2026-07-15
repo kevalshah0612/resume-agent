@@ -48,8 +48,9 @@ The per-tab model dropdown contains these NVIDIA-hosted models:
 - `nvidia/nemotron-3-ultra-550b-a55b`
 - `deepseek-ai/deepseek-v4-pro`
 - `minimaxai/minimax-m3`
+- `z-ai/glm-5.2`
 
-Nemotron and DeepSeek have `Thinking ON` and `Thinking OFF` options. NVIDIA generation uses the configured temperature, top-p, seed, stream mode, response limit, and reasoning budget. `NVIDIA_MEDIUM_EFFORT=true` is sent to Nemotron through its chat-template settings; false omits the field. JSON-bound calls use `nvext.guided_json` when a complete schema is available. When `NVIDIA_VALIDATION_PASS=true`, a locally valid response receives one independent correction pass using `NVIDIA_VALIDATOR_SEED`; false keeps a successful request to one model call. Distinct `NVIDIA_API_KEY_1` and `NVIDIA_API_KEY_2` accounts are selected by least-busy round robin, with one in-flight call per account by default. The legacy `NVIDIA_API_KEY` remains a deduplicated fallback. Retryable 429/5xx failures rotate through the available accounts, honor `Retry-After` when supplied, and otherwise use exponential backoff with jitter. Selection is per application tab and is locked while that tab is running, so concurrent tabs can safely use different profiles.
+Nemotron and DeepSeek expose only their `Thinking ON` profiles in the dropdown. GLM streams with its NVIDIA profile: temperature `1`, top-p `1`, maximum output `16384`, and seed `42`. Other NVIDIA generation uses the configured temperature, top-p, seed, stream mode, response limit, and reasoning budget. `NVIDIA_MEDIUM_EFFORT=true` is sent to Nemotron through its chat-template settings; false omits the field. JSON-bound calls use `nvext.guided_json` when a complete schema is available. When `NVIDIA_VALIDATION_PASS=true`, a locally valid response receives one independent correction pass using `NVIDIA_VALIDATOR_SEED`; false keeps a successful request to one model call. Distinct `NVIDIA_API_KEY_1` and `NVIDIA_API_KEY_2` accounts are selected by least-busy round robin, with one in-flight call per account by default. The legacy `NVIDIA_API_KEY` remains a deduplicated fallback. Retryable 429/5xx failures rotate through the available accounts, honor `Retry-After` when supplied, and otherwise use exponential backoff with jitter. Selection is per application tab and is locked while that tab is running, so concurrent tabs can safely use different profiles.
 
 `NVIDIA_MODEL` and `NVIDIA_THINKING` define the initial dropdown choice. To add another model later, add one `NvidiaModelSpec` entry in `pipeline.py`; the ON/OFF dropdown choices are generated automatically.
 
@@ -80,7 +81,7 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 
 The prompt dropdown is per tab:
 
-- `V1` is the default and uses the three prompts in `V1/Prompts/`. Only Evidence Mapping receives the complete `story.md`; the Resume Composer receives the locked, self-contained evidence packet instead of rereading Story.
+- `V1` is the default and uses the three long prompts plus `prompt_short.md` in `V1/Prompts/`. The long prompt remains the system context; the short stage controller is placed in the current user message for JD Intelligence, Evidence Mapping, and Resume Composition. Only Evidence Mapping receives the complete `story.md`; the Resume Composer receives the locked, self-contained evidence packet instead of rereading Story.
 - V1 `Analyze + Map` runs JD Intelligence and Evidence Mapping, then pauses once for DES approval. If mapping fails after analysis was saved, `Resume Mapping` reruns only Evidence Mapping. `Compose Resume` runs the evidence-locked composer and returns compact V3 JSON.
 - V1 does not assign stage-specific token or reasoning budgets; it inherits the same configured model limits as the main flow.
 - `Stable` uses `main_flow/`.

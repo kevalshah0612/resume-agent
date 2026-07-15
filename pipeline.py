@@ -247,8 +247,15 @@ class NvidiaModelSpec:
     model_id: str
     thinking_key: str | None
     stream: bool
+    thinking_modes: tuple[bool, ...] | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+    seed: int | None = None
 
     def thinking_options(self) -> tuple[bool, ...]:
+        if self.thinking_modes is not None:
+            return self.thinking_modes
         return (True, False) if self.thinking_key else (False,)
 
 
@@ -258,18 +265,30 @@ NVIDIA_MODEL_SPECS = (
         model_id="nvidia/nemotron-3-ultra-550b-a55b",
         thinking_key="enable_thinking",
         stream=True,
+        thinking_modes=(True,),
     ),
     NvidiaModelSpec(
         display_name="DS",
         model_id="deepseek-ai/deepseek-v4-pro",
         thinking_key="thinking",
         stream=False,
+        thinking_modes=(True,),
     ),
     NvidiaModelSpec(
         display_name="Minimax",
         model_id="minimaxai/minimax-m3",
         thinking_key=None,
         stream=False,
+    ),
+    NvidiaModelSpec(
+        display_name="GLM",
+        model_id="z-ai/glm-5.2",
+        thinking_key=None,
+        stream=True,
+        temperature=1.0,
+        top_p=1.0,
+        max_tokens=16384,
+        seed=42,
     ),
 )
 
@@ -310,6 +329,7 @@ MODEL_PRICING_PER_MTOK = {
     "nvidia/nemotron-3-ultra-550b-a55b": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
     "deepseek-ai/deepseek-v4-pro": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
     "minimaxai/minimax-m3": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
+    "z-ai/glm-5.2": {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0},
 }
 
 
@@ -549,7 +569,8 @@ def nvidia_model_option_label(model: str, thinking: bool) -> str:
     spec = get_nvidia_model_spec(model)
     if not spec.thinking_key:
         return spec.display_name
-    return f"{spec.display_name}-{'on' if thinking else 'off'}"
+    effective_thinking = thinking if thinking in spec.thinking_options() else spec.thinking_options()[0]
+    return f"{spec.display_name}-{'on' if effective_thinking else 'off'}"
 
 
 def nvidia_model_options() -> list[str]:
@@ -745,10 +766,14 @@ def build_nvidia_request_payload(
     payload: dict[str, Any] = {
         "model": model,
         "messages": openai_messages(system_blocks, messages),
-        "temperature": get_nvidia_temperature(),
-        "top_p": get_nvidia_top_p(),
-        "seed": get_nvidia_seed() if seed_override is None else seed_override,
-        "max_tokens": max_tokens,
+        "temperature": spec.temperature if spec.temperature is not None else get_nvidia_temperature(),
+        "top_p": spec.top_p if spec.top_p is not None else get_nvidia_top_p(),
+        "seed": (
+            seed_override
+            if seed_override is not None
+            else spec.seed if spec.seed is not None else get_nvidia_seed()
+        ),
+        "max_tokens": spec.max_tokens if spec.max_tokens is not None else max_tokens,
         "stream": spec.stream,
     }
     if extra_body:
@@ -2555,6 +2580,10 @@ def v1_composer_input(inp: ResumeInput) -> list[str]:
     ]
 
 
+def v1_short_controller(run_mode: str) -> str:
+    return f"RUN MODE\n{run_mode}\n\n{read_prompt('prompt_short.md', 'v1')}"
+
+
 def v1_pass1_bundle(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     data = extract_json(text)
     analysis = data.get("jd_analysis")
@@ -2578,7 +2607,13 @@ async def run_v1_pass1(
     try:
         analysis_raw = await call_model(
             system_blocks=[cached_text_block(read_prompt("01_JD_Intelligence_Analyzer.md", "v1"))],
-            messages=[{"role": "user", "content": "\n\n".join(v1_common_input(inp))}],
+            messages=[{
+                "role": "user",
+                "content": "\n\n".join([
+                    v1_short_controller("JD_INTELLIGENCE"),
+                    *v1_common_input(inp),
+                ]),
+            }],
             label=labeled_step(request_label, "V1 JD INTELLIGENCE"),
             cost_cb=cost_cb,
             output_validator=None,
@@ -2650,6 +2685,7 @@ async def run_v1_evidence_mapping(
 ) -> dict[str, Any]:
     mapper_diagnostics: dict[str, Any] = {}
     mapper_input = [
+        v1_short_controller("EVIDENCE_MAPPING"),
         *v1_common_input(inp),
         "JD ANALYSIS FROM PROMPT 1\n" + compact_json(analysis),
     ]
@@ -2712,6 +2748,7 @@ async def run_v1_pass2(
 ) -> str:
     analysis, mapper = v1_pass1_bundle(pass1_text)
     composer_input = [
+        v1_short_controller("RESUME_COMPOSITION"),
         *v1_composer_input(inp),
         "LOCKED EVIDENCE PACKET FROM PROMPT 2\n" + compact_json(mapper),
         f"USER DES APPROVAL\n{approval_text.strip() or 'No DES'}",
