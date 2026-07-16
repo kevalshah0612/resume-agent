@@ -24,10 +24,13 @@ import subprocess
 import sys
 import threading
 import time
+from html import unescape
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.request import Request, urlopen
 
 import anthropic
 
@@ -3157,6 +3160,7 @@ async def run_application_answers(
     jd: str,
     questions: str,
     resume_json: dict[str, Any],
+    company_research: str = "",
     cost_cb=None,
     request_label: str = "",
     cancel_event: threading.Event | None = None,
@@ -3165,6 +3169,12 @@ async def run_application_answers(
     prompt_profile: str = "stable",
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1" and not company_research.strip():
+        company_research = await asyncio.to_thread(
+            research_company_for_questions,
+            company,
+            title,
+        )
     system_blocks = [cached_text_block(read_prompt_with_fallback("questions.md", profile))]
     user_message = "\n".join([
         HUMAN_TEXT_STYLE_RULE.strip(),
@@ -3176,6 +3186,9 @@ async def run_application_answers(
         "",
         "Job Description:",
         jd.strip(),
+        "",
+        "Company Research (live web search results):",
+        company_research.strip() or "No live company research was available. Use the Job Description only for company facts.",
         "",
         f"Company: {company}",
         f"Title: {title}",
@@ -3198,6 +3211,131 @@ async def run_application_answers(
         model_override=nvidia_model,
         nvidia_thinking_override=nvidia_thinking,
     )
+
+
+async def run_linkedin_outreach(
+    *,
+    company: str,
+    title: str,
+    location: str,
+    jd: str,
+    resume_json: dict[str, Any],
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+    prompt_profile: str = "v1",
+) -> str:
+    profile = normalize_prompt_profile(prompt_profile)
+    system_blocks = [cached_text_block(read_prompt_with_fallback("linkedin.md", profile))]
+    user_message = "\n".join([
+        HUMAN_TEXT_STYLE_RULE.strip(),
+        "",
+        f"Prompt Profile: {profile}",
+        "",
+        "Candidate Resume JSON:",
+        json.dumps(resume_json, indent=2),
+        "",
+        "Job Description:",
+        jd.strip(),
+        "",
+        f"Company: {company}",
+        f"Title: {title}",
+        f"Location: {location.strip() or 'Not provided'}",
+    ])
+    response = await call_model(
+        system_blocks=system_blocks,
+        messages=[{"role": "user", "content": user_message}],
+        label=labeled_step(request_label, "LINKEDIN OUTREACH"),
+        cost_cb=cost_cb,
+        cancel_event=cancel_event,
+        model_override=nvidia_model,
+        nvidia_thinking_override=nvidia_thinking,
+    )
+    return enforce_linkedin_message_limit(response)
+
+
+def fetch_public_search_html(url: str, timeout_seconds: float = 12.0) -> str:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        },
+    )
+    with urlopen(request, timeout=timeout_seconds) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+def clean_search_result_text(value: str) -> str:
+    value = re.sub(r"<[^>]+>", " ", unescape(value))
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def decode_duckduckgo_result_url(value: str) -> str:
+    href = unescape(value).strip()
+    if href.startswith("//"):
+        href = "https:" + href
+    parsed = urlparse(href)
+    if parsed.netloc.endswith("duckduckgo.com"):
+        target = parse_qs(parsed.query).get("uddg", [""])[0]
+        if target:
+            return target
+    return href
+
+
+def research_company_for_questions(
+    company: str,
+    title: str,
+    *,
+    max_results: int = 6,
+) -> str:
+    query = f'"{company.strip()}" official engineering product blog documentation {title.strip()}'.strip()
+    search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
+    try:
+        page = fetch_public_search_html(search_url)
+    except Exception as exc:
+        return f"Live company research unavailable: {type(exc).__name__}. Use the Job Description only for company facts."
+
+    pattern = re.compile(
+        r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
+        r'.*?'
+        r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    results: list[str] = []
+    seen_urls: set[str] = set()
+    for href, raw_title, raw_snippet in pattern.findall(page):
+        result_url = decode_duckduckgo_result_url(href)
+        parsed = urlparse(result_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or result_url in seen_urls:
+            continue
+        result_title = clean_search_result_text(raw_title)
+        snippet = clean_search_result_text(raw_snippet)
+        if not result_title:
+            continue
+        seen_urls.add(result_url)
+        results.append(
+            "\n".join([
+                f"Result {len(results) + 1}: {result_title}",
+                f"URL: {result_url}",
+                f"Search excerpt: {snippet or 'No excerpt available.'}",
+            ])
+        )
+        if len(results) >= max(1, max_results):
+            break
+
+    if not results:
+        return "Live company research returned no usable results. Use the Job Description only for company facts."
+    return "\n\n".join([
+        f"Search query: {query}",
+        "Use these search excerpts as research leads. Do not claim facts beyond the displayed title, URL, and excerpt.",
+        *results,
+    ])
 
 
 def normalize_resume_json(data: dict[str, Any]) -> dict[str, Any]:

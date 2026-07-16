@@ -331,6 +331,81 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Candidate Resume JSON:", user_text)
         self.assertIn("Job Description:\nBuild Java APIs", user_text)
 
+    def test_v1_questions_use_v1_prompt(self):
+        with patch("pipeline.call_model", new=AsyncMock(return_value="1. Why this role?\nRelevant experience.")) as call_mock:
+            asyncio.run(
+                pipeline.run_application_answers(
+                    company="Acme",
+                    title="Backend Engineer",
+                    jd="Build Java APIs",
+                    questions="Why this role?",
+                    resume_json={"professional_experience": []},
+                    company_research="Official engineering page: builds agent orchestration systems.",
+                    prompt_profile="v1",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("V1 Application Questions Prompt", system_text)
+        self.assertIn("Prompt Profile: v1", user_text)
+        self.assertIn("Company Research (live web search results):", user_text)
+        self.assertIn("builds agent orchestration systems", user_text)
+
+    def test_company_research_extracts_named_results_and_urls(self):
+        page = """
+        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.netic.ai%2Fengineering&amp;rut=x">Netic Engineering | Building the Agentic Brain</a>
+        <a class="result__snippet" href="x">Netic builds an &lt;b&gt;orchestration&lt;/b&gt; layer for AI agents.</a>
+        """
+        with patch("pipeline.fetch_public_search_html", return_value=page):
+            research = pipeline.research_company_for_questions("Netic", "Software Engineer")
+        self.assertIn("Netic Engineering | Building the Agentic Brain", research)
+        self.assertIn("https://www.netic.ai/engineering", research)
+        self.assertIn("orchestration", research)
+
+    def test_v1_questions_research_company_when_not_supplied(self):
+        with (
+            patch(
+                "pipeline.research_company_for_questions",
+                return_value="Verified company research result.",
+            ) as research_mock,
+            patch("pipeline.call_model", new=AsyncMock(return_value="Answer")) as call_mock,
+        ):
+            asyncio.run(
+                pipeline.run_application_answers(
+                    company="Netic",
+                    title="Software Engineer",
+                    jd="Build agent orchestration systems.",
+                    questions="Why Netic?",
+                    resume_json={"professional_experience": []},
+                    prompt_profile="v1",
+                )
+            )
+        research_mock.assert_called_once_with("Netic", "Software Engineer")
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("Verified company research result.", user_text)
+
+    def test_v1_linkedin_uses_v1_prompt_and_current_inputs(self):
+        response = valid_resume_response("r" * 350, "m" * 350)
+        with patch("pipeline.call_model", new=AsyncMock(return_value=response)) as call_mock:
+            result = asyncio.run(
+                pipeline.run_linkedin_outreach(
+                    company="Acme",
+                    title="Backend Engineer",
+                    location="New York, NY",
+                    jd="Build Java APIs",
+                    resume_json={"professional_experience": []},
+                    prompt_profile="v1",
+                )
+            )
+        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
+        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
+        self.assertIn("V1 LinkedIn Outreach Prompt", system_text)
+        self.assertIn("Company: Acme", user_text)
+        self.assertIn("Title: Backend Engineer", user_text)
+        self.assertIn("Location: New York, NY", user_text)
+        self.assertLessEqual(len(pipeline.extract_linkedin_message(result, "recruiter")), 300)
+        self.assertLessEqual(len(pipeline.extract_linkedin_message(result, "hiring_manager")), 300)
+
     def test_v3_compact_to_resume_json_marks_v3_profile(self):
         compact = pipeline.extract_json(valid_compact_response())
         mapped = pipeline.compact_to_resume_json(

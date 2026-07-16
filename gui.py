@@ -42,8 +42,10 @@ from pipeline import (
     prompt_profile_options,
     resolve_prompt_profile_label,
     resolve_nvidia_model_option,
+    research_company_for_questions,
     run_application_answers,
     run_final_review,
+    run_linkedin_outreach,
     run_pass1,
     run_pass2,
     run_v1_evidence_mapping,
@@ -79,6 +81,7 @@ REQUEST_FILE_ALIASES = {
     "recruiter_process": ("06_recruiter_review_process.txt", "06_recruiter_raw.txt"),
     "recruiter_json": ("07_recruiter_resume_output.json", "07_recruiter_final_resume.json"),
     "questions": ("08_application_questions.txt",),
+    "company_research": ("08_company_research.txt",),
     "answers": ("09_application_answers.txt",),
     "linkedin_combined": ("10_linkedin_outreach.txt", "10_recruiter_linkedin_outreach.txt"),
     "linkedin_recruiter": ("10_recruiter_linkedin_message.txt",),
@@ -407,11 +410,12 @@ class JobTab(ttk.Frame):
             self.refresh_v1_mapping_actions()
             self.json_btn.grid()
             self.json_btn.config(text="Compose Resume")
-            self.recruiter_btn.grid_remove()
+            self.recruiter_btn.config(text="LinkedIn", command=self.on_linkedin_outreach)
+            self.recruiter_btn.grid()
             self.final_qa_btn.grid_remove()
-            self.questions_btn.grid_remove()
+            self.questions_btn.grid()
             self.approval.master.grid()
-            self.app_questions.master.grid_remove()
+            self.app_questions.master.grid()
             self.docx_btn.grid()
             self.pdf_btn.grid()
         elif prompt_profile == "v3":
@@ -429,7 +433,7 @@ class JobTab(ttk.Frame):
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
             self.json_btn.config(text="Prompt")
-            self.recruiter_btn.config(text="Hotdog")
+            self.recruiter_btn.config(text="Hotdog", command=self.on_recruiter_review)
             self.approval.master.grid()
             if self.text_value(self.approval).lower() in {"approved:", "approved", "confirm", "confirm:"}:
                 self.approval.delete("1.0", "end")
@@ -453,7 +457,7 @@ class JobTab(ttk.Frame):
             self.docx_btn.grid()
             self.pdf_btn.grid()
             self.json_btn.config(text="Generate JSON")
-            self.recruiter_btn.config(text="Recruiter")
+            self.recruiter_btn.config(text="Recruiter", command=self.on_recruiter_review)
             self.approval.master.grid()
             self.app_questions.master.grid()
 
@@ -619,6 +623,7 @@ class JobTab(ttk.Frame):
             ("Model Process | Recruiter Review", "recruiter_process"),
             ("Output | Recruiter Resume JSON", "recruiter_json"),
             ("Input | Application Questions", "questions"),
+            ("Input | Company Research", "company_research"),
             ("Output | Application Answers", "answers"),
             ("LinkedIn | Combined Outreach", "linkedin_combined"),
             ("LinkedIn | Recruiter Message", "linkedin_recruiter"),
@@ -1635,6 +1640,71 @@ class JobTab(ttk.Frame):
             return self.final_json_path
         return None
 
+    def auxiliary_resume_json(
+        self,
+        source_path: Path,
+        inp: ResumeInput,
+        prompt_profile: str,
+    ) -> dict:
+        data = json.loads(source_path.read_text(encoding="utf-8"))
+        if prompt_profile == "v1" and "professional_experience" not in data:
+            return compact_to_resume_json(data, inp, prompt_profile)
+        return normalize_resume_json(data)
+
+    def on_linkedin_outreach(self) -> None:
+        try:
+            inp = self.make_input()
+            request_dir = self.ensure_request_dir(inp)
+            json_path = self.best_resume_json_path()
+            if not json_path:
+                raise ValueError("Compose the resume JSON before creating LinkedIn outreach.")
+            prompt_profile = self.selected_prompt_profile()
+            resume_json = self.auxiliary_resume_json(json_path, inp, prompt_profile)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+        except Exception as exc:
+            messagebox.showerror("LinkedIn outreach needs input", str(exc), parent=self)
+            return
+
+        self.set_busy(True, "Creating LinkedIn messages and searches...", cancellable=True)
+
+        def task():
+            events: list[CostEvent] = []
+            raw = asyncio.run(run_linkedin_outreach(
+                company=inp.company,
+                title=inp.title,
+                location=inp.words,
+                jd=inp.jd,
+                resume_json=resume_json,
+                cost_cb=events.append,
+                request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
+                prompt_profile=prompt_profile,
+            ))
+            return raw, events, json_path
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            self.set_busy(False, "LinkedIn outreach ready" if not err else "LinkedIn outreach failed")
+            if err:
+                messagebox.showerror("LinkedIn outreach failed", str(err), parent=self)
+                return
+            raw, events, used_json_path = result
+            if not self.show_and_save_linkedin_outreach(request_dir, raw):
+                messagebox.showerror(
+                    "LinkedIn outreach failed",
+                    "The model response did not contain LinkedIn messages or search strings.",
+                    parent=self,
+                )
+                return
+            self.add_cost_events(events)
+            self.select_output_artifact("LinkedIn | Combined Outreach")
+            self.set_stage(f"LinkedIn outreach ready from {used_json_path.name}")
+
+        run_bg(self.app, task, done)
+
     def format_final_review_display(
         self,
         result: FinalReviewResult,
@@ -1791,9 +1861,9 @@ class JobTab(ttk.Frame):
                 raise ValueError(
                     "Generate JSON first. Final QA JSON is preferred, then recruiter JSON, then PASS 2 JSON."
                 )
-            resume_json = normalize_resume_json(json.loads(json_path.read_text(encoding="utf-8")))
-            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
             prompt_profile = self.selected_prompt_profile()
+            resume_json = self.auxiliary_resume_json(json_path, inp, prompt_profile)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         except Exception as exc:
             messagebox.showerror("Application answers need input", str(exc), parent=self)
             return
@@ -1803,12 +1873,15 @@ class JobTab(ttk.Frame):
 
         def task():
             events: list[CostEvent] = []
+            company_research = research_company_for_questions(inp.company, inp.title)
+            save_text(self.request_file("company_research", request_dir), company_research)
             answers = asyncio.run(run_application_answers(
                 company=inp.company,
                 title=inp.title,
                 jd=inp.jd,
                 questions=questions,
                 resume_json=resume_json,
+                company_research=company_research,
                 cost_cb=events.append,
                 request_label=self.request_label(inp),
                 cancel_event=self.cancel_event,
@@ -1816,7 +1889,7 @@ class JobTab(ttk.Frame):
                 nvidia_thinking=nvidia_thinking,
                 prompt_profile=prompt_profile,
             ))
-            return answers, events, json_path
+            return answers, events, json_path, company_research
 
         def done(result, err):
             if self.handle_cancelled(err):
@@ -1825,7 +1898,7 @@ class JobTab(ttk.Frame):
             if err:
                 messagebox.showerror("Application answers failed", str(err), parent=self)
                 return
-            answers, events, used_json_path = result
+            answers, events, used_json_path, _company_research = result
             clean_answers = self.clean_paste_text(answers)
             self.show_output("Application Answers", clean_answers)
             save_text(
