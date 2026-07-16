@@ -61,8 +61,8 @@ The following configuration is immutable. It defines every supported resume mode
   "writing_policy": {
     "tense": "past",
     "voice": "active",
-    "target_bullet_words": "18-24",
-    "hard_maximum_bullet_words": 28,
+    "target_bullet_words": "18-22",
+    "hard_maximum_bullet_words": 24,
     "maximum_jd_keyword_units_per_bullet": 3,
     "em_dash_allowed": false,
     "first_person_allowed": false,
@@ -434,6 +434,7 @@ Before returning JSON, silently verify:
 13. Long JD sentences are not used as concise terms.
 14. Action intents do not assert candidate experience.
 15. Empty arrays remain present.
+16. The writing policy targets 18 to 22 words and never permits more than 24 words in a final bullet.
 
 If any check fails, correct it silently before returning the object.
 

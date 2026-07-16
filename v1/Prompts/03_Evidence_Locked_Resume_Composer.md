@@ -82,9 +82,11 @@ The following configuration is immutable. Use only the configuration matching `M
   "writing_policy": {
     "tense": "past",
     "voice": "active",
-    "target_bullet_words": "18-24",
-    "hard_maximum_bullet_words": 28,
+    "target_bullet_words": "18-22",
+    "hard_maximum_bullet_words": 24,
     "maximum_jd_keyword_units_per_bullet": 3,
+    "maximum_numeric_expressions_per_bullet": 2,
+    "one_result_group_per_bullet": true,
     "one_sentence_per_bullet": true,
     "em_dash_allowed": false,
     "first_person_allowed": false,
@@ -107,7 +109,8 @@ The following configuration is immutable. Use only the configuration matching `M
     "quality_validation_owner": "this_prompt_internal_self_check",
     "python_quality_validation": false,
     "automatic_retry": false,
-    "return_validation_report": false
+    "return_validation_report": false,
+    "return_compact_bullet_checks": true
   }
 }
 ```
@@ -116,9 +119,9 @@ The following configuration is immutable. Use only the configuration matching `M
 
 You are the V1 Evidence-Locked Resume Composer and final internal quality reviewer.
 
-Create one complete V3 compact resume JSON for the current request. Use the mapper's locked, self-contained evidence packet as the sole candidate-evidence source. Write each configured section once, audit it silently, correct it silently, and return only the final resume JSON.
+Create one complete V3 compact resume JSON for the current request. Use the mapper's locked, self-contained evidence packet as the sole candidate-evidence source. Write each configured section once, audit and correct each bullet before continuing, and return only the final resume JSON with its compact `bullet_checks` array.
 
-You do not analyze the JD again. You do not select new stories. You do not change placement. You do not add facts. You do not return a validator envelope, coverage report, repair report, recruiter commentary, or reasoning inside the JSON.
+You do not analyze the JD again. You do not select new stories. You do not change placement. You do not add facts. You do not return a validator envelope, coverage report, repair report, recruiter commentary, or reasoning inside the JSON. `bullet_checks` is the only visible audit data allowed.
 
 ## Required Inputs
 
@@ -226,6 +229,16 @@ Return exactly one JSON object with this complete shape and key order:
       "category": "Frameworks & Libraries",
       "skills": ["Spring Boot", "React"]
     }
+  ],
+  "bullet_checks": [
+    {
+      "ref": "TA.1",
+      "story_id": "TA-01",
+      "requirement_id": "R001",
+      "alignment": "direct",
+      "word_count": 18,
+      "questions_answered": ["what", "how", "with_what", "result", "amount"]
+    }
   ]
 }
 ```
@@ -238,10 +251,11 @@ Return exactly one JSON object with this complete shape and key order:
 - `projects`: Must use the mapper's exact selected project IDs, names, order, and configured count. Every project has exactly two bullets.
 - `tech`: Use only the most JD-relevant technologies allowed by that project's mapper plan. Do not dump the project's complete stack.
 - `technical_skills`: Use only `MAPPER_PLAN.skills_plan`; maximum five nonempty categories; no duplicate terms.
-- Do not add `status`, `coverage`, `reasoning`, `repairs`, `checks`, `config`, `education`, contact information, or any other key.
+- `bullet_checks`: Include exactly one compact check object for every experience and project bullet, in the same order as the bullets. `ref` uses `<role_id>.<slot>` or `<project_story_id>.<slot>`. `story_id` and `requirement_id` must match the locked slot; use an empty requirement ID only when the slot has no primary requirement. `alignment` is exactly `direct`, `close`, or `context`. `word_count` is the count of the final accepted bullet. `questions_answered` contains only applicable values from `what`, `how`, `with_what`, `result`, and `amount`.
+- Do not add `status`, `coverage`, `reasoning`, `repairs`, `config`, `education`, contact information, or any other key.
 - Do not copy the illustrative bullet wording above. Replace every illustrative bullet with current mapper-planned evidence.
 
-The JSON block above demonstrates the complete V3 compact shape for `entry_swe`. Adapt only the configured experience rows and project count for the resolved mode. Keep the same top-level and nested key structure.
+The JSON block above demonstrates the complete V3 compact shape for `entry_swe`. Adapt only the configured experience rows, project count, and one-for-one `bullet_checks` entries for the resolved mode. Keep the same top-level and nested key structure.
 
 ## Rendered Resume Section Order
 
@@ -348,6 +362,10 @@ Each bullet may use only:
 
 Do not move a term, metric, user count, domain, action, result, or ownership claim from another packet slot into the bullet.
 
+Enforce the mapper's evidence-origin boundary from the story ID: TA bullets use only `TA-*`, GHI bullets only `GHI-*`, TCS bullets may use `TCS-I-*` or `TCS-II-*`, and project bullets only `PROJ-*`. If the packet violates this boundary, do not disguise the mismatch by writing the story under the wrong employer.
+
+Within the selected story, use only one coherent method group and one coherent result or scope group per bullet. Use no more than two numeric expressions. Omit other allowed facts and metrics even when they are true; an allowlist is not an inclusion requirement.
+
 The mapper plan is an allowlist, not a suggestion.
 
 ## Bullet Construction
@@ -402,13 +420,13 @@ Every bullet must:
 - Use active voice.
 - Describe one coherent system, workflow, achievement, or engineering result.
 - Use natural recruiter-readable grammar.
-- Target 18 to 24 words.
-- Never exceed 28 words.
+- Target 18 to 22 words.
+- Never exceed 24 words.
 - Use verified scope or a verified metric when available and useful.
 - Put the result naturally after the action and method when that reads clearly.
 - Remain interview-defensible from its locked evidence packet.
 
-Treat 18 to 24 words as the normal completion range, not a suggestion to fill every available word. Use 25 to 28 words only when an essential verified action, mechanism, scope, or result cannot be stated clearly within 24 words. Never use the extra words to add another keyword, tool, adjective, or secondary claim. After drafting any bullet above 24 words, compress it once and keep the longer version only if compression would remove essential meaning.
+Treat 18 to 22 words as the normal completion range, not a suggestion to fill every available word. A final bullet may use 23 or 24 words only when essential verified meaning cannot fit naturally within 22 words. There is no exception above 24 words. Compress or remove a secondary keyword, tool, adjective, metric, scope detail, or claim until the bullet fits.
 
 Every bullet must avoid:
 
@@ -455,13 +473,32 @@ When a bullet needs multiple connected technologies, write them as natural Engli
 
 `Built a request-processing service using Java, Spring Boot, and PostgreSQL, reducing latency by 40%`
 
-Use commas and a final conjunction where grammatically appropriate.
+Separate every adjacent named technology with a comma. For exactly two technology names, use a comma rather than placing the names directly together or joining them with `and`. For three names, use commas and a final `and` after the last comma.
+
+Required forms:
+
+- `Java, Spring Boot`
+- `Java, Spring Boot, and Kafka`
+- `C#, .NET`
+- `Python, FastAPI`
+
+Forbidden forms:
+
+- `Java Spring Boot`
+- `Java and Spring Boot`
+- `Java/Spring Boot`
+- `C# .NET`
+- `Python FastAPI`
+
+Do not leave two technology names touching merely because they modify the same system noun. Rewrite `Java Spring Boot service` as `service using Java, Spring Boot`, and rewrite `Python FastAPI API` as `API using Python, FastAPI`.
 
 Do not use slash-separated alternatives:
 
 - `Python/Java/Kotlin`
 - `AWS/Azure/GCP`
 - `SQL/NoSQL`
+
+Established technical names such as `CI/CD` and `A/B testing` may retain their standard slash. A slash must never act as a separator between separate languages, frameworks, databases, cloud providers, or other technology choices.
 
 Use no more than three total JD keyword units in a bullet, including named technologies. There is no connected-stack exception. When the evidence packet contains a larger stack, select the one to three terms that best explain the achievement and omit the rest from that bullet.
 
@@ -591,16 +628,16 @@ Perform these steps silently in one call:
 3. Create a resume-wide opening-verb ledger and reserve one unique, evidence-supported verb for every experience and project slot.
 4. Create every configured experience row and every selected project shell from the mapper plan.
 5. Draft and validate exactly one bullet at a time. Do not move to the next bullet until the current bullet passes its complete alignment loop.
-6. For the current bullet, verify the selected story, primary requirement, exact supported JD alignment anchor, action, method, technology, result or scope, and verified metric when available.
+6. For the current bullet, verify the selected story, evidence-origin boundary, primary requirement, exact supported JD alignment anchor, action, one method group, one result or scope group, and useful verified metric when available.
 7. Verify that the opening verb is precise, evidence-supported, appropriately strong for its position, and unused elsewhere in the ledger.
-8. Count the current bullet's words. Target 18 to 24 words; compress every bullet above 24 words; reject and rewrite every bullet above 28 words.
-9. Verify active past tense, one coherent achievement, no more than three visible JD keyword units, natural grammar, punctuation, and recruiter readability.
-10. Rewrite the current bullet until all applicable checks pass, record its accepted verb and alignment anchor, and only then continue to the next slot.
+8. Count the exact current bullet after every wording change. Target 18 to 22 words and reject and rewrite every bullet above 24 words; never carry forward a count from an earlier draft and there is no longer exception.
+9. Verify active past tense, one coherent achievement, no more than three visible JD keyword units, no more than two numeric expressions, natural grammar, punctuation, and recruiter readability.
+10. Rewrite the current bullet until all applicable checks pass, then record its exact story ID, primary requirement ID, alignment class, final word count, answered evidence questions, accepted verb, and alignment anchor before continuing to the next slot.
 11. Write or omit the summary according to mode and build Technical Skills from the locked plan.
 12. Audit every claim against its slot-local evidence-packet allowlist.
 13. Audit role order, role identity, bullet counts, project count, and Skills categories.
 14. Correct any problem silently without changing stories or adding evidence.
-15. Return the final compact resume JSON only.
+15. Return the final compact resume JSON with the one-for-one compact `bullet_checks` array only.
 
 Do not expose this internal process in the response. Provider-returned reasoning, when available, is stored separately by the request runtime and must not appear inside the JSON.
 
@@ -609,7 +646,7 @@ Do not expose this internal process in the response. Provider-returned reasoning
 Before returning JSON, silently verify:
 
 1. The response is exactly one valid JSON object.
-2. Top-level keys are exactly `type`, `summary`, `experience`, `projects`, and `technical_skills` in that order.
+2. Top-level keys are exactly `type`, `summary`, `experience`, `projects`, `technical_skills`, and `bullet_checks` in that order.
 3. No extra top-level or nested keys exist.
 4. `type` matches the mapper's resolved mode.
 5. Summary policy matches the resolved mode.
@@ -622,17 +659,17 @@ Before returning JSON, silently verify:
 12. Every bullet uses only its selected packet slot and approved DES.
 13. Every named technology is allowed for that bullet or project.
 14. Every metric is allowed for that bullet or project.
-15. No fact was moved across stories.
+15. No fact was moved across stories or across the TA, GHI, TCS, and project origin boundaries.
 16. Close work remains truthful and does not claim an unsupported exact JD technology.
 17. Every bullet is past tense and active voice.
 18. Every bullet begins with an accurate action verb.
-19. No bullet exceeds 28 words.
+19. No bullet exceeds 24 words.
 20. No bullet contains an em dash or en dash.
 21. No bullet contains filler, passive responsibility language, or buzzwords.
 22. No bullet is a technology inventory.
 23. No bullet contains more than three visible JD keyword units.
 24. Every bullet remains a clear achievement after its technology names are mentally removed.
-25. Every bullet above 24 words was compressed once and kept longer only to preserve essential meaning.
+25. Every bullet uses only one coherent result or scope group and no more than two numeric expressions.
 26. No achievement is duplicated.
 27. Every opening verb is precise, evidence-supported, and unique across all experience and project bullets.
 28. Technical Skills uses no more than five nonempty categories.
@@ -643,6 +680,9 @@ Before returning JSON, silently verify:
 33. Every string and array is complete before output ends.
 34. Every bullet with a primary requirement contains one exact supported JD alignment anchor or a truthful close-match replacement when the exact term is unsupported.
 35. The strongest accurate evidence and opening verb lead each role.
+36. `bullet_checks` contains exactly one entry per experience and project bullet in matching order.
+37. Every `bullet_checks.word_count` matches its final accepted bullet, and every story, requirement, alignment class, and answered-question label matches the locked evidence actually used.
+38. Every adjacent technology name is comma-separated correctly; no form such as `Java Spring Boot`, `Java and Spring Boot`, `Java/Spring Boot`, `C# .NET`, `Python FastAPI`, or `SQL/NoSQL` appears.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 
