@@ -362,6 +362,25 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("https://www.netic.ai/engineering", research)
         self.assertIn("orchestration", research)
 
+    def test_company_research_adds_compensation_query_when_question_requires_it(self):
+        company_page = """
+        <a rel="nofollow" class="result__a" href="https://www.acme.com/engineering">Acme Engineering</a>
+        <a class="result__snippet" href="x">Acme engineering teams build production systems.</a>
+        """
+        compensation_page = """
+        <a rel="nofollow" class="result__a" href="https://www.acme.com/jobs/software-engineer">Software Engineer | Acme Careers</a>
+        <a class="result__snippet" href="x">The base salary range for this role is $110,000 to $140,000.</a>
+        """
+        with patch("pipeline.fetch_public_search_html", side_effect=[company_page, compensation_page]) as fetch_mock:
+            research = pipeline.research_company_for_questions(
+                "Acme",
+                "Software Engineer",
+                "What are your compensation expectations?",
+            )
+        self.assertEqual(fetch_mock.call_count, 2)
+        self.assertIn("Compensation research query:", research)
+        self.assertIn("$110,000 to $140,000", research)
+
     def test_v1_questions_research_company_when_not_supplied(self):
         with (
             patch(
@@ -380,31 +399,24 @@ class PromptProfileTests(unittest.TestCase):
                     prompt_profile="v1",
                 )
             )
-        research_mock.assert_called_once_with("Netic", "Software Engineer")
+        research_mock.assert_called_once_with("Netic", "Software Engineer", "Why Netic?")
         user_text = call_mock.await_args.kwargs["messages"][0]["content"]
         self.assertIn("Verified company research result.", user_text)
 
-    def test_v1_linkedin_uses_v1_prompt_and_current_inputs(self):
-        response = valid_resume_response("r" * 350, "m" * 350)
-        with patch("pipeline.call_model", new=AsyncMock(return_value=response)) as call_mock:
-            result = asyncio.run(
-                pipeline.run_linkedin_outreach(
-                    company="Acme",
-                    title="Backend Engineer",
-                    location="New York, NY",
-                    jd="Build Java APIs",
-                    resume_json={"professional_experience": []},
-                    prompt_profile="v1",
+    def test_v1_linkedin_prompt_is_disabled(self):
+        with patch("pipeline.call_model", new=AsyncMock()) as call_mock:
+            with self.assertRaisesRegex(ValueError, "V1 LinkedIn prompting was removed"):
+                asyncio.run(
+                    pipeline.run_linkedin_outreach(
+                        company="Acme",
+                        title="Backend Engineer",
+                        location="New York, NY",
+                        jd="Build Java APIs",
+                        resume_json={"professional_experience": []},
+                        prompt_profile="v1",
+                    )
                 )
-            )
-        system_text = "\n".join(block["text"] for block in call_mock.await_args.kwargs["system_blocks"])
-        user_text = call_mock.await_args.kwargs["messages"][0]["content"]
-        self.assertIn("V1 LinkedIn Outreach Prompt", system_text)
-        self.assertIn("Company: Acme", user_text)
-        self.assertIn("Title: Backend Engineer", user_text)
-        self.assertIn("Location: New York, NY", user_text)
-        self.assertLessEqual(len(pipeline.extract_linkedin_message(result, "recruiter")), 300)
-        self.assertLessEqual(len(pipeline.extract_linkedin_message(result, "hiring_manager")), 300)
+        call_mock.assert_not_awaited()
 
     def test_v3_compact_to_resume_json_marks_v3_profile(self):
         compact = pipeline.extract_json(valid_compact_response())
@@ -512,6 +524,55 @@ class PromptProfileTests(unittest.TestCase):
         )
         self.assertEqual(jobs["TA"]["bullets"], ["Reviewed Java assignments using the approved rubric."])
         self.assertEqual(mapped["education"], app_properties.CANDIDATE_PROFILE["education"])
+
+    def test_v1_contact_header_starts_with_location_then_phone_email_and_linkedin(self):
+        mapped = pipeline.compact_to_resume_json(
+            {
+                "type": "entry_swe",
+                "experience": [],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(
+                company="Acme",
+                title="Software Engineer",
+                jd="Build APIs",
+                words="Boston, MA",
+            ),
+            "v1",
+        )
+
+        self.assertEqual(
+            mapped["contact"],
+            (
+                "New York, NY | Moving to Boston, MA | "
+                "(607) 235-1181 | keval.shah098@gmail.com | "
+                "linkedin.com/in/keval-shah0612"
+            ),
+        )
+
+    def test_v3_contact_header_does_not_inherit_v1_location_prefix(self):
+        mapped = pipeline.compact_to_resume_json(
+            {
+                "type": "Backend",
+                "level": "mid",
+                "experience": [],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(
+                company="Acme",
+                title="Backend Engineer",
+                jd="Build APIs",
+                words="Boston, MA",
+            ),
+            "v3",
+        )
+
+        self.assertEqual(
+            mapped["contact"],
+            "(607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612",
+        )
 
     def test_candidate_profile_locks_combined_tcs_identity(self):
         mapped = pipeline.compact_to_resume_json(

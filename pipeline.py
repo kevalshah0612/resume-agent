@@ -7,9 +7,9 @@ Flow 1:
 Flow 2:
   recruiter review -> final JSON for DOCX
 
-V1 is the default three-prompt flow. Stable and V3 remain available as explicit
-profiles. The provider layer uses NVIDIA first when configured, with direct
-Claude fallback only for profiles that allow it.
+V1 is the default three-prompt flow. Stable and V3 remain available as explicit profiles.
+The provider layer uses NVIDIA first when configured, with direct Claude
+fallback only for profiles that allow it.
 """
 
 from __future__ import annotations
@@ -1923,7 +1923,11 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         "experience_order": requested_order,
         "config": config,
         "name": CANDIDATE_NAME,
-        "contact": candidate_contact_line(),
+        "contact": (
+            f"{resume_header_location} | {candidate_contact_line()}"
+            if profile == "v1"
+            else candidate_contact_line()
+        ),
         "location": resume_header_location,
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
@@ -3174,6 +3178,7 @@ async def run_application_answers(
             research_company_for_questions,
             company,
             title,
+            questions,
         )
     system_blocks = [cached_text_block(read_prompt_with_fallback("questions.md", profile))]
     user_message = "\n".join([
@@ -3200,7 +3205,7 @@ async def run_application_answers(
         "Only if explicitly requested in Application Questions.",
         "",
         "Candidate Profile / Fixed Answers:",
-        "Use only details explicitly included in Application Questions or resume JSON. If missing, output NEED USER INPUT.",
+        "Use only personal facts explicitly included in Application Questions or resume JSON. For researchable questions such as compensation, use the JD and live research or a safe flexible answer. Never guess legal or identity facts.",
     ])
     return await call_model(
         system_blocks=system_blocks,
@@ -3228,6 +3233,11 @@ async def run_linkedin_outreach(
     prompt_profile: str = "v1",
 ) -> str:
     profile = normalize_prompt_profile(prompt_profile)
+    if profile == "v1":
+        raise ValueError(
+            f"{profile.upper()} LinkedIn prompting was removed. "
+            "Use the GUI Link field and Resume JSON output."
+        )
     system_blocks = [cached_text_block(read_prompt_with_fallback("linkedin.md", profile))]
     user_message = "\n".join([
         HUMAN_TEXT_STYLE_RULE.strip(),
@@ -3291,15 +3301,23 @@ def decode_duckduckgo_result_url(value: str) -> str:
 def research_company_for_questions(
     company: str,
     title: str,
+    questions: str = "",
     *,
     max_results: int = 6,
 ) -> str:
-    query = f'"{company.strip()}" official engineering product blog documentation {title.strip()}'.strip()
-    search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
-    try:
-        page = fetch_public_search_html(search_url)
-    except Exception as exc:
-        return f"Live company research unavailable: {type(exc).__name__}. Use the Job Description only for company facts."
+    queries = [
+        (
+            "Company and role research",
+            f'"{company.strip()}" official engineering product blog documentation "{title.strip()}"'.strip(),
+        )
+    ]
+    if re.search(r"\b(?:salary|compensation|pay|base pay|pay range|wage|remuneration)\b", questions, re.IGNORECASE):
+        queries.append(
+            (
+                "Compensation research",
+                f'"{company.strip()}" "{title.strip()}" salary range compensation base pay job posting'.strip(),
+            )
+        )
 
     pattern = re.compile(
         r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
@@ -3307,34 +3325,48 @@ def research_company_for_questions(
         r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
         flags=re.DOTALL | re.IGNORECASE,
     )
-    results: list[str] = []
     seen_urls: set[str] = set()
-    for href, raw_title, raw_snippet in pattern.findall(page):
-        result_url = decode_duckduckgo_result_url(href)
-        parsed = urlparse(result_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc or result_url in seen_urls:
+    sections: list[str] = []
+    errors: list[str] = []
+    per_query_limit = max(1, max_results // len(queries))
+    for label, query in queries:
+        search_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
+        try:
+            page = fetch_public_search_html(search_url)
+        except Exception as exc:
+            errors.append(f"{label}: {type(exc).__name__}")
             continue
-        result_title = clean_search_result_text(raw_title)
-        snippet = clean_search_result_text(raw_snippet)
-        if not result_title:
-            continue
-        seen_urls.add(result_url)
-        results.append(
-            "\n".join([
-                f"Result {len(results) + 1}: {result_title}",
-                f"URL: {result_url}",
-                f"Search excerpt: {snippet or 'No excerpt available.'}",
-            ])
-        )
-        if len(results) >= max(1, max_results):
-            break
 
-    if not results:
+        results: list[str] = []
+        for href, raw_title, raw_snippet in pattern.findall(page):
+            result_url = decode_duckduckgo_result_url(href)
+            parsed = urlparse(result_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc or result_url in seen_urls:
+                continue
+            result_title = clean_search_result_text(raw_title)
+            snippet = clean_search_result_text(raw_snippet)
+            if not result_title:
+                continue
+            seen_urls.add(result_url)
+            results.append(
+                "\n".join([
+                    f"Result {len(results) + 1}: {result_title}",
+                    f"URL: {result_url}",
+                    f"Search excerpt: {snippet or 'No excerpt available.'}",
+                ])
+            )
+            if len(results) >= per_query_limit:
+                break
+        if results:
+            sections.append("\n\n".join([f"{label} query: {query}", *results]))
+
+    if not sections:
+        if errors:
+            return f"Live company research unavailable: {'; '.join(errors)}. Use the Job Description only for company facts."
         return "Live company research returned no usable results. Use the Job Description only for company facts."
     return "\n\n".join([
-        f"Search query: {query}",
-        "Use these search excerpts as research leads. Do not claim facts beyond the displayed title, URL, and excerpt.",
-        *results,
+        "Use these search excerpts as research leads. Prefer an explicit range in the JD or an official company job posting. Do not claim facts beyond the displayed title, URL, and excerpt.",
+        *sections,
     ])
 
 

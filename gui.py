@@ -71,6 +71,10 @@ def is_experimental_profile(prompt_profile: str) -> bool:
     return prompt_profile == "v3"
 
 
+def is_v1_style_profile(prompt_profile: str) -> bool:
+    return prompt_profile == "v1"
+
+
 REQUEST_FILE_ALIASES = {
     "request": ("00_request_details.txt", "00_request.txt", "00_request.json"),
     "jd": ("01_job_description.txt", "01_jd.txt"),
@@ -78,6 +82,7 @@ REQUEST_FILE_ALIASES = {
     "approval": ("03_des_approval.txt", "03_approval.txt", "04_des_approval.txt"),
     "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
     "resume_json": ("05_resume_output.json", "05_final_resume.json", "05_resume_v3.json"),
+    "v1_resume_json": ("05.json", "05_resume_v3.json"),
     "recruiter_process": ("06_recruiter_review_process.txt", "06_recruiter_raw.txt"),
     "recruiter_json": ("07_recruiter_resume_output.json", "07_recruiter_final_resume.json"),
     "questions": ("08_application_questions.txt",),
@@ -140,6 +145,35 @@ def saved_setting_enabled(value: str, default: bool = True) -> bool:
     if not normalized:
         return default
     return normalized not in {"0", "false", "no", "off"}
+
+
+def format_v1_resume_output(
+    company: str,
+    title: str,
+    link: str,
+    resume_json: str,
+) -> str:
+    return "\n".join([
+        f"Company Name: {company.strip()}",
+        f"Title: {title.strip()}",
+        f"Link: {link.strip()}",
+        "",
+        "Resume JSON:",
+        resume_json.strip(),
+    ])
+
+
+def save_v1_resume_files(
+    request_dir: Path,
+    compact_resume: dict,
+    inp: ResumeInput,
+    prompt_profile: str = "v1",
+) -> tuple[Path, Path]:
+    compact_path = request_dir / "05_resume_v3.json"
+    full_path = request_dir / "05.json"
+    save_json(compact_path, compact_resume)
+    save_json(full_path, compact_to_resume_json(compact_resume, inp, prompt_profile))
+    return compact_path, full_path
 
 
 def combine_request_02_to_07(request_dir: Path) -> Path | None:
@@ -279,6 +313,7 @@ class JobTab(ttk.Frame):
             height=2,
         )
         self.app_questions = self._field_cell(quick_fields, "Application Questions", 1, 2, height=2)
+        self.link = self._field_cell(quick_fields, "Link", 2, 0, height=1, columnspan=3)
 
         self.jd_title = tk.StringVar(value="Job Description")
         ttk.Label(left, textvariable=self.jd_title).grid(row=1, column=0, sticky="w", pady=(8, 0))
@@ -325,9 +360,23 @@ class JobTab(ttk.Frame):
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w")
         return self._text_box(parent, row + 1, height=height)
 
-    def _field_cell(self, parent: ttk.Frame, label: str, row: int, column: int, height: int) -> tk.Text:
+    def _field_cell(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        row: int,
+        column: int,
+        height: int,
+        columnspan: int = 1,
+    ) -> tk.Text:
         cell = ttk.Frame(parent)
-        cell.grid(row=row, column=column, sticky="ew", padx=(0 if column == 0 else 6, 6 if column == 0 else 0))
+        cell.grid(
+            row=row,
+            column=column,
+            columnspan=columnspan,
+            sticky="ew",
+            padx=(0 if column == 0 else 6, 6 if column == 0 else 0),
+        )
         cell.columnconfigure(0, weight=1)
         label_widget = ttk.Label(cell, text=label)
         label_widget.grid(row=0, column=0, sticky="w")
@@ -399,7 +448,7 @@ class JobTab(ttk.Frame):
 
     def apply_prompt_profile_view(self) -> None:
         prompt_profile = self.selected_prompt_profile()
-        if prompt_profile == "v1":
+        if is_v1_style_profile(prompt_profile):
             self.words.master.grid()
             self.des.master.grid()
             self.des.field_label.config(text="DES / Existing Evidence")
@@ -410,12 +459,12 @@ class JobTab(ttk.Frame):
             self.refresh_v1_mapping_actions()
             self.json_btn.grid()
             self.json_btn.config(text="Compose Resume")
-            self.recruiter_btn.config(text="LinkedIn", command=self.on_linkedin_outreach)
-            self.recruiter_btn.grid()
+            self.recruiter_btn.grid_remove()
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
             self.approval.master.grid()
             self.app_questions.master.grid()
+            self.link.master.grid()
             self.docx_btn.grid()
             self.pdf_btn.grid()
         elif prompt_profile == "v3":
@@ -438,6 +487,7 @@ class JobTab(ttk.Frame):
             if self.text_value(self.approval).lower() in {"approved:", "approved", "confirm", "confirm:"}:
                 self.approval.delete("1.0", "end")
             self.app_questions.master.grid()
+            self.link.master.grid_remove()
             self.docx_btn.grid()
             self.pdf_btn.grid()
         else:
@@ -460,9 +510,10 @@ class JobTab(ttk.Frame):
             self.recruiter_btn.config(text="Recruiter", command=self.on_recruiter_review)
             self.approval.master.grid()
             self.app_questions.master.grid()
+            self.link.master.grid_remove()
 
     def refresh_v1_mapping_actions(self) -> None:
-        if self.selected_prompt_profile() != "v1":
+        if not is_v1_style_profile(self.selected_prompt_profile()):
             self.resume_map_btn.grid_remove()
             return
         analysis_ready = bool(
@@ -587,7 +638,7 @@ class JobTab(ttk.Frame):
 
     def refresh_combined_02_to_07(self, request_dir: Path | None = None) -> None:
         folder = request_dir or self.request_dir
-        if folder and self.selected_prompt_profile() != "v1":
+        if folder and not is_v1_style_profile(self.selected_prompt_profile()):
             combine_request_02_to_07(folder)
 
     def show_des_in_jd(self, pass1_text: str) -> None:
@@ -601,7 +652,7 @@ class JobTab(ttk.Frame):
         self.jd_showing_des = True
         self.jd_title.set(
             "Evidence Mapping - Matches / DES Suggestions"
-            if self.selected_prompt_profile() == "v1"
+            if is_v1_style_profile(self.selected_prompt_profile())
             else "PASS 1 - Missing Coverage / DES Suggestions"
         )
 
@@ -616,10 +667,14 @@ class JobTab(ttk.Frame):
     def artifact_choices(self) -> list[tuple[str, list[Path]]]:
         if not self.request_dir:
             return []
+        prompt_profile = self.selected_prompt_profile()
         definitions = [
             ("Model Process | PASS 1 DES", "des"),
             ("Model Process | Resume Generation", "resume_process"),
-            ("Output | Resume JSON", "resume_json"),
+            (
+                "Output | Resume JSON",
+                "v1_resume_json" if is_v1_style_profile(prompt_profile) else "resume_json",
+            ),
             ("Model Process | Recruiter Review", "recruiter_process"),
             ("Output | Recruiter Resume JSON", "recruiter_json"),
             ("Input | Application Questions", "questions"),
@@ -635,8 +690,15 @@ class JobTab(ttk.Frame):
             ("Log | DOCX+GHI Build", "docx_ghi_log"),
             ("Log | PDF Archive", "pdf_log"),
         ]
-        if self.selected_prompt_profile() == "v1":
-            definitions.insert(0, ("Model Reasoning | V1 Prompts", "v1_reasoning"))
+        if is_v1_style_profile(prompt_profile):
+            definitions = [
+                item for item in definitions
+                if not item[0].startswith("LinkedIn |")
+            ]
+            definitions.insert(
+                0,
+                (f"Model Reasoning | {prompt_profile.upper()} Prompts", "v1_reasoning"),
+            )
         choices: list[tuple[str, list[Path]]] = []
         for label, key in definitions:
             path = self.existing_request_file(key)
@@ -685,7 +747,18 @@ class JobTab(ttk.Frame):
                 sections.append(f"{path.name}\n{'=' * len(path.name)}\n{text}")
             else:
                 sections.append(text)
-        self.show_output(selected, "\n\n".join(sections), refresh_choices=False)
+        display = "\n\n".join(sections)
+        if (
+            selected == "Output | Resume JSON"
+            and is_v1_style_profile(self.selected_prompt_profile())
+        ):
+            display = format_v1_resume_output(
+                self.text_value(self.company),
+                self.text_value(self.title_text),
+                self.text_value(self.link),
+                display,
+            )
+        self.show_output(selected, display, refresh_choices=False)
 
     def select_output_artifact(self, label: str) -> None:
         self.refresh_output_choices()
@@ -959,6 +1032,10 @@ class JobTab(ttk.Frame):
 
     def ensure_request_dir(self, inp: ResumeInput) -> Path:
         if self.request_dir:
+            if is_v1_style_profile(self.selected_prompt_profile()):
+                self.update_request_metadata({
+                    "link": f"Link: {self.text_value(self.link)}",
+                })
             return self.request_dir
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.request_id = f"{slug(inp.company)}_{slug(inp.title or 'Software_Engineer')}_{stamp}"
@@ -966,7 +1043,7 @@ class JobTab(ttk.Frame):
         self.request_dir.mkdir(parents=True, exist_ok=True)
         nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
         prompt_profile = self.selected_prompt_profile()
-        if prompt_profile == "v1":
+        if is_v1_style_profile(prompt_profile):
             model_spec = get_nvidia_model_spec(nvidia_model)
             save_json(
                 self.request_dir / "00_request.json",
@@ -974,6 +1051,7 @@ class JobTab(ttk.Frame):
                     "request_id": self.request_id,
                     "company": inp.company,
                     "title": inp.title,
+                    "link": self.text_value(self.link),
                     "location": inp.words,
                     "initial_des": inp.des,
                     "prompt_profile": prompt_profile,
@@ -1085,7 +1163,11 @@ class JobTab(ttk.Frame):
 
         self.set_busy(
             True,
-            "JD Intelligence + Evidence Mapping running..." if prompt_profile == "v1" else "PASS 1 running...",
+            (
+                "JD Intelligence + Evidence Mapping running..."
+                if is_v1_style_profile(prompt_profile)
+                else "PASS 1 running..."
+            ),
             cancellable=True,
         )
 
@@ -1104,7 +1186,7 @@ class JobTab(ttk.Frame):
                         lambda stage, data, reasoning: self.save_v1_stage_artifact(
                             request_dir, stage, data, reasoning
                         )
-                        if prompt_profile == "v1"
+                        if is_v1_style_profile(prompt_profile)
                         else None
                     ),
                 ))
@@ -1124,7 +1206,7 @@ class JobTab(ttk.Frame):
             result, events, stage_err = result
             self.add_cost_events(events)
             if stage_err:
-                if prompt_profile == "v1":
+                if is_v1_style_profile(prompt_profile):
                     analysis_ready = (request_dir / "02_jd_intelligence.json").exists()
                     mapping_ready = (request_dir / "03_evidence_map.json").exists()
                     if analysis_ready and not mapping_ready:
@@ -1148,13 +1230,20 @@ class JobTab(ttk.Frame):
                     self.set_busy(False, "PASS 1 failed")
                     messagebox.showerror("PASS 1 failed", str(stage_err), parent=self)
                 return
-            self.set_busy(False, "Evidence Mapping ready" if prompt_profile == "v1" else "PASS 1 ready")
+            self.set_busy(
+                False,
+                (
+                    "Evidence Mapping ready"
+                    if is_v1_style_profile(prompt_profile)
+                    else "PASS 1 ready"
+                ),
+            )
             self.pass1_raw = result
             self.show_des_in_jd(result)
-            if prompt_profile != "v1":
+            if not is_v1_style_profile(prompt_profile):
                 save_text(self.request_file("des", request_dir), result)
             self.refresh_combined_02_to_07(request_dir)
-            if prompt_profile != "v1":
+            if not is_v1_style_profile(prompt_profile):
                 self.record_des_facts(
                     inp=inp,
                     prompt_profile=prompt_profile,
@@ -1163,9 +1252,9 @@ class JobTab(ttk.Frame):
                     approval_text=self.text_value(self.approval),
                 )
             self.show_output(
-                "Evidence Mapping" if prompt_profile == "v1" else "PASS 1",
+                "Evidence Mapping" if is_v1_style_profile(prompt_profile) else "PASS 1",
                 "Evidence Mapping complete. DES suggestions are pinned in the left panel."
-                if prompt_profile == "v1"
+                if is_v1_style_profile(prompt_profile)
                 else "PASS 1 complete. DES suggestions are pinned in the left panel.",
             )
             self.refresh_v1_mapping_actions()
@@ -1174,7 +1263,7 @@ class JobTab(ttk.Frame):
 
     def on_resume_v1_mapping(self) -> None:
         try:
-            if self.selected_prompt_profile() != "v1":
+            if not is_v1_style_profile(self.selected_prompt_profile()):
                 raise ValueError("Resume Mapping is available only for V1 requests.")
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
@@ -1266,12 +1355,12 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Missing step", str(exc), parent=self)
             return
 
-        if prompt_profile == "v1":
+        if is_v1_style_profile(prompt_profile):
             save_text(request_dir / "04_des_approval.txt", approval_raw or "No DES")
         else:
             save_text(self.request_file("approval", request_dir), approval_raw + "\n\nNormalized:\n" + approval)
         self.refresh_combined_02_to_07(request_dir)
-        if prompt_profile != "v1":
+        if not is_v1_style_profile(prompt_profile):
             self.record_des_facts(
                 inp=inp,
                 prompt_profile=prompt_profile,
@@ -1281,7 +1370,11 @@ class JobTab(ttk.Frame):
             )
         self.set_busy(
             True,
-            "Resume Composition running..." if prompt_profile == "v1" else "Generating JSON...",
+            (
+                "Resume Composition running..."
+                if is_v1_style_profile(prompt_profile)
+                else "Generating JSON..."
+            ),
             cancellable=True,
         )
 
@@ -1308,11 +1401,11 @@ class JobTab(ttk.Frame):
                     lambda stage, data, reasoning: self.save_v1_stage_artifact(
                         request_dir, stage, data, reasoning
                     )
-                    if prompt_profile == "v1"
+                    if is_v1_style_profile(prompt_profile)
                     else None
                 ),
             ))
-            if prompt_profile != "v1":
+            if not is_v1_style_profile(prompt_profile):
                 save_text(self.request_file("resume_process", request_dir), raw)
             self.refresh_combined_02_to_07(request_dir)
             try:
@@ -1330,15 +1423,27 @@ class JobTab(ttk.Frame):
             if err:
                 status = (
                     "Resume Composition provider failure"
-                    if prompt_profile == "v1" and (request_dir / "05_resume_composer_api_error.json").exists()
+                    if (
+                        is_v1_style_profile(prompt_profile)
+                        and (request_dir / "05_resume_composer_api_error.json").exists()
+                    )
                     else "Generate call failed"
                 )
                 self.set_busy(False, status)
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
-            self.set_busy(False, "Resume JSON ready" if prompt_profile == "v1" else "JSON ready")
+            self.set_busy(
+                False,
+                "Resume JSON ready" if is_v1_style_profile(prompt_profile) else "JSON ready",
+            )
             raw, data, events, parse_error = result
-            if is_experimental_profile(prompt_profile):
+            if is_v1_style_profile(prompt_profile):
+                profile_label = prompt_profile.upper()
+                self.show_output(
+                    f"{profile_label} Prompt",
+                    self.response_summary(raw) or f"{profile_label} prompt JSON is ready.",
+                )
+            elif is_experimental_profile(prompt_profile):
                 if not self.show_and_save_linkedin_outreach(request_dir, raw):
                     self.show_output(f"{prompt_profile.upper()} Prompt", self.response_summary(raw) or f"{prompt_profile.upper()} prompt JSON is ready.")
             elif not self.show_and_save_linkedin_outreach(request_dir, raw):
@@ -1347,12 +1452,16 @@ class JobTab(ttk.Frame):
             if parse_error:
                 self.set_stage("Raw response saved; JSON not extracted")
                 return
-            self.final_json_path = (
-                request_dir / "05_resume_v3.json"
-                if prompt_profile == "v1"
-                else self.request_file("resume_json", request_dir)
-            )
-            save_json(self.final_json_path, data)
+            if is_v1_style_profile(prompt_profile):
+                _compact_path, self.final_json_path = save_v1_resume_files(
+                    request_dir,
+                    data,
+                    inp,
+                    prompt_profile,
+                )
+            else:
+                self.final_json_path = self.request_file("resume_json", request_dir)
+                save_json(self.final_json_path, data)
             self.refresh_combined_02_to_07(request_dir)
             self.recruiter_json_path = None
             self.final_qa_json_path = None
@@ -1411,12 +1520,12 @@ class JobTab(ttk.Frame):
         self.pass1_raw = pass1_text
         self.approval.delete("1.0", "end")
         self.approval.insert("1.0", approval)
-        if prompt_profile == "v1":
+        if is_v1_style_profile(prompt_profile):
             save_text(request_dir / "04_des_approval.txt", approval)
         else:
             save_text(self.request_file("approval", request_dir), approval + "\n\nNormalized:\n" + approval)
         self.refresh_combined_02_to_07(request_dir)
-        if prompt_profile != "v1":
+        if not is_v1_style_profile(prompt_profile):
             self.record_des_facts(
                 inp=inp,
                 prompt_profile=prompt_profile,
@@ -1647,7 +1756,7 @@ class JobTab(ttk.Frame):
         prompt_profile: str,
     ) -> dict:
         data = json.loads(source_path.read_text(encoding="utf-8"))
-        if prompt_profile == "v1" and "professional_experience" not in data:
+        if is_v1_style_profile(prompt_profile) and "professional_experience" not in data:
             return compact_to_resume_json(data, inp, prompt_profile)
         return normalize_resume_json(data)
 
@@ -2072,14 +2181,22 @@ class JobTab(ttk.Frame):
         manager_script = manager_script_for_profile(prompt_profile)
         render_json_path = self.final_json_path
         renderer_data = None
-        if prompt_profile == "v1":
+        if is_v1_style_profile(prompt_profile):
             if not self.request_dir:
-                messagebox.showerror("Build DOCX failed", "V1 request folder is unavailable.", parent=self)
+                messagebox.showerror(
+                    "Build DOCX failed",
+                    f"{prompt_profile.upper()} request folder is unavailable.",
+                    parent=self,
+                )
                 return
             try:
                 inp = self.make_input()
-                compact = json.loads(self.final_json_path.read_text(encoding="utf-8"))
-                renderer_data = compact_to_resume_json(compact, inp, "v1")
+                resume_data = json.loads(self.final_json_path.read_text(encoding="utf-8"))
+                renderer_data = (
+                    normalize_resume_json(resume_data)
+                    if "professional_experience" in resume_data
+                    else compact_to_resume_json(resume_data, inp, prompt_profile)
+                )
             except Exception as exc:
                 messagebox.showerror("Build DOCX failed", str(exc), parent=self)
                 return
@@ -2180,6 +2297,7 @@ class JobTab(ttk.Frame):
 
         replace(self.company, metadata.get("company", ""))
         replace(self.title_text, metadata.get("title", "") or "Software Engineer")
+        replace(self.link, metadata.get("link", ""))
         replace(self.words, metadata.get("location", metadata.get("words", "")))
         replace(self.des, metadata.get("initial des", metadata.get("des", "")))
         saved_profile = metadata.get("prompt profile", DEFAULT_PROMPT_PROFILE)
@@ -2207,7 +2325,7 @@ class JobTab(ttk.Frame):
             questions_path.read_text(encoding="utf-8") if questions_path else "",
         )
 
-        if saved_profile == "v1":
+        if is_v1_style_profile(saved_profile):
             self.pass1_raw = self.load_v1_pass1_bundle(request_dir)
         else:
             pass1_path = self.existing_request_file("des", request_dir)
@@ -2216,7 +2334,10 @@ class JobTab(ttk.Frame):
         self.request_id = metadata.get("request id", request_dir.name) or request_dir.name
         self.apply_prompt_profile_view()
         self.refresh_combined_02_to_07(request_dir)
-        pass2_path = self.existing_request_file("resume_json", request_dir)
+        pass2_path = self.existing_request_file(
+            "v1_resume_json" if is_v1_style_profile(saved_profile) else "resume_json",
+            request_dir,
+        )
         recruiter_path = self.existing_request_file("recruiter_json", request_dir)
         final_qa_path = self.existing_request_file("final_qa_json", request_dir)
         self.recruiter_json_path = recruiter_path
@@ -2280,12 +2401,14 @@ class JobTab(ttk.Frame):
         replace(self.output, "")
         replace(self.approval, "")
         replace(self.app_questions, "")
+        replace(self.link, "")
 
         saved_profile = metadata.get("prompt profile", DEFAULT_PROMPT_PROFILE)
         self.prompt_selector.set(prompt_profile_label(saved_profile))
         self.on_prompt_profile_selected()
         replace(self.company, metadata.get("company", ""))
         replace(self.title_text, metadata.get("title", "") or "Software Engineer")
+        replace(self.link, metadata.get("link", ""))
         replace(self.words, metadata.get("location", metadata.get("words", "")))
         replace(self.des, metadata.get("initial des", metadata.get("des", "")))
         self.mode_value = metadata.get("mode", "")
@@ -2319,6 +2442,7 @@ class JobTab(ttk.Frame):
             self.jd,
             self.approval,
             self.app_questions,
+            self.link,
             self.output,
         ):
             box.delete("1.0", "end")

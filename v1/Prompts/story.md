@@ -535,16 +535,19 @@ Keval translated researcher requirements into data-ingestion, API, dashboard, vi
 
 The work covered technical discovery, implementation, testing, debugging, documentation, deployment support, and feedback-driven iteration.
 
+Keval used GitHub Copilot and Cursor as AI-assisted development tools for implementation support, debugging, test scaffolding, and technical documentation. He reviewed generated changes before integration and validated the final work through testing, researcher acceptance criteria, and feedback-driven iteration.
+
 ### FAANG framing dimensions
 
 - Stakeholders: 6 research teams
 - Delivery: 10+ scoped changes
 - Execution efficiency: clarification cycles down 50%
 - Ownership: discovery through delivery and feedback
+- AI-assisted development: GitHub Copilot and Cursor with human review, testing, and stakeholder validation
 
 ### Resume keywords
 
-stakeholder requirements, cross-functional collaboration, technical discovery, API delivery, dashboard delivery, research software, full development cycle, documentation, testing, iterative delivery.
+stakeholder requirements, cross-functional collaboration, technical discovery, API delivery, dashboard delivery, research software, full development cycle, AI-assisted development, GitHub Copilot, Cursor, documentation, debugging, test scaffolding, human validation, iterative delivery.
 
 ---
 
@@ -558,6 +561,8 @@ As a Teaching Assistant for Database Systems and Object-Oriented Programming, Ke
 
 He automated 12 Python review checks, reduced review time from 15 minutes to 1 minute per submission, and reviewed 1,000+ submissions per semester. He also conducted lab sessions on clean code, data structures, system-design reasoning, debugging, and database implementation.
 
+He used Codex, Cursor, and Claude Code as AI-assisted development tools while refining Python review automation, debugging checks, preparing test cases, and drafting technical documentation. He retained final implementation and review ownership by inspecting generated changes and validating them against course requirements and representative submissions.
+
 ### FAANG framing dimensions
 
 - Scale: 120+ students; 1,000+ submissions/semester
@@ -565,10 +570,11 @@ He automated 12 Python review checks, reduced review time from 15 minutes to 1 m
 - Developer productivity: review time 15 minutes to 1 minute
 - Technical depth: Java, C++, SQL, databases, OOP, data structures, concurrency, system design
 - Collaboration: mentoring, code review, technical communication
+- AI-assisted development: Codex, Cursor, and Claude Code with human review and submission-based validation
 
 ### Resume keywords
 
-Java, C++, SQL, Python, databases, OOP, data structures, system design, code review, debugging, clean code, query optimization, concurrency, mentoring, technical communication, automation.
+Java, C++, SQL, Python, databases, OOP, data structures, system design, code review, debugging, clean code, query optimization, concurrency, mentoring, technical communication, automation, AI-assisted development, Codex, Cursor, Claude Code, test support, documentation, human validation.
 
 ---
 
@@ -700,4 +706,3 @@ The workflow reduced personal prototype development time by 40% across 5 project
 AI-assisted development, Codex, Cursor, Claude Code, MCP, agentic coding, developer productivity, debugging, refactoring, testing support, Git.
 
 ---
-
