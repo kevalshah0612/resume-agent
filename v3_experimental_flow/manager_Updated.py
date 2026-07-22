@@ -1004,7 +1004,8 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
         # Fall back to config default only when JSON omits the field.
         display_grad = clean(edu.get("graduation", "")) or (grad if i == 0 else "")
         degree = clean(edu.get("degree", ""))
-        if degree or display_grad:
+        gpa = clean(edu.get("gpa", ""))
+        if degree or gpa or display_grad:
             p2 = doc.add_paragraph()
             headless_sp(p2)
             tabs2 = p2.paragraph_format.tab_stops
@@ -1013,11 +1014,31 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
 
             r = p2.add_run(degree)
             rf(r, sz=SUB_PT)
+            if gpa:
+                separator = p2.add_run(" | GPA: ")
+                rf(separator, sz=SUB_PT)
+                gpa_run = p2.add_run(gpa)
+                rf(gpa_run, sz=SUB_PT)
             if display_grad:
                 tab = p2.add_run("\t")
                 rf(tab, sz=SUB_PT)
                 r3 = p2.add_run(display_grad)
                 rf(r3, sz=SUB_PT)
+
+        coursework_value = edu.get("coursework") or []
+        if isinstance(coursework_value, list):
+            coursework = ", ".join(
+                clean(item) for item in coursework_value if clean(item)
+            )
+        else:
+            coursework = clean(coursework_value)
+        if coursework:
+            p3 = doc.add_paragraph()
+            headless_sp(p3)
+            label = p3.add_run("Relevant Coursework: ")
+            rf(label, sz=SUB_PT, bold=True)
+            value = p3.add_run(coursework)
+            rf(value, sz=SUB_PT)
 
         if i == 0 and render_ta and clean(edu.get("ta_bullet", "")):
             bullet(doc, edu.get("ta_bullet", ""), bold_markers)

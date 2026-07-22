@@ -8,7 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import app_properties
+import manager
 import pipeline
+from docx import Document
 
 
 EMPTY_USAGE = {
@@ -148,8 +150,10 @@ class PromptProfileTests(unittest.TestCase):
         self.assertNotIn("Preferred engineering and evidence verb bank", mapper_controller)
         self.assertNotIn("RESUME_COMPOSITION", mapper_controller)
         self.assertIn("RESUME_COMPOSITION", composer_controller)
-        self.assertIn("Target 18 to 24 words", composer_controller)
-        self.assertIn("never accept a bullet above 28 words", composer_controller)
+        self.assertIn("Include `coursework` after `summary`", composer_controller)
+        self.assertIn("For `mid_swe`, return `coursework: []`", composer_controller)
+        self.assertIn("Target 18 to 22 words", composer_controller)
+        self.assertIn("never accept a bullet above 24 words", composer_controller)
         self.assertIn("no more than three visible JD keyword units", composer_controller)
         self.assertIn("For every bullet, silently repeat this loop", composer_controller)
         self.assertIn("exact supported JD alignment anchor", composer_controller)
@@ -160,7 +164,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Exact JD Alignment Anchor", composer)
         self.assertIn("Never repeat an opening verb", composer)
         self.assertIn("Draft and validate exactly one bullet at a time", composer)
-        self.assertIn("reject and rewrite every bullet above 28 words", composer)
+        self.assertIn("reject and rewrite every bullet above 24 words", composer)
         self.assertIn("Do not open a project result bullet with `Self-tested`", composer)
 
     def test_v1_short_controller_is_sent_to_all_three_stages(self):
@@ -549,6 +553,63 @@ class PromptProfileTests(unittest.TestCase):
                 "(607) 235-1181 | keval.shah098@gmail.com | "
                 "linkedin.com/in/keval-shah0612"
             ),
+        )
+
+    def test_v1_coursework_is_verified_limited_and_entry_level_only(self):
+        entry = pipeline.compact_to_resume_json(
+            {
+                "type": "entry_swe",
+                "coursework": [
+                    "Systems Programming",
+                    "Unknown Cloud Course",
+                    "Database Systems",
+                    "Natural Language Processing",
+                    "Introduction to Machine Learning",
+                    "Programming Languages",
+                ],
+                "experience": [],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(company="Acme", title="Software Engineer", jd="Build systems"),
+            "v1",
+        )
+        mid = pipeline.compact_to_resume_json(
+            {
+                "type": "mid_swe",
+                "coursework": ["Systems Programming", "Database Systems"],
+                "experience": [],
+                "projects": [],
+                "technical_skills": [],
+            },
+            pipeline.ResumeInput(company="Acme", title="Software Engineer", jd="Build systems"),
+            "v1",
+        )
+
+        self.assertEqual(
+            entry["education"][0]["coursework"],
+            [
+                "Systems Programming",
+                "Database Systems",
+                "Natural Language Processing",
+                "Introduction to Machine Learning",
+            ],
+        )
+        self.assertEqual(entry["education"][0]["gpa"], "4.00/4.00")
+        self.assertNotIn("coursework", mid["education"][0])
+        self.assertNotIn("gpa", mid["education"][0])
+
+        doc = Document()
+        manager.render_education(doc, entry, "", 2, False, 0)
+        rendered_text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+        self.assertIn(
+            "Master of Science, Computer Science, AI Specialization | GPA: 4.00/4.00",
+            rendered_text,
+        )
+        self.assertIn(
+            "Relevant Coursework: Systems Programming, Database Systems, "
+            "Natural Language Processing, Introduction to Machine Learning",
+            rendered_text,
         )
 
     def test_v3_contact_header_does_not_inherit_v1_location_prefix(self):

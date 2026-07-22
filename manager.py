@@ -960,6 +960,27 @@ def render_education(doc: Document, data: dict, grad: str, level: int, bold_mark
         sp(p2)
         r4 = p2.add_run(clean(edu.get("degree", "")))
         rf(r4, italic=True)
+        gpa = clean(edu.get("gpa", ""))
+        if gpa:
+            separator = p2.add_run(" | GPA: ")
+            rf(separator, italic=True)
+            gpa_run = p2.add_run(gpa)
+            rf(gpa_run, italic=True)
+
+        coursework_value = edu.get("coursework") or []
+        if isinstance(coursework_value, list):
+            coursework = ", ".join(
+                clean(item) for item in coursework_value if clean(item)
+            )
+        else:
+            coursework = clean(coursework_value)
+        if coursework:
+            p3 = doc.add_paragraph()
+            sp(p3)
+            label = p3.add_run("Relevant Coursework: ")
+            rf(label, bold=True)
+            value = p3.add_run(coursework)
+            rf(value)
 
         if i == 0 and render_ta and clean(edu.get("ta_bullet", "")):
             bullet(doc, edu.get("ta_bullet", ""), bold_markers)

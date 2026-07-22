@@ -84,6 +84,22 @@ CANDIDATE_PROFILE = {
     ],
 }
 
+# Verified from the Binghamton University unofficial transcript supplied by the candidate.
+# Resume prompts may select only the smallest JD-relevant subset of these courses.
+VERIFIED_GRADUATE_COURSEWORK = (
+    "Database Systems",
+    "Programming Languages",
+    "Design and Analysis of Computer Algorithms",
+    "Programming Systems and Tools",
+    "Introduction to Machine Learning",
+    "Programming for the Web",
+    "Systems Programming",
+    "Introduction to Computer Vision",
+    "Introduction to Artificial Intelligence",
+    "Natural Language Processing",
+)
+VERIFIED_GRADUATE_GPA = "4.00/4.00"
+
 CANDIDATE_NAME = CANDIDATE_PROFILE["candidate"]["name"]
 RESUME_STEM = "Keval_Shah"
 

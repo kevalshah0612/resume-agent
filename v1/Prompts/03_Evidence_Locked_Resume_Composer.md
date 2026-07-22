@@ -1,5 +1,9 @@
 # V1 Prompt 3 - Evidence-Locked Resume Composer
 
+## Plain ASCII Resume Rule
+
+Every string in the returned resume JSON must use plain printable ASCII characters only. Never output or JSON-escape Unicode arrows, em dashes, en dashes, nonbreaking hyphens, smart quotes, ellipses, mathematical comparison symbols, multiplication signs, decorative bullets, or similar glyphs. Do not copy such characters from the mapper. Preserve exact values but express them concisely and naturally for the sentence. Shared units may appear once, as in `from 60 to 10 seconds`; ranges may read `12,000 to 14,000`; thresholds may read `under 1 second`. These examples illustrate valid ASCII wording and are not sentence templates. Never use compressed arrow or comparator shorthand such as `60s->10s`, `60s=>10s`, `3s-><1s`, or Unicode equivalents. Necessary ASCII characters inside established technical names and verified metrics, including `C#`, `C++`, `.NET`, `CI/CD`, `A/B`, `%`, and `+`, remain allowed.
+
 ## Authoritative System Configuration
 
 The following configuration is immutable. Use only the configuration matching `MAPPER_PLAN.resolved_mode`. Return the exact configured section order, role order, bullet counts, project count, and summary behavior.
@@ -85,7 +89,8 @@ The following configuration is immutable. Use only the configuration matching `M
     "target_bullet_words": "18-22",
     "hard_maximum_bullet_words": 24,
     "maximum_jd_keyword_units_per_bullet": 3,
-    "maximum_numeric_expressions_per_bullet": 2,
+    "maximum_performance_outcomes_per_bullet": 1,
+    "maximum_essential_scope_values_per_bullet": 1,
     "one_result_group_per_bullet": true,
     "one_sentence_per_bullet": true,
     "em_dash_allowed": false,
@@ -152,6 +157,7 @@ Return exactly one JSON object with this complete shape and key order:
 {
   "type": "entry_swe",
   "summary": "",
+  "coursework": ["Database Systems", "Programming Languages"],
   "experience": [
     {
       "id": "TA",
@@ -247,6 +253,7 @@ Return exactly one JSON object with this complete shape and key order:
 
 - `type`: Must exactly equal `MAPPER_PLAN.resolved_mode`.
 - `summary`: Empty for `entry_swe` and `entry_aiml`. For `mid_swe`, write one targeted paragraph of no more than 40 words using only `summary_plan`.
+- `coursework`: For `entry_swe` and `entry_aiml`, select the smallest useful set of two to four verified graduate courses that directly supports central JD requirements. Prefer two or three. For `mid_swe`, return `[]`.
 - `experience`: Must use the exact configured role order, identity values, and bullet counts for the resolved mode.
 - `projects`: Must use the mapper's exact selected project IDs, names, order, and configured count. Every project has exactly two bullets.
 - `tech`: Use only the most JD-relevant technologies allowed by that project's mapper plan. Do not dump the project's complete stack.
@@ -259,7 +266,7 @@ The JSON block above demonstrates the complete V3 compact shape for `entry_swe`.
 
 ## Rendered Resume Section Order
 
-The compact JSON contains tailored content; the runtime supplies canonical Education data and physically renders sections. Do not add an `education` or `section_order` key to the compact JSON.
+The compact JSON contains tailored content; the runtime supplies canonical Education identity data, renders the transcript-verified `GPA: 4.00/4.00` on the master's degree line and `coursework` below it for entry-level modes, and physically renders sections. Do not add an `education`, `gpa`, or `section_order` key to the compact JSON. Mid-level resumes render neither GPA nor coursework.
 
 Use the resolved mode's configured rendered order:
 
@@ -279,7 +286,7 @@ Return experience rows in this exact order and count:
 3. `TCS_SWE_II`: 3 bullets
 4. `TCS_SWE_I`: 2 bullets
 
-Return exactly 2 projects with 2 bullets each. `summary` must be `""`.
+Return exactly 2 projects with 2 bullets each. `summary` must be `""`. Return a minimal JD-relevant `coursework` array.
 
 ### Entry AI/ML
 
@@ -289,7 +296,7 @@ Return experience rows in this exact order and count:
 2. `GHI`: 3 bullets
 3. `TCS_COMBINED`: 3 bullets
 
-Return exactly 3 projects with 2 bullets each. `summary` must be `""`.
+Return exactly 3 projects with 2 bullets each. `summary` must be `""`. Return a minimal JD-relevant `coursework` array.
 
 `TCS_COMBINED` may contain mapper-selected bullets from either TCS level. Each bullet remains bound to its one selected evidence-packet slot and story ID. Use the locked `TCS_COMBINED` identity.
 
@@ -302,7 +309,7 @@ Return experience rows in this exact order and count:
 3. `TA`: 1 bullet
 4. `GHI`: 2 bullets
 
-Return exactly 2 projects with 2 bullets each. Write the required summary from `summary_plan` in no more than 40 words.
+Return exactly 2 projects with 2 bullets each. Write the required summary from `summary_plan` in no more than 40 words. Return `"coursework": []`.
 
 ## Source Hierarchy
 
@@ -364,7 +371,7 @@ Do not move a term, metric, user count, domain, action, result, or ownership cla
 
 Enforce the mapper's evidence-origin boundary from the story ID: TA bullets use only `TA-*`, GHI bullets only `GHI-*`, TCS bullets may use `TCS-I-*` or `TCS-II-*`, and project bullets only `PROJ-*`. If the packet violates this boundary, do not disguise the mismatch by writing the story under the wrong employer.
 
-Within the selected story, use only one coherent method group and one coherent result or scope group per bullet. Use no more than two numeric expressions. Omit other allowed facts and metrics even when they are true; an allowlist is not an inclusion requirement.
+Within the selected story, use only one coherent method group and at most one performance outcome per bullet. A before-and-after comparison is one outcome. You may include one essential scope value only when it materially proves JD-relevant scale. Omit every secondary performance metric even when it is true and mapper-authorized; an allowlist is not an inclusion requirement.
 
 The mapper plan is an allowlist, not a suggestion.
 
@@ -378,11 +385,9 @@ Write each bullet as one natural engineering achievement. Read left to right, th
 4. What improved or changed?
 5. By how much, when a verified metric exists?
 
-These questions are an evidence checklist, not a rigid sentence template. Do not force every bullet into identical grammar. Do not invent a metric when none is allowed.
+These questions are an evidence checklist, not a rigid sentence template. Do not force every bullet into identical grammar, clause order, transition, or metric construction. Vary sentence structure naturally across the resume while keeping each achievement clear. Do not invent a metric when none is allowed, and do not force every bullet to contain a number.
 
-Preferred natural shape:
-
-`Past-tense action + real system or workflow + concise technical method + verified result or scope`
+There is no required bullet formula. The action, system, method, scope, and result may appear in whichever natural order best communicates that specific achievement.
 
 Build the achievement first and add only the smallest set of terms needed to explain it. The mapper packet is an allowlist, not a checklist. A permitted technology, fact, metric, or requirement may be omitted when including it would weaken grammar, exceed keyword capacity, repeat another bullet, or turn the sentence into an inventory.
 
@@ -422,8 +427,9 @@ Every bullet must:
 - Use natural recruiter-readable grammar.
 - Target 18 to 22 words.
 - Never exceed 24 words.
-- Use verified scope or a verified metric when available and useful.
-- Put the result naturally after the action and method when that reads clearly.
+- Use at most one verified performance outcome when available, useful, and directly relevant to the bullet's primary JD requirement.
+- Use at most one essential scope value when it materially establishes scale; otherwise omit it.
+- Place the result wherever it reads naturally. Do not repeat the same metric phrasing or clause order across bullets.
 - Remain interview-defensible from its locked evidence packet.
 
 Treat 18 to 22 words as the normal completion range, not a suggestion to fill every available word. A final bullet may use 23 or 24 words only when essential verified meaning cannot fit naturally within 22 words. There is no exception above 24 words. Compress or remove a secondary keyword, tool, adjective, metric, scope detail, or claim until the bullet fits.
@@ -600,6 +606,31 @@ Do not use:
 - unsupported domain experience
 - a list of technologies
 
+## Relevant Coursework Rules
+
+Coursework is transcript-verified education evidence, not a keyword inventory.
+
+For `entry_swe` and `entry_aiml`, select only from this verified graduate catalog:
+
+- `Database Systems`
+- `Programming Languages`
+- `Design and Analysis of Computer Algorithms`
+- `Programming Systems and Tools`
+- `Introduction to Machine Learning`
+- `Programming for the Web`
+- `Systems Programming`
+- `Introduction to Computer Vision`
+- `Introduction to Artificial Intelligence`
+- `Natural Language Processing`
+
+Return two to four course titles, preferring two or three. Select a course only when it directly supports a central or high-priority JD requirement. Order courses by JD relevance, not transcript order. Do not add course codes, grades, GPA, unverified titles, generic electives, explanations, or technologies that are not course titles. Do not select overlapping courses merely to repeat one keyword.
+
+For `mid_swe`, return exactly:
+
+```text
+"coursework": []
+```
+
 ## Technical Skills Rules
 
 Build `technical_skills` only from `MAPPER_PLAN.skills_plan` after applying explicit DES approval.
@@ -628,12 +659,12 @@ Perform these steps silently in one call:
 3. Create a resume-wide opening-verb ledger and reserve one unique, evidence-supported verb for every experience and project slot.
 4. Create every configured experience row and every selected project shell from the mapper plan.
 5. Draft and validate exactly one bullet at a time. Do not move to the next bullet until the current bullet passes its complete alignment loop.
-6. For the current bullet, verify the selected story, evidence-origin boundary, primary requirement, exact supported JD alignment anchor, action, one method group, one result or scope group, and useful verified metric when available.
+6. For the current bullet, verify the selected story, evidence-origin boundary, primary requirement, exact supported JD alignment anchor, action, one method group, at most one performance outcome, and at most one essential scope value.
 7. Verify that the opening verb is precise, evidence-supported, appropriately strong for its position, and unused elsewhere in the ledger.
 8. Count the exact current bullet after every wording change. Target 18 to 22 words and reject and rewrite every bullet above 24 words; never carry forward a count from an earlier draft and there is no longer exception.
-9. Verify active past tense, one coherent achievement, no more than three visible JD keyword units, no more than two numeric expressions, natural grammar, punctuation, and recruiter readability.
+9. Verify active past tense, one coherent achievement, at most one performance outcome, at most one essential scope value, no more than three visible JD keyword units, natural varied grammar, punctuation, and recruiter readability.
 10. Rewrite the current bullet until all applicable checks pass, then record its exact story ID, primary requirement ID, alignment class, final word count, answered evidence questions, accepted verb, and alignment anchor before continuing to the next slot.
-11. Write or omit the summary according to mode and build Technical Skills from the locked plan.
+11. Write or omit the summary according to mode, select minimal JD-relevant coursework for entry modes, and build Technical Skills from the locked plan.
 12. Audit every claim against its slot-local evidence-packet allowlist.
 13. Audit role order, role identity, bullet counts, project count, and Skills categories.
 14. Correct any problem silently without changing stories or adding evidence.
@@ -646,7 +677,7 @@ Do not expose this internal process in the response. Provider-returned reasoning
 Before returning JSON, silently verify:
 
 1. The response is exactly one valid JSON object.
-2. Top-level keys are exactly `type`, `summary`, `experience`, `projects`, `technical_skills`, and `bullet_checks` in that order.
+2. Top-level keys are exactly `type`, `summary`, `coursework`, `experience`, `projects`, `technical_skills`, and `bullet_checks` in that order.
 3. No extra top-level or nested keys exist.
 4. `type` matches the mapper's resolved mode.
 5. Summary policy matches the resolved mode.
@@ -669,20 +700,23 @@ Before returning JSON, silently verify:
 22. No bullet is a technology inventory.
 23. No bullet contains more than three visible JD keyword units.
 24. Every bullet remains a clear achievement after its technology names are mentally removed.
-25. Every bullet uses only one coherent result or scope group and no more than two numeric expressions.
-26. No achievement is duplicated.
-27. Every opening verb is precise, evidence-supported, and unique across all experience and project bullets.
-28. Technical Skills uses no more than five nonempty categories.
-29. Every Skills term exists in the mapper plan and is current-JD-relevant.
-30. No Skills term is duplicated.
-31. No slash-separated alternative term appears.
-32. No Markdown, comments, placeholders, or explanations appear in the JSON.
-33. Every string and array is complete before output ends.
-34. Every bullet with a primary requirement contains one exact supported JD alignment anchor or a truthful close-match replacement when the exact term is unsupported.
-35. The strongest accurate evidence and opening verb lead each role.
-36. `bullet_checks` contains exactly one entry per experience and project bullet in matching order.
-37. Every `bullet_checks.word_count` matches its final accepted bullet, and every story, requirement, alignment class, and answered-question label matches the locked evidence actually used.
-38. Every adjacent technology name is comma-separated correctly; no form such as `Java Spring Boot`, `Java and Spring Boot`, `Java/Spring Boot`, `C# .NET`, `Python FastAPI`, or `SQL/NoSQL` appears.
+25. Every bullet uses at most one performance outcome and at most one essential scope value; a before-and-after comparison counts as one outcome.
+26. Metric wording and clause order vary naturally; no fixed resume-wide sentence pattern is imposed.
+27. No achievement is duplicated.
+28. Every opening verb is precise, evidence-supported, and unique across all experience and project bullets.
+29. Technical Skills uses no more than five nonempty categories.
+30. Every Skills term exists in the mapper plan and is current-JD-relevant.
+31. No Skills term is duplicated.
+32. No slash-separated alternative term appears.
+33. No Markdown, comments, placeholders, or explanations appear in the JSON.
+34. Every string and array is complete before output ends.
+35. Every bullet with a primary requirement contains one exact supported JD alignment anchor or a truthful close-match replacement when the exact term is unsupported.
+36. The strongest accurate evidence and opening verb lead each role.
+37. `bullet_checks` contains exactly one entry per experience and project bullet in matching order.
+38. Every `bullet_checks.word_count` matches its final accepted bullet, and every story, requirement, alignment class, and answered-question label matches the locked evidence actually used.
+39. Every adjacent technology name is comma-separated correctly; no form such as `Java Spring Boot`, `Java and Spring Boot`, `Java/Spring Boot`, `C# .NET`, `Python FastAPI`, or `SQL/NoSQL` appears.
+40. Entry-level coursework contains only two to four exact verified course titles that directly support the JD, while mid-level coursework is an empty array.
+41. Every JSON string uses plain printable ASCII characters only and contains no Unicode, encoded special glyph, arrow shorthand, or comparator shorthand.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 

@@ -81,8 +81,9 @@ The tab uses one large scrollable `Output` area with an artifact dropdown. Entri
 
 The prompt dropdown is per tab:
 
-- `V1` is the default and uses three long prompts plus isolated `prompt_short_jd.md`, `prompt_short_mapper.md`, and `prompt_short_composer.md` controllers in `V1/Prompts/`. The matching long prompt remains the system context, and only the matching short controller is placed in the current user message. Only Evidence Mapping receives the complete `story.md`; the Resume Composer receives the locked, self-contained evidence packet instead of rereading Story.
-- V1 `Analyze + Map` runs JD Intelligence and Evidence Mapping, then pauses once for DES approval. If mapping fails after analysis was saved, `Resume Mapping` reruns only Evidence Mapping. `Compose Resume` runs the evidence-locked composer and returns compact V3 JSON.
+- `V1` is the default and uses three long prompts plus isolated `prompt_short_jd.md`, `prompt_short_mapper.md`, and `prompt_short_composer.md` controllers in `V1/Prompts/`. The optional post-V1 validation stages use the same long-prompt plus short-controller pattern with `prompt_short_ats.md` and `prompt_short_optimizer.md` in `v1/2 stage/`. The matching long prompt remains the system context, and only the matching short controller is placed in the current user message. Only Evidence Mapping receives the complete `story.md`; the Resume Composer receives the locked, self-contained evidence packet instead of rereading Story.
+- V1 `Analyze + Map` runs JD Intelligence and Evidence Mapping, then pauses once for DES approval. If mapping fails after analysis was saved, `Resume Mapping` reruns only Evidence Mapping. `Compose` runs the evidence-locked composer and returns compact V3 JSON. The separate `Validate` button then runs the post-V1 ATS gap audit and evidence-locked optimizer; it never changes Analyze/Map or Compose.
+- Entry-level V1 resumes show a minimal set of transcript-verified coursework selected for the current JD. Mid-level V1 resumes omit coursework.
 - V1 does not assign stage-specific token or reasoning budgets; it inherits the same configured model limits as the main flow.
 - `Stable` uses `main_flow/`.
 - `V3` uses `v3_experimental_flow/prompts/prompt.md`, `prompt_short.md`, `Story.md`, and `hotdog.md`.
@@ -105,10 +106,11 @@ Default V1 path:
    - If JD Intelligence succeeds but Evidence Mapping encounters a provider or JSON failure, click `Resume Mapping`; Prompt 1 is not repeated.
 3. Review the organized exact matches, close matches, and DES questions.
 4. Approve exact DES IDs such as `Approved: DES001, DES002`, or enter `No DES`.
-5. Click `Compose Resume`.
-6. Click `DOCX`.
-7. Review the DOCX.
-8. Click `PDF`.
+5. Click `Compose`.
+6. Optionally click `Validate` to audit and optimize the composed V1 JSON. The parsed Optimizer JSON becomes canonical while the original compact and expanded Composer resumes remain saved separately.
+7. Click `DOCX`.
+8. Review the DOCX.
+9. Click `PDF`.
 
 Fast path:
 

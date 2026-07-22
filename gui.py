@@ -49,6 +49,7 @@ from pipeline import (
     run_pass1,
     run_pass2,
     run_v1_evidence_mapping,
+    run_v1_post_validation,
     run_recruiter_review,
     save_json,
     save_text,
@@ -83,6 +84,9 @@ REQUEST_FILE_ALIASES = {
     "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
     "resume_json": ("05_resume_output.json", "05_final_resume.json", "05_resume_v3.json"),
     "v1_resume_json": ("05.json", "05_resume_v3.json"),
+    "v1_composer_resume": ("05_composer.json", "05_resume_v3_composer.json"),
+    "v1_ats_report": ("06_ats_gap_report.md",),
+    "v1_optimizer_resume": ("07_resume_v3_optimized.json",),
     "recruiter_process": ("06_recruiter_review_process.txt", "06_recruiter_raw.txt"),
     "recruiter_json": ("07_recruiter_resume_output.json", "07_recruiter_final_resume.json"),
     "questions": ("08_application_questions.txt",),
@@ -176,6 +180,19 @@ def save_v1_resume_files(
     return compact_path, full_path
 
 
+def save_v1_composer_files(
+    request_dir: Path,
+    compact_resume: dict,
+    inp: ResumeInput,
+    prompt_profile: str = "v1",
+) -> tuple[Path, Path]:
+    compact_path = request_dir / "05_resume_v3_composer.json"
+    full_path = request_dir / "05_composer.json"
+    save_json(compact_path, compact_resume)
+    save_json(full_path, compact_to_resume_json(compact_resume, inp, prompt_profile))
+    return compact_path, full_path
+
+
 def combine_request_02_to_07(request_dir: Path) -> Path | None:
     if not request_dir.exists():
         return None
@@ -264,6 +281,9 @@ class JobTab(ttk.Frame):
         self.approve_des_btn.grid_remove()
         self.json_btn = ttk.Button(toolbar, text="Generate JSON", command=self.on_generate_json)
         self.json_btn.grid(row=0, column=2, padx=(0, 6))
+        self.validate_btn = ttk.Button(toolbar, text="Validate", command=self.on_v1_validate)
+        self.validate_btn.grid(row=0, column=3, padx=(0, 6))
+        self.validate_btn.grid_remove()
         self.recruiter_btn = ttk.Button(toolbar, text="Recruiter", command=self.on_recruiter_review)
         self.recruiter_btn.grid(row=0, column=3, padx=(0, 6))
         self.final_qa_btn = ttk.Button(toolbar, text="Final QA", command=self.on_final_review)
@@ -458,7 +478,8 @@ class JobTab(ttk.Frame):
             self.auto_btn.grid_remove()
             self.refresh_v1_mapping_actions()
             self.json_btn.grid()
-            self.json_btn.config(text="Compose Resume")
+            self.json_btn.config(text="Compose")
+            self.validate_btn.grid()
             self.recruiter_btn.grid_remove()
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
@@ -478,6 +499,7 @@ class JobTab(ttk.Frame):
             self.auto_btn.grid_remove()
             self.approve_des_btn.grid()
             self.json_btn.grid()
+            self.validate_btn.grid_remove()
             self.recruiter_btn.grid()
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
@@ -501,6 +523,7 @@ class JobTab(ttk.Frame):
             self.auto_btn.grid()
             self.approve_des_btn.grid_remove()
             self.json_btn.grid()
+            self.validate_btn.grid_remove()
             self.recruiter_btn.grid()
             self.final_qa_btn.grid()
             self.questions_btn.grid()
@@ -608,7 +631,14 @@ class JobTab(ttk.Frame):
             "evidence_map": "PROMPT 2 - EVIDENCE MAPPING",
             "resume_composer": "PROMPT 3 - RESUME COMPOSER",
         }
-        label = labels[base_stage]
+        self.save_v1_reasoning_block(request_dir, labels[base_stage], reasoning)
+
+    def save_v1_reasoning_block(
+        self,
+        request_dir: Path,
+        label: str,
+        reasoning: str,
+    ) -> None:
         start = f"===== {label} ====="
         end = f"===== END {label} ====="
         block = f"{start}\n{reasoning.strip()}\n{end}"
@@ -620,6 +650,40 @@ class JobTab(ttk.Frame):
         else:
             combined = "\n\n".join(part for part in (existing.strip(), block) if part)
         save_text(reasoning_path, combined + "\n")
+
+    def save_v1_validation_artifact(
+        self,
+        request_dir: Path,
+        stage: str,
+        data,
+        reasoning: str,
+    ) -> None:
+        names = {
+            "ats_audit": "06_ats_gap_report.md",
+            "optimizer": "07_resume_v3_optimized.json",
+            "ats_audit_api_error": "06_ats_audit_api_error.json",
+            "optimizer_api_error": "07_optimizer_api_error.json",
+            "optimizer_parse_error": "07_optimizer_parse_error_raw.txt",
+        }
+        if stage not in names:
+            raise ValueError(f"Unknown V1 validation artifact: {stage}")
+        path = request_dir / names[stage]
+        if stage == "ats_audit":
+            save_text(path, str(data).strip() + "\n")
+        elif stage == "optimizer_parse_error":
+            save_text(path, str((data or {}).get("raw") or ""))
+        else:
+            save_json(path, data)
+
+        labels = {
+            "ats_audit": "POST-V1 ATS GAP AUDIT",
+            "ats_audit_api_error": "POST-V1 ATS GAP AUDIT",
+            "optimizer": "POST-V1 EVIDENCE-LOCKED OPTIMIZER",
+            "optimizer_api_error": "POST-V1 EVIDENCE-LOCKED OPTIMIZER",
+            "optimizer_parse_error": "POST-V1 EVIDENCE-LOCKED OPTIMIZER",
+        }
+        if stage in labels:
+            self.save_v1_reasoning_block(request_dir, labels[stage], reasoning)
 
     def load_v1_pass1_bundle(self, request_dir: Path) -> str:
         analysis_path = request_dir / "02_jd_intelligence.json"
@@ -695,10 +759,13 @@ class JobTab(ttk.Frame):
                 item for item in definitions
                 if not item[0].startswith("LinkedIn |")
             ]
-            definitions.insert(
-                0,
+            definitions = [
                 (f"Model Reasoning | {prompt_profile.upper()} Prompts", "v1_reasoning"),
-            )
+                ("Input | Composer Resume", "v1_composer_resume"),
+                ("Report | ATS Gaps", "v1_ats_report"),
+                ("Output | Optimized Resume", "v1_optimizer_resume"),
+                *definitions,
+            ]
         choices: list[tuple[str, list[Path]]] = []
         for label, key in definitions:
             path = self.existing_request_file(key)
@@ -1090,6 +1157,7 @@ class JobTab(ttk.Frame):
             self.auto_btn,
             self.approve_des_btn,
             self.json_btn,
+            self.validate_btn,
             self.recruiter_btn,
             self.final_qa_btn,
             self.docx_btn,
@@ -1332,7 +1400,7 @@ class JobTab(ttk.Frame):
             self.refresh_v1_mapping_actions()
             self.show_output(
                 "Evidence Mapping",
-                "Evidence Mapping complete. Review the DES suggestions, record approval, then click Compose Resume.",
+                "Evidence Mapping complete. Review the DES suggestions, record approval, then click Compose.",
             )
 
         run_bg(self.app, task, done)
@@ -1453,6 +1521,22 @@ class JobTab(ttk.Frame):
                 self.set_stage("Raw response saved; JSON not extracted")
                 return
             if is_v1_style_profile(prompt_profile):
+                for stale_name in (
+                    "06_ats_gap_report.md",
+                    "06_ats_audit_api_error.json",
+                    "07_resume_v3_optimized.json",
+                    "07_optimizer_api_error.json",
+                    "07_optimizer_parse_error_raw.txt",
+                ):
+                    stale_path = request_dir / stale_name
+                    if stale_path.exists():
+                        stale_path.unlink()
+                save_v1_composer_files(
+                    request_dir,
+                    data,
+                    inp,
+                    prompt_profile,
+                )
                 _compact_path, self.final_json_path = save_v1_resume_files(
                     request_dir,
                     data,
@@ -1468,6 +1552,96 @@ class JobTab(ttk.Frame):
             self.docx_path = None
             self.select_output_artifact("Output | Resume JSON")
             self.set_stage(f"{prompt_profile.upper() + ' Prompt' if is_experimental_profile(prompt_profile) else 'JSON'}: {self.final_json_path.name}")
+
+        run_bg(self.app, task, done)
+
+    def on_v1_validate(self) -> None:
+        try:
+            if not is_v1_style_profile(self.selected_prompt_profile()):
+                raise ValueError("Validation is available only for V1 requests.")
+            if not self.request_dir:
+                raise ValueError("Compose the V1 resume first.")
+            inp = self.make_input()
+            request_dir = self.request_dir
+            analysis_path = request_dir / "02_jd_intelligence.json"
+            mapper_path = request_dir / "03_evidence_map.json"
+            approval_path = request_dir / "04_des_approval.txt"
+            composer_path = request_dir / "05_resume_v3_composer.json"
+            composer_full_path = request_dir / "05_composer.json"
+            current_path = composer_path if composer_path.exists() else request_dir / "05_resume_v3.json"
+            missing = [
+                path.name
+                for path in (analysis_path, mapper_path, approval_path, current_path)
+                if not path.exists()
+            ]
+            if missing:
+                raise ValueError("Validation requires these V1 artifacts: " + ", ".join(missing))
+            jd_analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+            mapper_plan = json.loads(mapper_path.read_text(encoding="utf-8"))
+            approval = approval_path.read_text(encoding="utf-8").strip() or "No DES"
+            current_resume = json.loads(current_path.read_text(encoding="utf-8"))
+            if not composer_path.exists() or not composer_full_path.exists():
+                save_v1_composer_files(request_dir, current_resume, inp, "v1")
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+        except Exception as exc:
+            messagebox.showerror("Validate needs a composed V1 resume", str(exc), parent=self)
+            return
+
+        self.set_busy(True, "ATS audit + optimization running...", cancellable=True)
+
+        def task():
+            events: list[CostEvent] = []
+            try:
+                result = asyncio.run(run_v1_post_validation(
+                    inp,
+                    jd_analysis,
+                    mapper_plan,
+                    approval,
+                    current_resume,
+                    cost_cb=events.append,
+                    request_label=self.request_label(inp),
+                    cancel_event=self.cancel_event,
+                    nvidia_model=nvidia_model,
+                    nvidia_thinking=nvidia_thinking,
+                    stage_artifact_cb=lambda stage, data, reasoning: self.save_v1_validation_artifact(
+                        request_dir,
+                        stage,
+                        data,
+                        reasoning,
+                    ),
+                ))
+                return result, events, None
+            except OperationCancelled:
+                raise
+            except Exception as exc:
+                return None, events, exc
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            if err:
+                self.set_busy(False, "Validation failed")
+                messagebox.showerror("V1 validation failed", str(err), parent=self)
+                return
+            validation_result, events, stage_err = result
+            self.add_cost_events(events)
+            if stage_err:
+                self.set_busy(False, "Validation failed")
+                messagebox.showerror("V1 validation failed", str(stage_err), parent=self)
+                return
+            _compact_path, self.final_json_path = save_v1_resume_files(
+                request_dir,
+                validation_result.optimized_resume,
+                inp,
+                "v1",
+            )
+            self.recruiter_json_path = None
+            self.final_qa_json_path = None
+            self.docx_path = None
+            self.refresh_combined_02_to_07(request_dir)
+            self.set_busy(False, "Optimized resume ready")
+            self.select_output_artifact("Output | Resume JSON")
+            self.set_stage(f"Optimized JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
 

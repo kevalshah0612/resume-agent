@@ -47,6 +47,7 @@ class RequestCombinerTests(unittest.TestCase):
         compact_resume = {
             "type": "mid_swe",
             "summary": "Backend engineer building reliable distributed systems.",
+            "coursework": [],
             "experience": [
                 {
                     "id": "TCS_SWE_II",
@@ -114,6 +115,9 @@ class RequestCombinerTests(unittest.TestCase):
         )
         self.assertEqual(saved_compact, compact_resume)
         self.assertEqual(json.loads(displayed_json), full_resume)
+        self.assertEqual(full_resume["type"], "Mid")
+        self.assertEqual(full_resume["config"]["strategy_type"], "Mid")
+        self.assertEqual(full_resume["config"]["prompt_profile"], "v1")
         self.assertEqual(full_resume["name"], "Keval Shah")
         self.assertEqual(
             full_resume["contact"],
@@ -129,6 +133,51 @@ class RequestCombinerTests(unittest.TestCase):
         self.assertTrue(full_resume["projects"])
         self.assertTrue(full_resume["technical_skills"])
         self.assertEqual(preferred_path, full_path)
+
+    def test_preserves_expanded_composer_and_optimized_v1_contact_and_type(self):
+        composer_resume = {
+            "type": "mid_swe",
+            "summary": "Original composer summary.",
+            "coursework": [],
+            "experience": [],
+            "projects": [],
+            "technical_skills": [],
+            "bullet_checks": [],
+        }
+        optimized_resume = dict(composer_resume)
+        optimized_resume["summary"] = "Optimized summary."
+        inp = gui.ResumeInput(
+            company="Acme",
+            title="Backend Engineer",
+            jd="Build reliable backend services.",
+            words="Boston, MA",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            request_dir = Path(tmp)
+            composer_compact_path, composer_full_path = gui.save_v1_composer_files(
+                request_dir,
+                composer_resume,
+                inp,
+            )
+            optimized_compact_path, optimized_full_path = gui.save_v1_resume_files(
+                request_dir,
+                optimized_resume,
+                inp,
+            )
+
+            saved_composer_compact = json.loads(composer_compact_path.read_text(encoding="utf-8"))
+            saved_composer_full = json.loads(composer_full_path.read_text(encoding="utf-8"))
+            saved_optimized_compact = json.loads(optimized_compact_path.read_text(encoding="utf-8"))
+            saved_optimized_full = json.loads(optimized_full_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(saved_composer_compact["summary"], "Original composer summary.")
+        self.assertEqual(saved_optimized_compact["summary"], "Optimized summary.")
+        self.assertEqual(saved_composer_full["summary"], "Original composer summary.")
+        self.assertEqual(saved_optimized_full["summary"], "Optimized summary.")
+        self.assertEqual(saved_composer_full["contact"], saved_optimized_full["contact"])
+        self.assertEqual(saved_composer_full["type"], saved_optimized_full["type"])
+        self.assertEqual(saved_composer_full["config"], saved_optimized_full["config"])
 
     def test_reads_legacy_text_request_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:

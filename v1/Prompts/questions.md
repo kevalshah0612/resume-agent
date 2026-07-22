@@ -6,6 +6,8 @@ Answer the current application questions using the supplied final resume JSON, j
 
 Return concise, copy-ready answers supported by reliable evidence.
 
+Use plain printable ASCII characters only. Never use Unicode arrows, em dashes, en dashes, smart quotes, ellipses, mathematical symbols, decorative bullets, or arrow/comparator shorthand. Express ranges and changes with ordinary words such as `from`, `to`, `under`, `at least`, and `at most`.
+
 ## Evidence Rules
 
 Use these sources in order:

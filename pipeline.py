@@ -41,6 +41,8 @@ from app_properties import (
     LINKEDIN_URL,
     PROMPT_PROFILE_LABELS,
     PROJECT_URLS,
+    VERIFIED_GRADUATE_COURSEWORK,
+    VERIFIED_GRADUATE_GPA,
     candidate_contact_line,
     candidate_education_profile,
     candidate_experience_profile,
@@ -51,6 +53,7 @@ from manager import build_render_profile
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
 PROMPT_V1_DIR = ROOT / "V1" / "Prompts"
+V1_POST_STAGE_DIR = ROOT / "v1" / "2 stage"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
 RUNS_DIR = ROOT / "runs"
@@ -69,6 +72,7 @@ DEFAULT_NVIDIA_SEED = 42
 DEFAULT_NVIDIA_VALIDATOR_SEED = 43
 DEFAULT_NVIDIA_REASONING_BUDGET = 32768
 DEFAULT_RESPONSE_MAX_TOKENS = 65536
+WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR = "Worker local total request limit reached"
 
 _log_cb = None
 _nvidia_gate_lock = threading.Lock()
@@ -210,6 +214,12 @@ class ResumeInput:
     words: str = ""
     mode: str = ""
     des: str = ""
+
+
+@dataclass
+class V1PostValidationResult:
+    ats_report: str
+    optimized_resume: dict[str, Any]
 
 
 @dataclass
@@ -1916,6 +1926,24 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
     elif profile == "v3":
         config["experience_order"] = "json_order"
 
+    education = candidate_education_profile()
+    if v1_mode in {"entry_swe", "entry_aiml"}:
+        education[0]["gpa"] = VERIFIED_GRADUATE_GPA
+        allowed_coursework = {
+            course.casefold(): course for course in VERIFIED_GRADUATE_COURSEWORK
+        }
+        selected_coursework: list[str] = []
+        raw_coursework = compact.get("coursework") or []
+        if isinstance(raw_coursework, list):
+            for item in raw_coursework:
+                canonical = allowed_coursework.get(str(item).strip().casefold())
+                if canonical and canonical not in selected_coursework:
+                    selected_coursework.append(canonical)
+                if len(selected_coursework) == 4:
+                    break
+        if selected_coursework:
+            education[0]["coursework"] = selected_coursework
+
     resume_header_location = header_location(inp)
     return normalize_resume_json({
         "type": strategy_type,
@@ -1932,7 +1960,7 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         "linkedin_url": LINKEDIN_URL,
         "github_url": GITHUB_URL,
         "summary": summary_text,
-        "education": candidate_education_profile(),
+        "education": education,
         "professional_experience": jobs,
         "projects": projects,
         "technical_skills": compact_model_skills_to_technical_skills(
@@ -2502,6 +2530,53 @@ async def call_model(
     return text
 
 
+def is_worker_local_total_request_limit_error(exc: Exception) -> bool:
+    """Match only the worker-local request-limit failure, including wrapped errors."""
+    pending: list[BaseException] = [exc]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR in str(current):
+            return True
+        response = getattr(current, "response", None)
+        if response is not None:
+            try:
+                if WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR in str(
+                    getattr(response, "text", "") or ""
+                ):
+                    return True
+            except Exception:
+                pass
+        for nested in (current.__cause__, current.__context__):
+            if nested is not None:
+                pending.append(nested)
+    return False
+
+
+async def call_v1_stage_model(
+    *,
+    cancel_event: threading.Event | None = None,
+    **call_kwargs: Any,
+) -> str:
+    """Restart the active V1 stage immediately for the worker-local limit only."""
+    while True:
+        raise_if_cancelled(cancel_event)
+        try:
+            return await call_model(cancel_event=cancel_event, **call_kwargs)
+        except OperationCancelled:
+            raise
+        except Exception as exc:
+            if not is_worker_local_total_request_limit_error(exc):
+                raise
+            log(
+                f"{call_kwargs.get('label', 'V1 stage')}: "
+                "worker-local total request limit reached; restarting stage immediately."
+            )
+
+
 def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
     if is_experimental_prompt_profile(prompt_profile):
         return [
@@ -2571,6 +2646,563 @@ def v1_composer_input(inp: ResumeInput) -> list[str]:
     ]
 
 
+V1_POST_MODE_CONFIG: dict[str, dict[str, Any]] = {
+    "entry_swe": {
+        "roles": [("TA", 2), ("GHI", 3), ("TCS_SWE_II", 3), ("TCS_SWE_I", 2)],
+        "projects": 2,
+        "summary_max_words": 0,
+    },
+    "entry_aiml": {
+        "roles": [("TA", 2), ("GHI", 3), ("TCS_COMBINED", 3)],
+        "projects": 3,
+        "summary_max_words": 0,
+    },
+    "mid_swe": {
+        "roles": [("TCS_SWE_II", 4), ("TCS_SWE_I", 2), ("TA", 1), ("GHI", 2)],
+        "projects": 2,
+        "summary_max_words": 40,
+    },
+}
+
+V1_LOCKED_EXPERIENCE_IDENTITY: dict[str, dict[str, str]] = {
+    "TA": {
+        "title": "Teaching Assistant",
+        "company": "Binghamton University",
+        "location": "Binghamton, NY",
+        "dates": "Aug 2025 - Present",
+    },
+    "GHI": {
+        "title": "Software Engineering Intern",
+        "company": "Global Health Impact",
+        "location": "New York, NY",
+        "dates": "May 2025 - Jun 2025",
+    },
+    "TCS_SWE_II": {
+        "title": "Software Engineer II",
+        "company": "Tata Consultancy Services",
+        "location": "Gandhinagar, India",
+        "dates": "Oct 2022 - Dec 2024",
+    },
+    "TCS_SWE_I": {
+        "title": "Software Engineer I",
+        "company": "Tata Consultancy Services",
+        "location": "Gandhinagar, India",
+        "dates": "Mar 2021 - Sep 2022",
+    },
+    "TCS_COMBINED": {
+        "title": "Software Engineer II",
+        "company": "Tata Consultancy Services",
+        "location": "Gandhinagar, India",
+        "dates": "Mar 2021 - Dec 2024",
+    },
+}
+
+V1_TOP_LEVEL_KEYS = [
+    "type",
+    "summary",
+    "coursework",
+    "experience",
+    "projects",
+    "technical_skills",
+    "bullet_checks",
+]
+V1_EXPERIENCE_KEYS = ["id", "title", "company", "location", "dates", "bullets"]
+V1_PROJECT_KEYS = ["story_id", "name", "tech", "bullets"]
+V1_SKILLS_KEYS = ["category", "skills"]
+V1_BULLET_CHECK_KEYS = [
+    "ref",
+    "story_id",
+    "requirement_id",
+    "alignment",
+    "word_count",
+    "questions_answered",
+]
+V1_QUESTION_LABELS = ["what", "how", "with_what", "result", "amount"]
+
+
+def read_v1_post_stage_prompt(name: str) -> str:
+    path = V1_POST_STAGE_DIR / name
+    if not path.exists():
+        raise FileNotFoundError(f"Missing V1 post-composition prompt: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def v1_post_short_controller(run_mode: str) -> str:
+    prompt_files = {
+        "POST_V1_ATS_AUDIT": "prompt_short_ats.md",
+        "POST_V1_OPTIMIZATION": "prompt_short_optimizer.md",
+    }
+    try:
+        prompt_file = prompt_files[run_mode]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported V1 post-composition run mode: {run_mode}") from exc
+    return f"RUN MODE: {run_mode}\n\n{read_v1_post_stage_prompt(prompt_file)}"
+
+
+def v1_bullet_word_count(text: str) -> int:
+    return len(str(text or "").split())
+
+
+def extract_exact_json_object(text: str) -> dict[str, Any]:
+    """Extract one model JSON object without applying renderer normalization."""
+
+    stripped = str(text or "").strip()
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        return parsed
+
+    decoder = json.JSONDecoder()
+    candidates: list[dict[str, Any]] = []
+    for match in re.finditer(r"\{", stripped):
+        try:
+            candidate, _end = decoder.raw_decode(stripped[match.start():])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict):
+            candidates.append(candidate)
+    if candidates:
+        return candidates[-1]
+    raise ValueError("Could not extract one valid JSON object from model output.")
+
+
+def normalized_des_ids(approval_text: str) -> set[str]:
+    return {
+        f"DES{int(number):03d}"
+        for number in re.findall(r"\bDES\s*-?\s*0*(\d+)\b", approval_text or "", re.IGNORECASE)
+    }
+
+
+def _exact_key_errors(value: Any, expected: list[str], path: str) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{path} must be an object."]
+    actual = list(value.keys())
+    if actual == expected:
+        return []
+    return [f"{path} keys must be exactly {expected}; received {actual}."]
+
+
+def _slot_des_terms(
+    mapper_plan: dict[str, Any],
+    approval_text: str,
+) -> dict[tuple[str, int], set[str]]:
+    approved = normalized_des_ids(approval_text)
+    result: dict[tuple[str, int], set[str]] = {}
+    for item in mapper_plan.get("des_questions") or []:
+        if not isinstance(item, dict) or str(item.get("id") or "").upper() not in approved:
+            continue
+        placement = item.get("if_approved") or {}
+        if not isinstance(placement, dict) or placement.get("placement_section") != "experience":
+            continue
+        role_id = str(placement.get("role_id") or "")
+        try:
+            slot = int(placement.get("slot"))
+        except (TypeError, ValueError):
+            continue
+        term = str(placement.get("selected_term") or item.get("exact_jd_term") or "").strip()
+        if role_id and slot > 0 and term:
+            result.setdefault((role_id, slot), set()).add(term)
+    return result
+
+
+def _numeric_tokens(text: str) -> set[str]:
+    return {
+        token.rstrip(".,")
+        for token in re.findall(r"\d[\d,.]*(?:\+|%|ms|MB|GB|TB|s)?", str(text or ""), re.IGNORECASE)
+    }
+
+
+def validate_v1_optimized_resume(
+    current_resume: dict[str, Any],
+    optimized_resume: dict[str, Any],
+    mapper_plan: dict[str, Any],
+    approval_text: str,
+) -> list[str]:
+    """Return exact structural and evidence-boundary errors for a post-V1 result."""
+
+    errors = _exact_key_errors(optimized_resume, V1_TOP_LEVEL_KEYS, "resume")
+    if not isinstance(optimized_resume, dict):
+        return errors
+
+    mode = str(mapper_plan.get("resolved_mode") or "").strip()
+    config = V1_POST_MODE_CONFIG.get(mode)
+    if not config:
+        errors.append(f"Unsupported or missing mapper resolved_mode: {mode or '<empty>'}.")
+        return errors
+    if optimized_resume.get("type") != mode:
+        errors.append(f"resume.type must equal mapper resolved_mode {mode!r}.")
+
+    summary = optimized_resume.get("summary")
+    if not isinstance(summary, str):
+        errors.append("resume.summary must be a string.")
+    elif config["summary_max_words"] == 0 and summary != "":
+        errors.append(f"{mode} summary must be an empty string.")
+    elif config["summary_max_words"] and v1_bullet_word_count(summary) > config["summary_max_words"]:
+        errors.append(f"{mode} summary exceeds {config['summary_max_words']} words.")
+
+    mapper_roles = {
+        str(role.get("role_id") or ""): role
+        for role in mapper_plan.get("experience_plan") or []
+        if isinstance(role, dict)
+    }
+    experiences = optimized_resume.get("experience")
+    if not isinstance(experiences, list):
+        errors.append("resume.experience must be an array.")
+        experiences = []
+    expected_roles: list[tuple[str, int]] = config["roles"]
+    if len(experiences) != len(expected_roles):
+        errors.append(f"resume.experience must contain {len(expected_roles)} roles; received {len(experiences)}.")
+
+    slot_ledger: list[dict[str, Any]] = []
+    opening_verbs: dict[str, str] = {}
+    slot_des_terms = _slot_des_terms(mapper_plan, approval_text)
+
+    for index, (role_id, expected_bullets) in enumerate(expected_roles):
+        if index >= len(experiences):
+            continue
+        experience = experiences[index]
+        path = f"experience[{index}]"
+        errors.extend(_exact_key_errors(experience, V1_EXPERIENCE_KEYS, path))
+        if not isinstance(experience, dict):
+            continue
+        if experience.get("id") != role_id:
+            errors.append(f"{path}.id must be {role_id!r}.")
+        identity = V1_LOCKED_EXPERIENCE_IDENTITY[role_id]
+        for key, expected in identity.items():
+            if experience.get(key) != expected:
+                errors.append(f"{path}.{key} must remain {expected!r}.")
+        bullets = experience.get("bullets")
+        if not isinstance(bullets, list):
+            errors.append(f"{path}.bullets must be an array.")
+            bullets = []
+        if len(bullets) != expected_bullets:
+            errors.append(f"{path}.bullets must contain {expected_bullets} bullets; received {len(bullets)}.")
+        mapper_slots = {
+            int(slot.get("slot")): slot
+            for slot in (mapper_roles.get(role_id, {}).get("bullets") or [])
+            if isinstance(slot, dict) and str(slot.get("slot") or "").isdigit()
+        }
+        for bullet_index, bullet in enumerate(bullets, start=1):
+            bullet_path = f"{path}.bullets[{bullet_index - 1}]"
+            if not isinstance(bullet, str) or not bullet.strip():
+                errors.append(f"{bullet_path} must be a nonempty string.")
+                continue
+            words = v1_bullet_word_count(bullet)
+            if words > 24:
+                errors.append(f"{bullet_path} has {words} words; maximum is 24.")
+            if "\u2013" in bullet or "\u2014" in bullet:
+                errors.append(f"{bullet_path} contains an em dash or en dash.")
+            verb = bullet.split()[0].strip(".,:;()[]{}").lower()
+            if verb in opening_verbs:
+                errors.append(f"{bullet_path} repeats opening verb {verb!r} used by {opening_verbs[verb]}.")
+            else:
+                opening_verbs[verb] = bullet_path
+            mapper_slot = mapper_slots.get(bullet_index, {})
+            if not mapper_slot:
+                errors.append(f"Mapper slot missing for {role_id}.{bullet_index}.")
+            allowed_text = " ".join(
+                str(value)
+                for key in ("allowed_fact_fragments", "allowed_metrics", "allowed_technology_terms")
+                for value in (mapper_slot.get(key) or [])
+            )
+            allowed_text += " " + " ".join(slot_des_terms.get((role_id, bullet_index), set()))
+            for token in _numeric_tokens(bullet):
+                if token not in _numeric_tokens(allowed_text):
+                    errors.append(f"{bullet_path} uses numeric token {token!r} outside its mapper slot allowlist.")
+            slot_ledger.append({
+                "ref": f"{role_id}.{bullet_index}",
+                "story_id": str(mapper_slot.get("story_id") or ""),
+                "primary_requirement_ids": [
+                    str(item) for item in (mapper_slot.get("primary_requirement_ids") or [])
+                ],
+                "bullet": bullet,
+            })
+
+    mapper_projects = [
+        item for item in mapper_plan.get("project_plan") or [] if isinstance(item, dict)
+    ]
+    projects = optimized_resume.get("projects")
+    if not isinstance(projects, list):
+        errors.append("resume.projects must be an array.")
+        projects = []
+    expected_project_count = int(config["projects"])
+    if len(projects) != expected_project_count:
+        errors.append(f"resume.projects must contain {expected_project_count} projects; received {len(projects)}.")
+    if len(mapper_projects) != expected_project_count:
+        errors.append(
+            f"mapper project_plan must contain {expected_project_count} projects; received {len(mapper_projects)}."
+        )
+    for index in range(min(len(projects), len(mapper_projects), expected_project_count)):
+        project = projects[index]
+        mapper_project = mapper_projects[index]
+        path = f"projects[{index}]"
+        errors.extend(_exact_key_errors(project, V1_PROJECT_KEYS, path))
+        if not isinstance(project, dict):
+            continue
+        story_id = str(mapper_project.get("story_id") or "")
+        if project.get("story_id") != story_id:
+            errors.append(f"{path}.story_id must be {story_id!r}.")
+        expected_name = str(mapper_project.get("name") or "")
+        if project.get("name") != expected_name:
+            errors.append(f"{path}.name must remain {expected_name!r}.")
+        allowed_tech = {str(item) for item in (mapper_project.get("allowed_technology_terms") or [])}
+        tech = project.get("tech")
+        if not isinstance(tech, list) or any(not isinstance(item, str) for item in tech):
+            errors.append(f"{path}.tech must be an array of strings.")
+        else:
+            unsupported = [item for item in tech if item not in allowed_tech]
+            if unsupported:
+                errors.append(f"{path}.tech contains mapper-unauthorized terms: {unsupported}.")
+            if len(tech) != len(set(tech)):
+                errors.append(f"{path}.tech contains duplicate terms.")
+        bullets = project.get("bullets")
+        if not isinstance(bullets, list):
+            errors.append(f"{path}.bullets must be an array.")
+            bullets = []
+        if len(bullets) != 2:
+            errors.append(f"{path}.bullets must contain exactly 2 bullets; received {len(bullets)}.")
+        mapper_slots = {
+            int(slot.get("slot")): slot
+            for slot in (mapper_project.get("bullets") or [])
+            if isinstance(slot, dict) and str(slot.get("slot") or "").isdigit()
+        }
+        for bullet_index, bullet in enumerate(bullets, start=1):
+            bullet_path = f"{path}.bullets[{bullet_index - 1}]"
+            if not isinstance(bullet, str) or not bullet.strip():
+                errors.append(f"{bullet_path} must be a nonempty string.")
+                continue
+            words = v1_bullet_word_count(bullet)
+            if words > 24:
+                errors.append(f"{bullet_path} has {words} words; maximum is 24.")
+            if "\u2013" in bullet or "\u2014" in bullet:
+                errors.append(f"{bullet_path} contains an em dash or en dash.")
+            verb = bullet.split()[0].strip(".,:;()[]{}").lower()
+            if verb in opening_verbs:
+                errors.append(f"{bullet_path} repeats opening verb {verb!r} used by {opening_verbs[verb]}.")
+            else:
+                opening_verbs[verb] = bullet_path
+            mapper_slot = mapper_slots.get(bullet_index, {})
+            if not mapper_slot:
+                errors.append(f"Mapper slot missing for {story_id}.{bullet_index}.")
+            allowed_text = " ".join(
+                str(value)
+                for key in ("allowed_fact_fragments", "allowed_metrics")
+                for value in (mapper_slot.get(key) or [])
+            )
+            for token in _numeric_tokens(bullet):
+                if token not in _numeric_tokens(allowed_text):
+                    errors.append(f"{bullet_path} uses numeric token {token!r} outside its mapper slot allowlist.")
+            slot_ledger.append({
+                "ref": f"{story_id}.{bullet_index}",
+                "story_id": story_id,
+                "primary_requirement_ids": [
+                    str(item) for item in (mapper_slot.get("primary_requirement_ids") or [])
+                ],
+                "bullet": bullet,
+            })
+
+    approved_des = normalized_des_ids(approval_text)
+    allowed_skills: dict[str, set[str]] = {}
+    for category in mapper_plan.get("skills_plan") or []:
+        if not isinstance(category, dict):
+            continue
+        category_name = str(category.get("category") or "")
+        allowed_terms: set[str] = set()
+        for item in category.get("terms") or []:
+            if not isinstance(item, dict):
+                continue
+            dependencies = {str(value).upper() for value in (item.get("approved_des_ids") or [])}
+            if dependencies and not dependencies.issubset(approved_des):
+                continue
+            term = str(item.get("term") or "").strip()
+            if term:
+                allowed_terms.add(term)
+        allowed_skills[category_name] = allowed_terms
+    technical_skills = optimized_resume.get("technical_skills")
+    if not isinstance(technical_skills, list):
+        errors.append("resume.technical_skills must be an array.")
+        technical_skills = []
+    if len(technical_skills) > 5:
+        errors.append("resume.technical_skills may contain at most 5 categories.")
+    seen_categories: set[str] = set()
+    seen_terms: set[str] = set()
+    for index, category in enumerate(technical_skills):
+        path = f"technical_skills[{index}]"
+        errors.extend(_exact_key_errors(category, V1_SKILLS_KEYS, path))
+        if not isinstance(category, dict):
+            continue
+        category_name = category.get("category")
+        if not isinstance(category_name, str) or category_name not in allowed_skills:
+            errors.append(f"{path}.category is not present in mapper skills_plan: {category_name!r}.")
+            continue
+        if category_name in seen_categories:
+            errors.append(f"{path}.category duplicates {category_name!r}.")
+        seen_categories.add(category_name)
+        skills = category.get("skills")
+        if not isinstance(skills, list) or not skills or any(not isinstance(item, str) for item in skills):
+            errors.append(f"{path}.skills must be a nonempty array of strings.")
+            continue
+        for skill in skills:
+            if skill not in allowed_skills[category_name]:
+                errors.append(f"{path}.skills contains mapper-unauthorized term {skill!r}.")
+            if skill in seen_terms:
+                errors.append(f"Technical skill {skill!r} is duplicated.")
+            seen_terms.add(skill)
+
+    checks = optimized_resume.get("bullet_checks")
+    if not isinstance(checks, list):
+        errors.append("resume.bullet_checks must be an array.")
+        checks = []
+    if len(checks) != len(slot_ledger):
+        errors.append(f"resume.bullet_checks must contain {len(slot_ledger)} entries; received {len(checks)}.")
+    question_rank = {label: index for index, label in enumerate(V1_QUESTION_LABELS)}
+    for index in range(min(len(checks), len(slot_ledger))):
+        check = checks[index]
+        expected = slot_ledger[index]
+        path = f"bullet_checks[{index}]"
+        errors.extend(_exact_key_errors(check, V1_BULLET_CHECK_KEYS, path))
+        if not isinstance(check, dict):
+            continue
+        if check.get("ref") != expected["ref"]:
+            errors.append(f"{path}.ref must be {expected['ref']!r}.")
+        if check.get("story_id") != expected["story_id"]:
+            errors.append(f"{path}.story_id must be {expected['story_id']!r}.")
+        allowed_requirements = expected["primary_requirement_ids"] or [""]
+        if check.get("requirement_id") not in allowed_requirements:
+            errors.append(f"{path}.requirement_id must be one of {allowed_requirements}.")
+        if check.get("alignment") not in {"direct", "close", "context"}:
+            errors.append(f"{path}.alignment must be direct, close, or context.")
+        actual_words = v1_bullet_word_count(expected["bullet"])
+        if check.get("word_count") != actual_words:
+            errors.append(f"{path}.word_count must be {actual_words}.")
+        questions = check.get("questions_answered")
+        if not isinstance(questions, list) or any(item not in question_rank for item in questions):
+            errors.append(f"{path}.questions_answered contains an invalid label.")
+        elif len(questions) != len(set(questions)) or questions != sorted(questions, key=question_rank.get):
+            errors.append(f"{path}.questions_answered must be unique and in logical order.")
+
+    if isinstance(current_resume, dict):
+        current_mode = str(current_resume.get("type") or "")
+        if current_mode and current_mode != mode:
+            errors.append(f"Current composer mode {current_mode!r} conflicts with mapper mode {mode!r}.")
+    return errors
+
+
+async def run_v1_post_validation(
+    inp: ResumeInput,
+    jd_analysis: dict[str, Any],
+    mapper_plan: dict[str, Any],
+    approval_text: str,
+    current_resume: dict[str, Any],
+    *,
+    cost_cb=None,
+    request_label: str = "",
+    cancel_event: threading.Event | None = None,
+    nvidia_model: str | None = None,
+    nvidia_thinking: bool | None = None,
+    stage_artifact_cb: Callable[[str, Any, str], None] | None = None,
+) -> V1PostValidationResult:
+    story_library = read_prompt("story.md", "v1")
+    ats_input = "\n\n".join([
+        v1_post_short_controller("POST_V1_ATS_AUDIT"),
+        f"CURRENT_DATE\n{datetime.now().astimezone().date().isoformat()}",
+        f"JOB_DESCRIPTION\n{inp.jd.strip()}",
+        "JD_ANALYSIS_JSON\n" + compact_json(jd_analysis),
+        "MAPPER_PLAN_JSON\n" + compact_json(mapper_plan),
+        f"OPTIONAL_STORY_LIBRARY\n{story_library}",
+        f"DES_APPROVAL\n{approval_text.strip() or 'No DES'}",
+        "V1_RESUME_JSON\n" + compact_json(current_resume),
+        "OPTIONAL_MARKET_CONTEXT\nNot supplied. Use the JD and V1 artifacts only.",
+    ])
+    ats_diagnostics: dict[str, Any] = {}
+    try:
+        ats_report = await call_v1_stage_model(
+            system_blocks=[cached_text_block(read_v1_post_stage_prompt("ATS.md"))],
+            messages=[{"role": "user", "content": ats_input}],
+            label=labeled_step(request_label, "V1 ATS GAP AUDIT"),
+            cost_cb=cost_cb,
+            output_validator=None,
+            retry_instruction="",
+            cancel_event=cancel_event,
+            model_override=nvidia_model,
+            nvidia_thinking_override=nvidia_thinking,
+            diagnostics=ats_diagnostics,
+            nvidia_validation_pass_override=False,
+            nvidia_max_attempts_override=1,
+            provider_fallback_override=False,
+        )
+    except Exception as exc:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "ats_audit_api_error",
+                v1_api_error_data(exc, ats_diagnostics),
+                v1_api_error_reasoning(
+                    ats_diagnostics,
+                    "Provider request failed before ATS audit reasoning was returned.",
+                ),
+            )
+        raise
+    if stage_artifact_cb:
+        stage_artifact_cb("ats_audit", ats_report, v1_reasoning_text(ats_diagnostics))
+
+    optimizer_input = "\n\n".join([
+        v1_post_short_controller("POST_V1_OPTIMIZATION"),
+        f"JOB_DESCRIPTION\n{inp.jd.strip()}",
+        "JD_ANALYSIS_JSON\n" + compact_json(jd_analysis),
+        "MAPPER_PLAN_JSON\n" + compact_json(mapper_plan),
+        f"DES_APPROVAL\n{approval_text.strip() or 'No DES'}",
+        "CURRENT_V1_RESUME_JSON\n" + compact_json(current_resume),
+        f"ATS_GAP_REPORT\n{ats_report.strip()}",
+    ])
+    optimizer_diagnostics: dict[str, Any] = {}
+    try:
+        optimizer_raw = await call_v1_stage_model(
+            system_blocks=[cached_text_block(read_v1_post_stage_prompt("optimizer.md"))],
+            messages=[{"role": "user", "content": optimizer_input}],
+            label=labeled_step(request_label, "V1 EVIDENCE-LOCKED OPTIMIZER"),
+            cost_cb=cost_cb,
+            output_validator=None,
+            retry_instruction="",
+            cancel_event=cancel_event,
+            model_override=nvidia_model,
+            nvidia_thinking_override=nvidia_thinking,
+            diagnostics=optimizer_diagnostics,
+            nvidia_validation_pass_override=False,
+            nvidia_max_attempts_override=1,
+            provider_fallback_override=False,
+        )
+    except Exception as exc:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "optimizer_api_error",
+                v1_api_error_data(exc, optimizer_diagnostics),
+                v1_api_error_reasoning(
+                    optimizer_diagnostics,
+                    "Provider request failed before optimizer reasoning was returned.",
+                ),
+            )
+        raise
+    try:
+        optimized_resume = extract_exact_json_object(optimizer_raw)
+    except Exception:
+        if stage_artifact_cb:
+            stage_artifact_cb(
+                "optimizer_parse_error",
+                {"raw": optimizer_raw},
+                v1_reasoning_text(optimizer_diagnostics),
+            )
+        raise
+    if stage_artifact_cb:
+        stage_artifact_cb("optimizer", optimized_resume, v1_reasoning_text(optimizer_diagnostics))
+
+    return V1PostValidationResult(
+        ats_report=ats_report,
+        optimized_resume=optimized_resume,
+    )
+
+
 def v1_short_controller(run_mode: str) -> str:
     prompt_files = {
         "JD_INTELLIGENCE": "prompt_short_jd.md",
@@ -2605,7 +3237,7 @@ async def run_v1_pass1(
 ) -> str:
     analysis_diagnostics: dict[str, Any] = {}
     try:
-        analysis_raw = await call_model(
+        analysis_raw = await call_v1_stage_model(
             system_blocks=[cached_text_block(read_prompt("01_JD_Intelligence_Analyzer.md", "v1"))],
             messages=[{
                 "role": "user",
@@ -2690,7 +3322,7 @@ async def run_v1_evidence_mapping(
         "JD ANALYSIS FROM PROMPT 1\n" + compact_json(analysis),
     ]
     try:
-        mapper_raw = await call_model(
+        mapper_raw = await call_v1_stage_model(
             system_blocks=[
                 cached_text_block(read_prompt("02_Evidence_Mapper_DES_Planner.md", "v1")),
                 cached_text_block(read_prompt("story.md", "v1")),
@@ -2755,7 +3387,7 @@ async def run_v1_pass2(
     ]
     composer_diagnostics: dict[str, Any] = {}
     try:
-        composer_raw = await call_model(
+        composer_raw = await call_v1_stage_model(
             system_blocks=[
                 cached_text_block(read_prompt("03_Evidence_Locked_Resume_Composer.md", "v1")),
             ],

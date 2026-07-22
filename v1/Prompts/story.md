@@ -1,23 +1,23 @@
-# Story.md — Keval Shah Experience and Project Story Bank
+# Story.md - Keval Shah Experience and Project Story Bank
 
 All facts and numbers in this file are approved for resume use.
 
 ---
 
-# Tata Consultancy Services — Software Engineer II
+# Tata Consultancy Services - Software Engineer II
 
-## TCS-II-01 — High-Throughput File Ingestion, Concurrency, and Reliability
+## TCS-II-01 - High-Throughput File Ingestion, Concurrency, and Reliability
 
 ### Engineering story
 
 Keval led development of a Java and Spring Boot file-ingestion and status platform for large 3D drawing workflows. The platform used concurrent multipart uploads, Kafka-backed ordered processing, SharePoint-connected storage, REST APIs, SQL/NoSQL data flows, OAuth 2.0, and RBAC to manage authorization, intake, storage, status, notification, and downstream communication.
 
-The system handled 12,000–14,000 daily uploads for 9,000+ concurrent users across 4+ downstream services. It sustained 1,200 uploads per hour and files up to 500MB. The redesign reduced transfer latency from 60 seconds to 10 seconds, lowered failed uploads from 18% to 5%, and reduced related support tickets by 33%.
+The system handled 12,000 to 14,000 daily uploads for 9,000+ concurrent users across 4+ downstream services. It sustained 1,200 uploads per hour and files up to 500MB. The redesign reduced transfer latency from 60 seconds to 10 seconds, lowered failed uploads from 18% to 5%, and reduced related support tickets by 33%.
 
 ### FAANG framing dimensions
 
 - System: distributed file-ingestion and lifecycle platform
-- Scale: 12,000–14,000 daily uploads; 9,000+ concurrent users; 4+ downstream services
+- Scale: 12,000 to 14,000 daily uploads; 9,000+ concurrent users; 4+ downstream services
 - Throughput: 1,200 uploads/hour
 - Data size: files up to 500MB
 - Performance: 60 seconds to 10 seconds; 83% latency reduction
@@ -30,7 +30,7 @@ Java, Spring Boot, concurrency, multithreading, Kafka, REST APIs, distributed sy
 
 ---
 
-## TCS-II-02 — SharePoint Authentication Recovery and Reusable Identity Integration
+## TCS-II-02 - SharePoint Authentication Recovery and Reusable Identity Integration
 
 ### Engineering story
 
@@ -53,7 +53,7 @@ OAuth 2.0, Spring Security, authentication, authorization, SharePoint APIs, prod
 
 ---
 
-## TCS-II-03 — Enterprise RBAC and Access Governance
+## TCS-II-03 - Enterprise RBAC and Access Governance
 
 ### Engineering story
 
@@ -74,7 +74,7 @@ RBAC, OAuth 2.0, authentication, authorization, access control, identity, Spring
 
 ---
 
-## TCS-II-04 — Multi-Server Release Automation and Rollback
+## TCS-II-04 - Multi-Server Release Automation and Rollback
 
 ### Engineering story
 
@@ -97,7 +97,7 @@ GitLab CI/CD, Ruby, deployment automation, release engineering, developer produc
 
 ---
 
-## TCS-II-05 — Cross-Application Task Orchestration and Validation
+## TCS-II-05 - Cross-Application Task Orchestration and Validation
 
 ### Engineering story
 
@@ -119,7 +119,7 @@ Python, Django, FastAPI, REST APIs, distributed systems, orchestration, asynchro
 
 ---
 
-## TCS-II-06 — Operations Automation and Environment Readiness
+## TCS-II-06 - Operations Automation and Environment Readiness
 
 ### Engineering story
 
@@ -140,7 +140,7 @@ Python automation, Linux, health checks, environment readiness, operational tool
 
 ---
 
-## TCS-II-07 — React File-Workflow Dashboard
+## TCS-II-07 - React File-Workflow Dashboard
 
 ### Engineering story
 
@@ -162,7 +162,7 @@ React, TypeScript, JavaScript, HTML, CSS, REST API integration, frontend validat
 
 ---
 
-## TCS-II-08 — Angular Operations and Ticket Dashboard
+## TCS-II-08 - Angular Operations and Ticket Dashboard
 
 ### Engineering story
 
@@ -183,7 +183,7 @@ Angular, TypeScript, JavaScript, HTML, CSS, dashboards, API integration, operati
 
 ---
 
-## TCS-II-09 — Transfer Visibility and Operational Self-Service
+## TCS-II-09 - Transfer Visibility and Operational Self-Service
 
 ### Engineering story
 
@@ -204,7 +204,7 @@ workflow visibility, high-volume requests, bulk operations, notifications, monit
 
 ---
 
-## TCS-II-10 — Observability and Production Debugging
+## TCS-II-10 - Observability and Production Debugging
 
 ### Engineering story
 
@@ -225,7 +225,7 @@ Datadog, CloudWatch, observability, monitoring, telemetry, alerting, logs, metri
 
 ---
 
-## TCS-II-11 — Certificate and Dependency Remediation
+## TCS-II-11 - Certificate and Dependency Remediation
 
 ### Engineering story
 
@@ -246,7 +246,7 @@ SAST, Polaris, Black Duck, dependency remediation, TLS/SSL, certificate rotation
 
 ---
 
-## TCS-II-12 — C#/.NET Enterprise Portal Performance
+## TCS-II-12 - C#/.NET Enterprise Portal Performance
 
 ### Engineering story
 
@@ -267,7 +267,7 @@ C#, .NET, ASP.NET Core, Web API, REST APIs, Entity Framework, SQL Server, Oracle
 
 ---
 
-## TCS-II-13 — Portal Access Control and Configuration Security
+## TCS-II-13 - Portal Access Control and Configuration Security
 
 ### Engineering story
 
@@ -287,7 +287,7 @@ OAuth, RBAC, Azure Key Vault, secrets management, access control, configuration 
 
 ---
 
-## TCS-II-14 — Technical Leadership and Full Development Cycle
+## TCS-II-14 - Technical Leadership and Full Development Cycle
 
 ### Engineering story
 
@@ -310,9 +310,9 @@ technical leadership, mentoring, full development cycle, end-to-end SDLC, requir
 
 ---
 
-# Tata Consultancy Services — Software Engineer I
+# Tata Consultancy Services - Software Engineer I
 
-## TCS-I-01 — Transaction-State APIs and Cross-System Consistency
+## TCS-I-01 - Transaction-State APIs and Cross-System Consistency
 
 ### Engineering story
 
@@ -333,7 +333,7 @@ Java, Spring Boot, REST APIs, distributed systems, transaction state, data consi
 
 ---
 
-## TCS-I-02 — Legacy Java Recovery and Modernization
+## TCS-I-02 - Legacy Java Recovery and Modernization
 
 ### Engineering story
 
@@ -355,7 +355,7 @@ Java 11, modernization, legacy systems, Redis, caching, dependency management, R
 
 ---
 
-## TCS-I-03 — CI/CD, Testing, UAT, and Release Delivery
+## TCS-I-03 - CI/CD, Testing, UAT, and Release Delivery
 
 ### Engineering story
 
@@ -377,7 +377,7 @@ CI/CD, GitLab, Jenkins, JUnit, Mockito, Pytest, automated testing, integration t
 
 ---
 
-## TCS-I-04 — Linux Migration and Cloud Environment Standardization
+## TCS-I-04 - Linux Migration and Cloud Environment Standardization
 
 ### Engineering story
 
@@ -399,7 +399,7 @@ Linux, CentOS, Amazon Linux, AWS, GCP, cloud migration, package dependencies, Ba
 
 ---
 
-## TCS-I-05 — Cross-Database Design and Query Optimization
+## TCS-I-05 - Cross-Database Design and Query Optimization
 
 ### Engineering story
 
@@ -419,7 +419,7 @@ Oracle, MongoDB, MySQL, PostgreSQL, Microsoft SQL Server, SQL, NoSQL, schema des
 
 ---
 
-## TCS-I-06 — Full-Stack Framework and Tested Feature Delivery
+## TCS-I-06 - Full-Stack Framework and Tested Feature Delivery
 
 ### Engineering story
 
@@ -439,9 +439,9 @@ React, Angular, TypeScript, JavaScript, Node.js, Next.js, Java, Spring MVC, Hibe
 
 ---
 
-# Global Health Impact — Software Engineering Intern
+# Global Health Impact - Software Engineering Intern
 
-## GHI-01 — Health-Data Ingestion and Quality Pipeline
+## GHI-01 - Health-Data Ingestion and Quality Pipeline
 
 ### Engineering story
 
@@ -463,7 +463,7 @@ Python, data pipelines, ETL, data ingestion, data validation, data quality, Post
 
 ---
 
-## GHI-02 — Health-Data APIs and Research Queries
+## GHI-02 - Health-Data APIs and Research Queries
 
 ### Engineering story
 
@@ -485,7 +485,7 @@ Python, REST APIs, backend services, API design, PostgreSQL, MongoDB, p95 latenc
 
 ---
 
-## GHI-03 — Research Dashboard and Visualization
+## GHI-03 - Research Dashboard and Visualization
 
 ### Engineering story
 
@@ -506,7 +506,7 @@ React, JavaScript, HTML, CSS, dashboards, data visualization, world maps, REST A
 
 ---
 
-## GHI-04 — Machine-Learning Prediction Integration
+## GHI-04 - Machine-Learning Prediction Integration
 
 ### Engineering story
 
@@ -527,7 +527,7 @@ machine learning, Python, data preprocessing, feature engineering, model evaluat
 
 ---
 
-## GHI-05 — Research Stakeholder Delivery
+## GHI-05 - Research Stakeholder Delivery
 
 ### Engineering story
 
@@ -551,9 +551,9 @@ stakeholder requirements, cross-functional collaboration, technical discovery, A
 
 ---
 
-# Binghamton University — Teaching Assistant
+# Binghamton University - Teaching Assistant
 
-## TA-01 — Code Review, Database Systems, and Review Automation
+## TA-01 - Code Review, Database Systems, and Review Automation
 
 ### Engineering story
 
@@ -581,7 +581,7 @@ Java, C++, SQL, Python, databases, OOP, data structures, system design, code rev
 # Personal Projects
 
 
-## PROJ-01 — JobPulse: Job Ingestion and Semantic Search Platform
+## PROJ-01 - JobPulse: Job Ingestion and Semantic Search Platform
 
 ### Engineering story
 
@@ -595,7 +595,7 @@ React, TypeScript, Node.js, Fastify, Kafka, PostgreSQL, pgvector, Redis, embeddi
 
 ---
 
-## PROJ-02 — FraudSift: Transaction Analytics and Anomaly Detection
+## PROJ-02 - FraudSift: Transaction Analytics and Anomaly Detection
 
 ### Engineering story
 
@@ -609,7 +609,7 @@ Python, FastAPI, scikit-learn, anomaly detection, classification, feature engine
 
 ---
 
-## PROJ-03 — FilingQuery: Citation-Grounded SEC Filing Retrieval
+## PROJ-03 - FilingQuery: Citation-Grounded SEC Filing Retrieval
 
 ### Engineering story
 
@@ -623,7 +623,7 @@ Python, FastAPI, PostgreSQL, pgvector, embeddings, vector search, RAG, retrieval
 
 ---
 
-## PROJ-04 — EvalTrace: RAG Evaluation and CI Quality Gates
+## PROJ-04 - EvalTrace: RAG Evaluation and CI Quality Gates
 
 ### Engineering story
 
@@ -637,7 +637,7 @@ Python, RAG evaluation, LLM evaluation, DeepEval, Pytest, GitHub Actions, halluc
 
 ---
 
-## PROJ-05 — ReviewBot: AI-Assisted Pull-Request Review
+## PROJ-05 - ReviewBot: AI-Assisted Pull-Request Review
 
 ### Engineering story
 
@@ -651,7 +651,7 @@ Python, LangGraph, FastAPI, AI agents, code review, developer tools, GitHub Acti
 
 ---
 
-## PROJ-06 — Resume Agent: Evidence-Grounded Resume Automation
+## PROJ-06 - Resume Agent: Evidence-Grounded Resume Automation
 
 ### Engineering story
 
@@ -665,7 +665,7 @@ Python, LLM workflows, AI agents, prompt engineering, structured JSON, evidence 
 
 ---
 
-## PROJ-07 — JobFill AI: Browser-Based Application Automation
+## PROJ-07 - JobFill AI: Browser-Based Application Automation
 
 ### Engineering story
 
@@ -679,7 +679,7 @@ JavaScript, Chrome Manifest V3, browser automation, service workers, content scr
 
 ---
 
-## PROJ-08 — Bistro AI: Structured AI Ordering Workflow
+## PROJ-08 - Bistro AI: Structured AI Ordering Workflow
 
 ### Engineering story
 
@@ -693,7 +693,7 @@ TypeScript, Node.js, Express, React Native, Expo, PostgreSQL, Prisma, structured
 
 ---
 
-## PROJ-09 — AI-Assisted Engineering Workflow
+## PROJ-09 - AI-Assisted Engineering Workflow
 
 ### Engineering story
 

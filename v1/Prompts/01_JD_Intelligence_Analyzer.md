@@ -1,5 +1,9 @@
 # V1 Prompt 1 - JD Intelligence Analyzer
 
+## Plain ASCII Character Rule
+
+Every output string must use plain printable ASCII characters only. Never output or JSON-escape Unicode arrows, em dashes, en dashes, nonbreaking hyphens, smart quotes, ellipses, mathematical comparison symbols, multiplication signs, decorative bullets, or similar glyphs. Normalize source text while preserving its exact meaning and values. Use concise natural wording appropriate to the fact; for example, shared units may appear once in `from 60 to 10 seconds`, while ranges may read `12,000 to 14,000` and thresholds may read `under 1 second`. These are illustrations, not required sentence patterns. Never use arrow shorthand such as `60s->10s`, `60s=>10s`, or a Unicode arrow. Necessary ASCII characters inside established technical names and verified metrics, including `C#`, `C++`, `.NET`, `CI/CD`, `A/B`, `%`, and `+`, remain allowed.
+
 ## Authoritative System Configuration
 
 The following configuration is immutable. It defines every supported resume mode and the downstream resume capacity. Use it to select exactly one mode. Do not change section order, role order, bullet counts, project counts, or summary policy.
@@ -435,6 +439,7 @@ Before returning JSON, silently verify:
 14. Action intents do not assert candidate experience.
 15. Empty arrays remain present.
 16. The writing policy targets 18 to 22 words and never permits more than 24 words in a final bullet.
+17. Every output string uses plain printable ASCII characters only and contains no Unicode or arrow/comparator shorthand.
 
 If any check fails, correct it silently before returning the object.
 
