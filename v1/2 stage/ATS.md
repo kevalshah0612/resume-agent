@@ -238,6 +238,10 @@ Audit Prompt 1 and Prompt 2 keyword metadata before scoring:
 7. Give no evidence credit merely because the user and model both named a keyword. Apply the normal evidence multiplier to the final resume proof.
 8. Audit default-approved nontechnical requirements without expecting DES. Award high-confidence coverage only when mapper-bound story evidence supports the exact meaning; otherwise score close or absent evidence normally.
 9. If an important missing technical keyword lacks direct mapper evidence or approved DES, classify it as `REQUIRES_USER_VERIFICATION` or `REQUIRES_REMAPPING`. The Optimizer cannot introduce it.
+10. Build the audit's final-priority set from recruiter-searchable terms tied to priority-5 requirements first and priority-4 requirements second; do not add a new resume JSON key for this set.
+11. Verify every evidence-authorized priority-5 professional term appears in its mapper-planned experience bullet, normally the earliest bullet that directly proves it.
+12. Verify remaining evidence-authorized priority-5 and priority-4 professional terms appear before lower-priority terminology when their planned slots have capacity.
+13. Report project-only, DES-dependent, close, and unsupported terms honestly instead of demanding that they appear in Professional Experience.
 
 ## Step 3: Compare the mapper plan with the final resume
 
@@ -457,6 +461,8 @@ Before returning the report, silently verify:
 * Every retained user keyword matches or is faithfully equivalent to the current JD.
 * Model keywords were evaluated independently and consensus boosts were applied only once, capped at priority 5.
 * Consensus weighting remained inside the fixed 100-point total and did not create evidence credit.
+* Priority-5 and priority-4 recruiter-searchable terms were checked against their mapper-authorized resume placements.
+* Missing evidence-authorized priority terms were reported without adding keyword metadata to the resume JSON.
 * OR groups preserve literal satisfaction while separately targeting two and capping at three supported resume members.
 * Nontechnical requirements created no DES and received high-confidence credit only when story-bound evidence supports them.
 * Skills-only evidence received limited credit.

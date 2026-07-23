@@ -331,6 +331,11 @@ Use `MAPPER_PLAN.keyword_strategy` only to rank already authorized wording and p
 
 - Preserve model-derived keywords even when no user keyword report exists.
 - Give `user_and_model` consensus terms extra attention in their mapper-authorized slots because both sources identified them as important.
+- Treat mapper-authorized terms tied to priority-5 requirements as the first placement tier and priority-4 terms as the second tier.
+- When a priority-5 term has direct professional evidence and its mapper-authorized destination is an experience slot, visibly use the exact supported JD term in that planned bullet, normally the role's first bullet.
+- Place remaining mapper-authorized priority-5 and priority-4 professional terms in the earliest planned experience bullets before lower-priority terminology, normally within the first two bullets of the relevant role.
+- If the Mapper binds an important term only to a project, Skills, DES branch, or truthful close term, preserve that boundary. Never force it into Professional Experience.
+- Do not add keyword-analysis metadata or any other key to the resume JSON. Important words must appear naturally in existing summary, bullet, project-tech, or Technical Skills values only.
 - Consensus priority never authorizes a fact, technology, story, metric, or extra bullet. Use a consensus term only when the selected slot directly supports it or an explicitly approved technical DES authorizes it there.
 - Use the exact concise JD wording when the mapper marks the evidence exact. Do not weaken an exact supported keyword into a synonym that an ATS may miss.
 - Normalize duplicate singular, plural, acronym, expanded, case, or punctuation variants to one natural visible term. Do not repeat a keyword merely because it appeared multiple times in a scanner report.
@@ -737,6 +742,9 @@ Before returning JSON, silently verify:
 44. OR groups contain two supported members when available and never more than three; an unsupported second member is never invented.
 45. AND and combined-stack members remain independently supported.
 46. Default-approved nontechnical wording is used only where the mapper binds it to explicit story evidence and never requires DES.
+47. Every mapper-authorized priority-5 exact professional term appears in its planned experience bullet, normally the earliest bullet that directly proves it.
+48. Mapper-authorized priority-4 professional terms appear before lower-priority terms when their planned slots have capacity.
+49. No keyword-analysis, coverage, or priority metadata key was added to the resume JSON.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 

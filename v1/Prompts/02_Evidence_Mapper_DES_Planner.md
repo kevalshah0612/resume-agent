@@ -332,6 +332,18 @@ Treat Prompt 1's `keyword_signals` and per-requirement priority metadata as rank
 4. Use the exact concise JD wording when the selected story directly supports the same meaning. Use truthful close wording when it does not.
 5. Do not create duplicate placements merely because singular, plural, acronym, expanded, or case variants appeared in the user report.
 
+Before finalizing bullet slots, internally rank recruiter-searchable terms from Prompt 1's priority-5 and priority-4 requirements:
+
+1. Search the entire story bank for direct professional evidence first, then direct project evidence, then truthful close evidence.
+2. For a priority-5 term with direct professional evidence, place its exact supported JD wording in bullet 1 of the earliest configured experience role that directly proves it whenever that bullet remains one coherent achievement.
+3. For remaining priority-5 and priority-4 terms with direct professional evidence, place them in the first two bullets of the earliest relevant experience role before lower-priority terms.
+4. Never move project-only, education-only, or another employer's evidence into Professional Experience. If professional evidence is absent, use the strongest truthful project, Skills, DES, or gap treatment.
+5. A bullet may contain at most three coherent JD keyword units. If capacity is full, use the next earliest truthful slot rather than stuffing the bullet.
+6. For exact evidence, preserve exact JD wording in `allowed_technology_terms` or `allowed_fact_fragments`. For close evidence, use only the truthful close term.
+7. A DES-dependent term becomes available only after explicit approval.
+8. Context-only and unsupported terms must not be inserted into resume content.
+9. Do not add any new JSON key for this ranking; express the result through the existing requirements, placement, slot allowlists, and coverage fields.
+
 For `closed_any_of` and `open_any_of` groups:
 
 - Preserve the literal JD `minimum_select` for satisfaction and scoring.
@@ -777,6 +789,10 @@ Before returning JSON, silently verify:
 38. Every AND and combined-stack member is evaluated independently.
 39. Every DES states its logic metadata, priority source, consensus boost, current supported members, and exact approved placement.
 40. No nontechnical requirement creates DES; supported nontechnical terms are default-approved and story-bound, while unsupported ones remain context-only.
+41. Every evidence-authorized priority-5 term with professional proof is assigned to the earliest coherent experience placement, normally bullet 1.
+42. Remaining evidence-authorized priority-5 and priority-4 professional terms are assigned before lower-priority terms, normally within the first two bullets.
+43. Every prioritized exact JD term is present in its destination slot allowlist or approved DES branch.
+44. Project-only and unsupported priority terms are never forced into Professional Experience.
 
 If any check fails, correct it silently before returning the object.
 

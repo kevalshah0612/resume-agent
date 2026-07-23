@@ -185,6 +185,7 @@ def format_v1_resume_output(
     link: str,
     resume_json: str,
     job_description: str = "",
+    priority_keywords: str = "",
 ) -> str:
     parts = [
         f"Company Name: {company.strip()}",
@@ -197,12 +198,203 @@ def format_v1_resume_output(
             "Job Description:",
             job_description.strip(),
         ])
+    if priority_keywords.strip():
+        parts.extend([
+            "",
+            "Final Priority Keywords (display only; not part of Resume JSON):",
+            priority_keywords.strip(),
+        ])
     parts.extend([
         "",
         "Resume JSON:",
         resume_json.strip(),
     ])
     return "\n".join(parts)
+
+
+def format_v1_priority_keywords(
+    jd_analysis: dict,
+    mapper_plan: dict,
+    resume_json: str,
+) -> str:
+    """Format user/model/final keyword traceability without modifying resume JSON."""
+
+    signals = jd_analysis.get("keyword_signals") or {}
+    strategy = mapper_plan.get("keyword_strategy") or {}
+
+    def unique_terms(values) -> list[str]:
+        if not isinstance(values, list):
+            return []
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            term = re.sub(r"\s+", " ", str(value or "")).strip()
+            key = term.casefold()
+            if term and key not in seen:
+                result.append(term)
+                seen.add(key)
+        return result
+
+    user_keywords = unique_terms(
+        signals.get("user_keywords") or strategy.get("normalized_user_keywords") or []
+    )
+    model_keywords = unique_terms(
+        signals.get("model_keywords") or strategy.get("model_keywords") or []
+    )
+    consensus_keywords = unique_terms(
+        signals.get("consensus_keywords") or strategy.get("consensus_keywords") or []
+    )
+
+    try:
+        resume = json.loads(resume_json)
+    except (TypeError, json.JSONDecodeError):
+        resume = {}
+
+    visible_parts = [str(resume.get("summary") or "")]
+    for role in resume.get("professional_experience") or resume.get("experience") or []:
+        if isinstance(role, dict):
+            visible_parts.extend(str(value) for value in (role.get("bullets") or []))
+    for project in resume.get("projects") or []:
+        if not isinstance(project, dict):
+            continue
+        visible_parts.extend(str(value) for value in (project.get("tech") or []))
+        visible_parts.extend(str(value) for value in (project.get("bullets") or []))
+    for category in resume.get("technical_skills") or []:
+        if isinstance(category, dict):
+            visible_parts.extend(str(value) for value in (category.get("skills") or []))
+        elif isinstance(category, (list, tuple)) and len(category) >= 2:
+            visible_parts.extend(str(value) for value in (category[1] or []))
+    visible_text = " ".join(visible_parts)
+
+    def term_present(term: str) -> bool:
+        normalized_term = re.sub(r"[^a-z0-9+#.]+", " ", term.casefold()).strip()
+        normalized_text = re.sub(r"[^a-z0-9+#.]+", " ", visible_text.casefold()).strip()
+        return bool(
+            normalized_term
+            and f" {normalized_term} " in f" {normalized_text} "
+        )
+
+    requirements = {
+        str(item.get("id") or ""): item
+        for item in (jd_analysis.get("requirements") or [])
+        if isinstance(item, dict) and str(item.get("id") or "")
+    }
+    evidence_by_requirement: dict[str, list[dict]] = {}
+    for item in mapper_plan.get("requirement_evidence") or []:
+        if not isinstance(item, dict):
+            continue
+        requirement_id = str(item.get("requirement_id") or "")
+        if requirement_id:
+            evidence_by_requirement.setdefault(requirement_id, []).append(item)
+
+    rows: list[dict] = []
+    seen_rows: set[tuple[str, str]] = set()
+    for requirement_id, requirement in requirements.items():
+        try:
+            priority = int(
+                requirement.get("priority")
+                or requirement.get("final_priority")
+                or 0
+            )
+        except (TypeError, ValueError):
+            priority = 0
+        if priority < 4:
+            continue
+        evidence_items = evidence_by_requirement.get(requirement_id) or [{}]
+        for evidence in evidence_items:
+            match_state = str(evidence.get("match_state") or "context_only")
+            term = str(
+                evidence.get("selected_member")
+                or evidence.get("jd_term")
+                or requirement.get("jd_term")
+                or requirement.get("canonical_term")
+                or ""
+            ).strip()
+            if not term:
+                members = unique_terms(requirement.get("members") or [])
+                term = members[0] if members else ""
+            if not term or len(term.split()) > 8:
+                continue
+            row_key = (term.casefold(), requirement_id)
+            if row_key in seen_rows:
+                continue
+            seen_rows.add(row_key)
+            resume_terms = unique_terms(
+                evidence.get("truthful_resume_terms") or [term]
+            )
+            present = any(term_present(value) for value in resume_terms)
+            placement = evidence.get("placement") or {}
+            if not isinstance(placement, dict):
+                placement = {}
+            section = str(
+                placement.get("section")
+                or placement.get("placement_section")
+                or ""
+            )
+            role_id = str(placement.get("role_id") or "")
+            slot = placement.get("slot") or ""
+            placement_text = "gap"
+            if section:
+                placement_bits = [section]
+                if role_id:
+                    placement_bits.append(role_id)
+                if slot:
+                    placement_bits.append(f"bullet {slot}")
+                placement_text = " / ".join(placement_bits)
+            signal = str(
+                requirement.get("keyword_signal")
+                or evidence.get("priority_source")
+                or (
+                    "user_and_model"
+                    if term.casefold() in {value.casefold() for value in consensus_keywords}
+                    else "model_only"
+                )
+            )
+            des_id = str(evidence.get("des_id") or "")
+            if present:
+                coverage = "PRESENT"
+            elif match_state == "des_needed" or des_id:
+                coverage = f"DES REQUIRED{f' ({des_id})' if des_id else ''}"
+            elif match_state in {"exact", "close"}:
+                coverage = "MISSING FROM RESUME"
+            else:
+                coverage = "UNSUPPORTED GAP"
+            rows.append({
+                "term": term,
+                "priority": priority,
+                "signal": signal,
+                "match_state": match_state,
+                "placement": placement_text,
+                "coverage": coverage,
+            })
+
+    signal_rank = {"user_and_model": 0, "model_only": 1, "user_only": 2}
+    rows.sort(
+        key=lambda row: (
+            -int(row["priority"]),
+            signal_rank.get(str(row["signal"]), 3),
+            str(row["term"]).casefold(),
+        )
+    )
+    lines = [
+        "My Words: " + (", ".join(user_keywords) if user_keywords else "(none)"),
+        "Model Words: " + (", ".join(model_keywords) if model_keywords else "(none)"),
+        "Consensus Words: " + (
+            ", ".join(consensus_keywords) if consensus_keywords else "(none)"
+        ),
+        "Final Important Words:",
+    ]
+    if rows:
+        lines.extend(
+            (
+                f"- P{row['priority']} | {row['term']} | {row['signal']} | "
+                f"{row['match_state']} | {row['placement']} | {row['coverage']}"
+            )
+            for row in rows
+        )
+    else:
+        lines.append("- (No priority-4 or priority-5 concise terms were available.)")
+    return "\n".join(lines)
 
 
 def save_v1_resume_files(
@@ -876,6 +1068,18 @@ class JobTab(ttk.Frame):
             selected == "Output | Resume JSON"
             and is_v1_style_profile(self.selected_prompt_profile())
         ):
+            priority_keywords = ""
+            analysis_path = self.request_dir / "02_jd_intelligence.json"
+            mapper_path = self.request_dir / "03_evidence_map.json"
+            if analysis_path.exists() and mapper_path.exists():
+                try:
+                    priority_keywords = format_v1_priority_keywords(
+                        json.loads(analysis_path.read_text(encoding="utf-8")),
+                        json.loads(mapper_path.read_text(encoding="utf-8")),
+                        display,
+                    )
+                except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                    priority_keywords = ""
             display = format_v1_resume_output(
                 self.text_value(self.company),
                 self.text_value(self.title_text),
@@ -886,6 +1090,7 @@ class JobTab(ttk.Frame):
                     if self.jd_showing_des
                     else self.text_value(self.jd)
                 ),
+                priority_keywords=priority_keywords,
             )
         self.show_output(selected, display, refresh_choices=False)
 

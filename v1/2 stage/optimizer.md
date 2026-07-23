@@ -249,7 +249,11 @@ Docker must not become virtualization. Kubernetes must not become Linux-kernel e
 4. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the three-keyword maximum.
 5. Apply an approved technical DES only to its exact term, logic member, and prepared placement. Approval of one AND or OR member never authorizes another.
 6. Use default-approved nontechnical wording without DES only when its mapper slot explicitly supports that behavior or responsibility. Do not introduce unsupported compliance, risk, ownership, leadership, domain, or behavioral claims.
-7. Never create a new DES, remap evidence, or add an important missing technical keyword that lacks current mapper authority. Preserve the safe wording and leave the gap for a new Analyze + Map run.
+7. Treat mapper-authorized terms tied to priority-5 requirements as the first repair tier and priority-4 terms as the second tier.
+8. Put evidence-authorized priority-5 professional terms in their earliest mapper-planned experience bullets, normally bullet 1, and place remaining priority-5 and priority-4 terms before lower-priority wording when capacity permits.
+9. Keep project-only, DES-dependent, close, and unsupported terms within their truthful boundaries; never force them into Professional Experience.
+10. Do not add keyword-analysis, coverage, priority, or audit metadata to the compact resume JSON.
+11. Never create a new DES, remap evidence, or add an important missing technical keyword that lacks current mapper authority. Preserve the safe wording and leave the gap for a new Analyze + Map run.
 
 ## Summary rules
 
@@ -419,6 +423,9 @@ Before returning, verify:
 28. OR groups contain two supported members when available and never more than three; literal satisfaction remains unchanged.
 29. Every AND and combined-stack member remains independently supported.
 30. Default-approved nontechnical terms are story-bound and never create unsupported claims or DES.
+31. Every mapper-authorized priority-5 professional term appears in its planned early experience bullet.
+32. Mapper-authorized priority-4 professional terms precede lower-priority wording when their slots have capacity.
+33. No keyword-analysis, coverage, priority, or audit metadata key was added to the resume JSON.
 
 If a requested repair cannot pass every applicable check, preserve the safest valid current wording instead.
 
