@@ -7,6 +7,9 @@
 - Preserve `coursework` after `summary`. For entry modes, keep only two to four exact transcript-verified titles from the complete Optimizer prompt, preferring two or three directly relevant courses; for `mid_swe`, return `[]`.
 - Do not add or edit GPA. The runtime renders the verified entry-level GPA outside the compact JSON.
 - Apply only safe ATS wording improvements supported by the mapper and approved DES. The ATS report is advice, not evidence.
+- Prioritize exact supported user-and-model consensus keywords over otherwise equal terms, while ignoring scanner headings, prose, scores, percentages, counts, ratios, duplicates, and non-JD noise. Consensus ranking never authorizes evidence.
+- Preserve literal AND/OR logic. Use two supported OR members when available and never more than three; keep every AND member independently supported.
+- Apply approved technical DES only to its exact member and placement. Use mapper-default-approved nontechnical wording without DES only where the selected story supports the meaning.
 - Treat every approved DES as final and use it only in its authorized mapper placement. Do not label approved content pending or invent supporting details.
 - Keep the strongest supported JD terms in the earliest relevant bullets, but write natural achievement-first sentences without keyword stuffing, buzzwords, filler, or technology lists.
 - Keep at most one performance outcome in each bullet, selected for the strongest central JD requirement. A before-and-after comparison is one outcome. Keep at most one essential scope value when scale materially matters, and remove secondary performance metrics even when the mapper authorizes them.

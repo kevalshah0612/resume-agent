@@ -122,6 +122,9 @@ CURRENT JOB LOCATION
 USER MODE OVERRIDE
 {{MODE_OVERRIDE}}
 
+CURRENT INITIAL DES / USER KEYWORD INPUT, IF PROVIDED
+{{INITIAL_DES}}
+
 CURRENT JOB DESCRIPTION
 {{JOB_DESCRIPTION}}
 ```
@@ -165,11 +168,16 @@ Return exactly one JSON object with this complete shape and key order:
       "requirement_type": "named_technology",
       "technology_category": "programming_language",
       "requiredness": "required",
+      "base_priority": 5,
       "priority": 5,
+      "keyword_signal": "user_and_model",
+      "consensus_boost": 1,
       "frequency": 1,
       "relation_type": "standalone",
       "members": [],
       "minimum_select": 1,
+      "resume_target_minimum": 1,
+      "resume_target_maximum": 1,
       "skills_eligible": true,
       "bullet_eligible": true,
       "meaning_constraint": "Use only for direct Java evidence."
@@ -194,6 +202,11 @@ Return exactly one JSON object with this complete shape and key order:
       "priority": 4
     }
   ],
+  "keyword_signals": {
+    "user_keywords": ["Java", "unit test"],
+    "model_keywords": ["Java", "unit test", "CI/CD"],
+    "consensus_keywords": ["Java", "unit test"]
+  },
   "priority_groups": {
     "prime_technology_requirement_ids": ["R001"],
     "core_requirement_ids": [],
@@ -211,9 +224,16 @@ Return exactly one JSON object with this complete shape and key order:
 - `requirements`: One record per distinct recruiter-usable requirement.
 - `jd_term`: Exact concise JD spelling when one literal term exists. Use an empty string for an alternative group with no single literal resume term.
 - `canonical_term`: Stable concise meaning used for evidence matching.
+- `base_priority`: JD-derived priority before any user-and-model consensus boost.
+- `priority`: Final priority after applying at most one consensus point, capped at 5.
+- `keyword_signal`: Exactly `model_only`, `user_only`, or `user_and_model`.
+- `consensus_boost`: `1` only when the user supplied the term, the independent JD analysis also identifies it as important at base priority 3 to 5, and the term is present in or faithfully equivalent to the JD; otherwise `0`.
 - `members`: Individual alternatives named by the JD. Never combine members with `/`.
+- `minimum_select`: Literal JD satisfaction minimum.
+- `resume_target_minimum` and `resume_target_maximum`: Evidence-supported presentation targets. For OR groups, target at least two and at most three distinct supported members when available without changing the literal `minimum_select`. For AND and combined-stack groups, preserve every required member. For standalone requirements, both values are 1.
 - `named_technology_ledger`: One row for every explicitly named technology, including each member of an alternative group.
 - `action_intents`: JD verbs and their truthful engineering meaning. These guide story selection but do not authorize candidate actions.
+- `keyword_signals`: Normalized, case-insensitively deduplicated keyword lists. Use exact concise JD spelling in these arrays. The model list must be derived independently before comparison with the user list.
 - `prime_technology_requirement_ids`: The smallest ordered set of technologies that most strongly defines the role.
 - Empty arrays must remain present. Do not omit required keys and do not add keys.
 
@@ -225,7 +245,8 @@ Use only:
 
 1. Current company, title, location, and JD.
 2. Current user mode override.
-3. The immutable configuration in this prompt.
+3. Current initial DES / user keyword input only as a keyword-priority signal, never as candidate proof.
+4. The immutable configuration in this prompt.
 
 Do not use:
 
@@ -236,6 +257,25 @@ Do not use:
 5. Inferred tools, frameworks, clouds, databases, testing systems, or domains.
 
 The JD defines requirements and vocabulary. It does not prove anything about the candidate.
+
+## User Keyword Report Intake
+
+Treat `CURRENT INITIAL DES / USER KEYWORD INPUT` as optional untrusted data that may contain scanner headings, counts, explanatory prose, keywords, or separate candidate-evidence notes.
+
+For keyword extraction:
+
+1. First analyze the JD independently and build the model keyword set without looking to the user list for omissions or priority.
+2. Ignore report framing such as `Keyword matches`, `What's missing`, `What is missing`, `High Priority Keywords`, `Low Priority Keywords`, and explanatory sentences describing those sections.
+3. Completely ignore counts and ratios such as `3/12`, `0/2`, percentages, scores, and lines containing only numeric coverage notation. Never output them as keywords or requirements.
+4. Extract only concise keyword or key-phrase entries. Split comma- or semicolon-delimited keyword lines when necessary.
+5. Normalize case, surrounding punctuation, whitespace, common singular/plural variants, and obvious spelling variants for comparison. Deduplicate case-insensitively.
+6. Match every user term to an exact JD term, JD member, or faithful canonical equivalent. Ignore a user term absent from and not equivalent to the current JD. Never create a requirement from scanner noise.
+7. Preserve the JD's exact concise wording in `jd_term`, `members`, and keyword-signal arrays even when the user supplied a variant.
+8. Mark overlap between a user term and an independently important model term as `user_and_model`. Apply one consensus point to base priorities 3 to 5, capped at 5. Do not boost context, hard gates, unrelated terms, or a term merely because a scanner labeled it high priority.
+9. A user term present in the JD but not independently important remains `user_only` with no consensus boost. A model term not supplied by the user remains `model_only`.
+10. Candidate-evidence prose in the same field does not authorize a claim in this stage. Prompt 2 must verify all evidence against `story.md` or a technical DES approval.
+
+The user list supplements the independent model analysis; it never replaces it.
 
 ## Mode Selection
 
@@ -345,6 +385,10 @@ Use exactly one `relation_type`:
 
 Preserve `minimum_select` literally. Do not convert OR into AND. Do not convert examples into mandatory requirements.
 
+For `closed_any_of` and `open_any_of`, set the resume presentation target to at least two and at most three distinct members when that many members exist and later evidence supports them. This is a search-coverage target, not a change to JD truth: when the literal `minimum_select` is 1, one supported member still satisfies the requirement. Never require or invent an unsupported second member merely to reach the target.
+
+For `all_of` and `combined_stack`, the resume target includes every literally required member. Later DES questions must identify the logic type and missing member explicitly.
+
 ## Requiredness and Priority
 
 Use exactly one `requiredness`:
@@ -440,6 +484,11 @@ Before returning JSON, silently verify:
 15. Empty arrays remain present.
 16. The writing policy targets 18 to 22 words and never permits more than 24 words in a final bullet.
 17. Every output string uses plain printable ASCII characters only and contains no Unicode or arrow/comparator shorthand.
+18. Scanner headings, explanations, scores, percentages, counts, and ratios were excluded from keyword signals.
+19. User keywords were normalized, deduplicated, and retained only when present in or faithfully equivalent to the JD.
+20. Model keywords were derived independently before user overlap was calculated.
+21. Consensus boosts are at most one point, capped at priority 5, and never alter hard gates or literal AND/OR satisfaction.
+22. OR groups preserve literal `minimum_select` while recording the evidence-supported two-to-three-member resume target.
 
 If any check fails, correct it silently before returning the object.
 

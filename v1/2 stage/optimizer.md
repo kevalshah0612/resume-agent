@@ -49,6 +49,8 @@ Use the sources in this order:
 
 Never use the audit report, Job Description, market context, or current resume wording as independent proof of candidate experience.
 
+`JD_ANALYSIS_JSON.keyword_signals` and `MAPPER_PLAN_JSON.keyword_strategy` rank authorized repairs but never authorize them. Prefer a user-and-model consensus term over an otherwise equal model-only or user-only term when both fit the same locked evidence and bullet capacity.
+
 ## Absolute output requirement
 
 Return only one complete, valid V1 compact resume JSON object.
@@ -227,7 +229,7 @@ Follow `JD_ANALYSIS_JSON` and the ATS gap report's verified logic map.
 
 ### OR and example-set requirements
 
-Emphasize the strongest supported branch. Do not add unsupported alternatives merely to increase keyword count.
+Preserve literal JD satisfaction. Target two distinct supported members when authorized evidence permits and never select more than three. Do not add an unsupported second member merely to reach the presentation target or increase keyword count.
 
 ### AND requirements
 
@@ -238,6 +240,16 @@ Represent each supported component separately. Do not imply the full group is sa
 Preserve the exact supported capability boundaries.
 
 Docker must not become virtualization. Kubernetes must not become Linux-kernel expertise. Monitoring must not become formal on-call ownership. Data ingestion must not become untrusted code execution. Code analysis must not become security isolation. Backend development must not become systems programming.
+
+## Keyword repair rules
+
+1. Use only normalized JD-matched keywords preserved in the JD analysis and mapper strategy. Never copy scanner headings, explanatory prose, scores, percentages, counts, ratios, or unrelated user terms into the resume.
+2. Normalize duplicate singular, plural, acronym, expanded, case, and punctuation variants to one natural term.
+3. Strengthen exact supported wording when the current resume uses a weaker synonym that an ATS may miss.
+4. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the three-keyword maximum.
+5. Apply an approved technical DES only to its exact term, logic member, and prepared placement. Approval of one AND or OR member never authorizes another.
+6. Use default-approved nontechnical wording without DES only when its mapper slot explicitly supports that behavior or responsibility. Do not introduce unsupported compliance, risk, ownership, leadership, domain, or behavioral claims.
+7. Never create a new DES, remap evidence, or add an important missing technical keyword that lacks current mapper authority. Preserve the safe wording and leave the gap for a new Analyze + Map run.
 
 ## Summary rules
 
@@ -402,6 +414,11 @@ Before returning, verify:
 23. No candidate experience, metric, technology, project, role, identity, or seniority was invented.
 24. All JSON strings are escaped correctly, with no trailing commas or comments.
 25. Every JSON string uses plain printable ASCII characters only and contains no Unicode, encoded special glyph, arrow shorthand, or comparator shorthand.
+26. Keyword repairs use only normalized JD-matched mapper terms and contain no scanner framing, counts, ratios, duplicates, or non-JD noise.
+27. Consensus terms receive tie-breaking repair priority but no new evidence authority.
+28. OR groups contain two supported members when available and never more than three; literal satisfaction remains unchanged.
+29. Every AND and combined-stack member remains independently supported.
+30. Default-approved nontechnical terms are story-bound and never create unsupported claims or DES.
 
 If a requested repair cannot pass every applicable check, preserve the safest valid current wording instead.
 

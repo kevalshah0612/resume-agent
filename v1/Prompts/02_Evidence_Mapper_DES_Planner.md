@@ -145,10 +145,33 @@ Return exactly one JSON object with this complete shape and key order:
       "PROJ-01", "PROJ-02", "PROJ-03", "PROJ-04", "PROJ-05", "PROJ-06", "PROJ-07", "PROJ-08", "PROJ-09"
     ]
   },
+  "keyword_strategy": {
+    "normalized_user_keywords": ["Java", "unit test"],
+    "model_keywords": ["Java", "unit test", "CI/CD"],
+    "consensus_keywords": ["Java", "unit test"],
+    "auto_approved_nontechnical_requirement_ids": ["R010"],
+    "or_coverage": [
+      {
+        "requirement_id": "R003",
+        "literal_minimum_select": 1,
+        "resume_target_minimum": 2,
+        "resume_target_maximum": 3,
+        "supported_members": ["Java", "Python"],
+        "des_member_ids": []
+      }
+    ]
+  },
   "requirement_evidence": [
     {
       "requirement_id": "R001",
       "jd_term": "Java",
+      "logic_type": "standalone",
+      "logic_group": "Java",
+      "minimum_select": 1,
+      "resume_target_minimum": 1,
+      "resume_target_maximum": 1,
+      "priority_source": "user_and_model",
+      "consensus_boost": 1,
       "match_state": "exact",
       "selected_member": "Java",
       "story_id": "TA-01",
@@ -169,6 +192,14 @@ Return exactly one JSON object with this complete shape and key order:
       "id": "DES001",
       "requirement_id": "R002",
       "exact_jd_term": "Kotlin",
+      "logic_type": "standalone",
+      "logic_group": "Kotlin",
+      "minimum_select": 1,
+      "resume_target_minimum": 1,
+      "resume_target_maximum": 1,
+      "current_supported_members": [],
+      "priority_source": "user_and_model",
+      "consensus_boost": 1,
       "closest_story_id": "TA-01",
       "closest_verified_evidence": "Verified Java and object-oriented programming review work.",
       "question": "Did the TA work directly include Kotlin?",
@@ -270,6 +301,13 @@ Return exactly one JSON object with this complete shape and key order:
 
 - `status`: Use `des_required` when at least one DES question exists; otherwise use `ready`.
 - `story_scan`: A complete reading receipt, not a shortlist. Derive `expected_story_count` from every story-ID heading in the supplied current `story.md`, make `scanned_story_count` equal that number, and list every discovered story ID exactly once in source order. The populated example reflects the current 35-story file; include any stories added later instead of assuming the example is permanent.
+- `keyword_strategy`: Copy Prompt 1's normalized user, model, and consensus sets exactly; record nontechnical requirements handled without DES and the literal-versus-presentation status of every OR group.
+- `logic_type`: Copy the requirement's Prompt 1 `relation_type` exactly.
+- `logic_group`: Use the concise canonical group meaning, never a slash-joined technology string.
+- `minimum_select`: Literal JD satisfaction minimum copied from Prompt 1.
+- `resume_target_minimum` and `resume_target_maximum`: Prompt 1's evidence-supported presentation targets. They never authorize unsupported members.
+- `priority_source`: Copy Prompt 1 `keyword_signal` exactly.
+- `consensus_boost`: Copy Prompt 1's `consensus_boost` exactly; this affects mapping order but never evidence authority.
 - `match_state`: Exactly one of `exact`, `close`, `des_needed`, or `context_only`.
 - `selected_member`: The one verified individual technology selected from an alternative group. Never return a slash-separated group.
 - `truthful_resume_terms`: Only words that the selected story or current DES directly supports.
@@ -283,6 +321,38 @@ Return exactly one JSON object with this complete shape and key order:
 - Empty arrays remain present. Do not omit keys and do not add keys.
 
 The JSON block above is a populated shape example. Replace its example values with the current mapping. Arrays must expand to the exact resolved-mode counts.
+
+## Keyword Signal and Logic Planning
+
+Treat Prompt 1's `keyword_signals` and per-requirement priority metadata as ranking signals, not candidate evidence.
+
+1. Preserve the independently derived model keywords even when the user supplies no keyword report.
+2. Preserve only user terms Prompt 1 matched to the current JD. Do not recover ignored scanner headings, explanations, scores, percentages, counts, ratios, or unrelated terms from `CURRENT INITIAL DES`.
+3. Map `user_and_model` consensus requirements before otherwise equal model-only or user-only requirements. A consensus boost breaks priority ties and raises attention; it does not override a stronger JD-requiredness tier, a literal AND/OR rule, story strength, or truth.
+4. Use the exact concise JD wording when the selected story directly supports the same meaning. Use truthful close wording when it does not.
+5. Do not create duplicate placements merely because singular, plural, acronym, expanded, or case variants appeared in the user report.
+
+For `closed_any_of` and `open_any_of` groups:
+
+- Preserve the literal JD `minimum_select` for satisfaction and scoring.
+- Target two distinct supported members in the resume and never select more than three.
+- Select only evidence-supported members. One supported member still satisfies a literal one-of requirement even when the two-member presentation target is not reached.
+- Create a technical DES for a missing second member only when the normal DES conditions are met and a truthful role-local confirmation is plausible. Do not create filler DES questions merely to reach two.
+- Record supported and DES-dependent members in `keyword_strategy.or_coverage`.
+
+For `all_of` and `combined_stack` groups:
+
+- Map every required member independently.
+- Identify every missing technical member in its DES metadata.
+- Never mark the group fully covered merely because one member is strong.
+
+For nontechnical requirements, including behavioral competencies, responsibilities, methodologies, business processes, and soft skills:
+
+- Treat the requirement as approved by default for mapping and do not create DES.
+- Add its requirement ID to `auto_approved_nontechnical_requirement_ids`.
+- Place the exact concise JD wording with high confidence only when a selected story explicitly supports the same behavior or responsibility.
+- When evidence is only close, use the truthful close phrasing. When no evidence exists, leave it `context_only`; default approval never invents compliance, risk, ownership, leadership, domain, or other factual experience.
+- Bind every placed nontechnical term to one selected story and one coherent achievement like every other claim.
 
 ## Core Evidence Rule
 
@@ -514,16 +584,21 @@ Behavioral competencies and responsibilities should normally be demonstrated thr
 
 Create DES only when all conditions are true:
 
-1. The requirement is priority 4 or 5.
+1. The requirement is an important named technology or concrete technical practice with final priority 4 or 5, including a base-priority-3 term raised to 4 by valid user-and-model consensus.
 2. The exact named technology or technical practice is not directly established anywhere in the entire story bank.
 3. A close story exists in the same role or project where the approved fact would be placed.
 4. A short user confirmation could truthfully establish the exact term for that specific role or project.
+5. For an OR group, the question helps reach the two-member presentation target without exceeding three selected members; for an AND or combined-stack group, it addresses a genuinely missing required member.
 
-Do not create DES when any story already directly proves the requirement. Do not attach a DES to an older or unrelated role merely because that role proves an adjacent process. Named examples in a DES question must be plausible for the role, but plausibility or product availability never substitutes for confirmation of actual candidate use.
+Never create DES for nontechnical requirements; those follow the default-approval evidence rule above. Do not create DES when any story already directly proves the requirement. Do not attach a DES to an older or unrelated role merely because that role proves an adjacent process. Named examples in a DES question must be plausible for the role, but plausibility or product availability never substitutes for confirmation of actual candidate use.
 
 Every DES question must contain:
 
 - Exact JD term.
+- Logic type and concise logic group.
+- Literal `minimum_select` plus resume target minimum and maximum.
+- Current supported members for an AND, OR, example, or combined group.
+- Priority source and consensus boost.
 - Closest story ID.
 - Current verified evidence.
 - One direct question.
@@ -696,6 +771,12 @@ Before returning JSON, silently verify:
 32. Separate technologies remain separate plan terms; no slash-separated or unpunctuated combined technology string is created.
 33. Every DES branch and fallback attached to a slot preserves that slot's selected story ID and never introduces facts or technologies from a different story.
 34. Every output string uses plain printable ASCII characters only, and every range or change uses natural words rather than symbols or shorthand.
+35. Keyword signals exactly preserve Prompt 1's normalized, deduplicated JD-matched terms and never restore ignored report framing or counts.
+36. Consensus requirements receive extra ranking attention but no unsupported evidence, placement, or scoring credit.
+37. Every OR group preserves literal satisfaction, targets two supported members, caps selection at three, and never invents a second member.
+38. Every AND and combined-stack member is evaluated independently.
+39. Every DES states its logic metadata, priority source, consensus boost, current supported members, and exact approved placement.
+40. No nontechnical requirement creates DES; supported nontechnical terms are default-approved and story-bound, while unsupported ones remain context-only.
 
 If any check fails, correct it silently before returning the object.
 

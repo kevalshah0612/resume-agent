@@ -163,11 +163,20 @@ class V1PostValidationFlowTests(unittest.TestCase):
     def test_runs_ats_then_optimizer_and_returns_validated_json(self):
         mapper = mapper_fixture()
         resume = resume_fixture(mapper)
+        inp = pipeline.ResumeInput(
+            company="Acme",
+            title="Software Engineer",
+            link="https://example.com/job",
+            jd="Build reliable Python services with production testing and operational ownership.",
+        )
         artifacts = []
         with (
             patch(
                 "pipeline.call_model",
-                new=AsyncMock(side_effect=["# V1 ATS, COVERAGE, AND GAP REPORT", json.dumps(resume)]),
+                new=AsyncMock(side_effect=[
+                    "# V1 ATS, COVERAGE, AND GAP REPORT",
+                    json.dumps(resume),
+                ]),
             ) as call_mock,
             patch("pipeline.read_prompt", return_value="story library"),
             patch(
@@ -176,11 +185,7 @@ class V1PostValidationFlowTests(unittest.TestCase):
             ) as validation_mock,
         ):
             result = asyncio.run(pipeline.run_v1_post_validation(
-                pipeline.ResumeInput(
-                    company="Acme",
-                    title="Software Engineer",
-                    jd="Build reliable Python services with production testing and operational ownership.",
-                ),
+                inp,
                 {"requirements": [{"id": "R001"}]},
                 mapper,
                 "No DES",

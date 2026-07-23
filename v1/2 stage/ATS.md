@@ -56,6 +56,8 @@ Use the sources in this order:
 
 When artifacts disagree, report the disagreement. Do not silently choose the version that produces the highest score.
 
+`JD_ANALYSIS_JSON.keyword_signals` and `MAPPER_PLAN_JSON.keyword_strategy` are priority and coverage metadata, not candidate evidence. User-and-model consensus may increase a JD requirement's final priority by one point, capped at 5, but never authorizes a claim or overrides the mapper.
+
 ## V1 compact resume contract
 
 The top-level keys must be exactly, and in this order:
@@ -197,6 +199,9 @@ For each meaningful requirement record:
 * priority,
 * relation type,
 * members and minimum selection,
+* resume target minimum and maximum,
+* keyword signal: model only, user only, or user and model,
+* base priority, final priority, and consensus boost,
 * meaning constraint,
 * whether it is eligible for a bullet, Technical Skills, or both.
 
@@ -208,7 +213,7 @@ Do not flatten logical groups.
 
 ### OR and example-set logic
 
-When one of several alternatives is sufficient, strong evidence for one valid branch satisfies the group. Do not penalize every absent alternative.
+When one of several alternatives is sufficient, strong evidence for one valid branch satisfies a literal one-of group. Do not penalize every absent alternative as a required gap. Separately audit the resume presentation target: prefer two supported members and never more than three. Missing the second presentation member is an optimization opportunity only when authorized evidence or a prepared technical DES exists; it is not failure of a literal minimum of one.
 
 ### AND logic
 
@@ -219,6 +224,20 @@ Evaluate each mandatory component separately. One supported component must not r
 Interpret the grammar and the JD analysis together. Explain the minimum required branches. Do not treat adjacent technologies as equivalents.
 
 Docker is not virtualization. Kubernetes is not Linux-kernel engineering. Backend development is not systems programming. Monitoring is not automatically formal on-call ownership. Data ingestion is not untrusted code execution.
+
+## User and Model Keyword Signal Audit
+
+Audit Prompt 1 and Prompt 2 keyword metadata before scoring:
+
+1. Confirm user keywords were normalized and deduplicated case-insensitively.
+2. Confirm scanner headings, explanatory prose, scores, percentages, counts, and ratios such as `3/12` did not become requirements or keywords.
+3. Confirm every retained user keyword exists in or is faithfully equivalent to the current JD.
+4. Confirm model keywords were independently extracted from the JD and remain represented even when the user did not provide them.
+5. Confirm `user_and_model` consensus terms received the configured one-point priority boost only when their base priority was 3 to 5, with final priority capped at 5.
+6. Allocate more of the fixed 100-point scoring weight to legitimate consensus requirements according to their final priority. Do not add bonus points beyond 100 and do not double-count the same requirement.
+7. Give no evidence credit merely because the user and model both named a keyword. Apply the normal evidence multiplier to the final resume proof.
+8. Audit default-approved nontechnical requirements without expecting DES. Award high-confidence coverage only when mapper-bound story evidence supports the exact meaning; otherwise score close or absent evidence normally.
+9. If an important missing technical keyword lacks direct mapper evidence or approved DES, classify it as `REQUIRES_USER_VERIFICATION` or `REQUIRES_REMAPPING`. The Optimizer cannot introduce it.
 
 ## Step 3: Compare the mapper plan with the final resume
 
@@ -313,6 +332,17 @@ Use a compact table with:
 * Required correction
 
 Include only meaningful checks, but always report overall schema validity and evidence-lock validity.
+
+## User and Model Keyword Coverage
+
+Report concise lists for:
+
+* normalized user keywords retained because they match the JD,
+* independently derived model keywords,
+* user-and-model consensus keywords and their boosted requirement IDs,
+* ignored scanner framing or non-JD noise summarized without reproducing counts as keywords,
+* supported, close, DES-dependent, and uncovered consensus terms,
+* AND/OR logic status, including literal satisfaction and the separate two-to-three-member OR presentation target.
 
 ## Score Breakdown
 
@@ -423,6 +453,12 @@ Before returning the report, silently verify:
 * Unselected-story opportunities are labeled as requiring remapping.
 * Only explicitly approved DES evidence is treated as usable.
 * AND, OR, example-set, and mixed logic were interpreted correctly.
+* User keywords were normalized and deduplicated; scanner headings, explanatory prose, scores, percentages, counts, and ratios were ignored.
+* Every retained user keyword matches or is faithfully equivalent to the current JD.
+* Model keywords were evaluated independently and consensus boosts were applied only once, capped at priority 5.
+* Consensus weighting remained inside the fixed 100-point total and did not create evidence credit.
+* OR groups preserve literal satisfaction while separately targeting two and capping at three supported resume members.
+* Nontechnical requirements created no DES and received high-confidence credit only when story-bound evidence supports them.
 * Skills-only evidence received limited credit.
 * Every schema claim follows the V1 compact contract.
 * Coursework is minimal, transcript-verified, directly JD-relevant, and present only for entry-level modes.

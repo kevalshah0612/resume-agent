@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -61,6 +62,17 @@ from pipeline import (
 
 ROOT = Path(__file__).parent
 
+UI_BG = "#1E242C"
+UI_PANEL = "#272E38"
+UI_INPUT = "#171C22"
+UI_TEXT = "#E6EAF0"
+UI_TEXT_MUTED = "#AAB3C0"
+UI_BORDER = "#3A4452"
+UI_ACCENT = "#527FBF"
+UI_ACCENT_HOVER = "#6392D2"
+UI_SELECTION = "#344C6A"
+UI_DISABLED = "#727C89"
+
 
 def manager_script_for_profile(prompt_profile: str) -> Path:
     if prompt_profile in {"v1", "v3"}:
@@ -84,6 +96,7 @@ REQUEST_FILE_ALIASES = {
     "resume_process": ("04_resume_generation_process.txt", "04_final_raw.txt"),
     "resume_json": ("05_resume_output.json", "05_final_resume.json", "05_resume_v3.json"),
     "v1_resume_json": ("05.json", "05_resume_v3.json"),
+    "v1_jd_analysis": ("02_jd_intelligence.json",),
     "v1_composer_resume": ("05_composer.json", "05_resume_v3_composer.json"),
     "v1_ats_report": ("06_ats_gap_report.md",),
     "v1_optimizer_resume": ("07_resume_v3_optimized.json",),
@@ -114,6 +127,14 @@ COMBINED_02_TO_07_KEYS = (
     "recruiter_json",
 )
 
+V1_POST_VALIDATION_ARTIFACTS = (
+    "06_ats_gap_report.md",
+    "06_ats_audit_api_error.json",
+    "07_resume_v3_optimized.json",
+    "07_optimizer_api_error.json",
+    "07_optimizer_parse_error_raw.txt",
+)
+
 
 def existing_request_file_for_key(request_dir: Path, key: str) -> Path | None:
     for name in REQUEST_FILE_ALIASES[key]:
@@ -121,6 +142,13 @@ def existing_request_file_for_key(request_dir: Path, key: str) -> Path | None:
         if path.exists():
             return path
     return None
+
+
+def clear_v1_post_validation_artifacts(request_dir: Path) -> None:
+    for name in V1_POST_VALIDATION_ARTIFACTS:
+        path = request_dir / name
+        if path.exists():
+            path.unlink()
 
 
 def read_saved_request_inputs(request_dir: Path) -> tuple[dict[str, str], str]:
@@ -156,15 +184,25 @@ def format_v1_resume_output(
     title: str,
     link: str,
     resume_json: str,
+    job_description: str = "",
 ) -> str:
-    return "\n".join([
+    parts = [
         f"Company Name: {company.strip()}",
         f"Title: {title.strip()}",
         f"Link: {link.strip()}",
+    ]
+    if job_description.strip():
+        parts.extend([
+            "",
+            "Job Description:",
+            job_description.strip(),
+        ])
+    parts.extend([
         "",
         "Resume JSON:",
         resume_json.strip(),
     ])
+    return "\n".join(parts)
 
 
 def save_v1_resume_files(
@@ -274,7 +312,7 @@ class JobTab(ttk.Frame):
         )
         self.resume_map_btn.grid(row=0, column=1, padx=(0, 6))
         self.resume_map_btn.grid_remove()
-        self.auto_btn = ttk.Button(toolbar, text="Auto JSON", command=self.on_auto_json)
+        self.auto_btn = ttk.Button(toolbar, text="Auto", command=self.on_auto_json)
         self.auto_btn.grid(row=0, column=1, padx=(0, 6))
         self.approve_des_btn = ttk.Button(toolbar, text="Approved DES", command=self.on_approve_all_des)
         self.approve_des_btn.grid(row=0, column=1, padx=(0, 6))
@@ -346,32 +384,29 @@ class JobTab(ttk.Frame):
 
         output_header = ttk.Frame(right)
         output_header.grid(row=0, column=0, sticky="ew")
-        output_header.columnconfigure(1, weight=1)
-        output_header.columnconfigure(6, weight=1)
-        self.output_title = tk.StringVar(value="Output")
-        ttk.Label(output_header, textvariable=self.output_title).grid(row=0, column=0, sticky="w")
-        ttk.Label(output_header, text="Prompt").grid(row=0, column=2, sticky="e", padx=(4, 3))
+        output_header.columnconfigure(4, weight=1)
+        ttk.Label(output_header, text="Prompt").grid(row=0, column=0, sticky="e", padx=(0, 3))
         self.prompt_selector = ttk.Combobox(
             output_header,
             state="readonly",
             width=8,
             values=prompt_profile_options(),
         )
-        self.prompt_selector.grid(row=0, column=3, sticky="e", padx=(0, 4))
+        self.prompt_selector.grid(row=0, column=1, sticky="e", padx=(0, 4))
         self.prompt_selector.set(prompt_profile_label(DEFAULT_PROMPT_PROFILE))
         self.prompt_selector.bind("<<ComboboxSelected>>", self.on_prompt_profile_selected)
-        ttk.Label(output_header, text="Model").grid(row=0, column=4, sticky="e", padx=(4, 3))
+        ttk.Label(output_header, text="Model").grid(row=0, column=2, sticky="e", padx=(4, 3))
         self.model_selector = ttk.Combobox(
             output_header,
             state="readonly",
-            width=24,
+            width=13,
             values=nvidia_model_options(),
         )
-        self.model_selector.grid(row=0, column=5, sticky="e", padx=(0, 4))
+        self.model_selector.grid(row=0, column=3, sticky="e", padx=(0, 4))
         self.model_selector.set(get_default_nvidia_model_option())
         self.model_selector.bind("<<ComboboxSelected>>", self.on_model_selected)
         self.output_selector = ttk.Combobox(output_header, state="readonly", width=24)
-        self.output_selector.grid(row=0, column=6, sticky="ew")
+        self.output_selector.grid(row=0, column=4, sticky="ew")
         self.output_selector.bind("<<ComboboxSelected>>", self.on_output_selected)
         self.output = self._text_box(right, 1, height=28, sticky="nsew")
         self.apply_prompt_profile_view()
@@ -475,7 +510,8 @@ class JobTab(ttk.Frame):
             self.words.field_label.config(text="Location")
             self.pass1_btn.config(text="Analyze + Map")
             self.pass1_btn.grid()
-            self.auto_btn.grid_remove()
+            self.auto_btn.config(text="Auto")
+            self.auto_btn.grid()
             self.refresh_v1_mapping_actions()
             self.json_btn.grid()
             self.json_btn.config(text="Compose")
@@ -520,6 +556,7 @@ class JobTab(ttk.Frame):
             self.pass1_btn.config(text="PASS 1")
             self.pass1_btn.grid()
             self.resume_map_btn.grid_remove()
+            self.auto_btn.config(text="Auto JSON")
             self.auto_btn.grid()
             self.approve_des_btn.grid_remove()
             self.json_btn.grid()
@@ -539,21 +576,10 @@ class JobTab(ttk.Frame):
         if not is_v1_style_profile(self.selected_prompt_profile()):
             self.resume_map_btn.grid_remove()
             return
-        analysis_ready = bool(
-            self.request_dir and (self.request_dir / "02_jd_intelligence.json").exists()
-        )
-        mapping_ready = bool(
-            self.request_dir and (self.request_dir / "03_evidence_map.json").exists()
-        )
-        if analysis_ready and not mapping_ready:
-            self.resume_map_btn.grid()
-            self.approve_des_btn.grid_remove()
-        elif mapping_ready:
-            self.resume_map_btn.grid_remove()
-            self.approve_des_btn.grid()
-        else:
-            self.resume_map_btn.grid_remove()
-            self.approve_des_btn.grid_remove()
+        self.resume_map_btn.grid_remove()
+        self.approve_des_btn.grid_remove()
+        self.auto_btn.config(text="Auto")
+        self.auto_btn.grid()
 
     def update_request_metadata(self, updates: dict[str, str]) -> None:
         metadata_path = self.existing_request_file("request") or self.request_file("request")
@@ -761,6 +787,7 @@ class JobTab(ttk.Frame):
             ]
             definitions = [
                 (f"Model Reasoning | {prompt_profile.upper()} Prompts", "v1_reasoning"),
+                ("Input | JD Intelligence", "v1_jd_analysis"),
                 ("Input | Composer Resume", "v1_composer_resume"),
                 ("Report | ATS Gaps", "v1_ats_report"),
                 ("Output | Optimized Resume", "v1_optimizer_resume"),
@@ -771,6 +798,36 @@ class JobTab(ttk.Frame):
             path = self.existing_request_file(key)
             if path:
                 choices.append((label, [path]))
+
+        if is_v1_style_profile(prompt_profile):
+            displayed_paths = {
+                path.resolve()
+                for _label, paths in choices
+                for path in paths
+            }
+            represented_paths = {
+                (self.request_dir / name).resolve()
+                for aliases in REQUEST_FILE_ALIASES.values()
+                for name in aliases
+                if (self.request_dir / name).is_file()
+            }
+            for path in sorted(self.request_dir.iterdir(), key=lambda item: item.name.lower()):
+                lowered_name = path.name.lower()
+                if (
+                    not path.is_file()
+                    or path.suffix.lower() not in {".json", ".txt", ".md", ".log"}
+                    or path.name == COMBINED_02_TO_07_FILE
+                    or path.resolve() in displayed_paths
+                    or path.resolve() in represented_paths
+                    or lowered_name.startswith("08_repair")
+                    or not any(
+                        word in lowered_name
+                        for word in ("error", "failed", "rejected")
+                    )
+                ):
+                    continue
+                choices.append((f"Error | {path.name}", [path]))
+                displayed_paths.add(path.resolve())
 
         if not self.existing_request_file("final_qa_process"):
             legacy_names = (
@@ -824,6 +881,11 @@ class JobTab(ttk.Frame):
                 self.text_value(self.title_text),
                 self.text_value(self.link),
                 display,
+                job_description=(
+                    self.job_description
+                    if self.jd_showing_des
+                    else self.text_value(self.jd)
+                ),
             )
         self.show_output(selected, display, refresh_choices=False)
 
@@ -979,8 +1041,7 @@ class JobTab(ttk.Frame):
             text = text.replace(old, new)
         return text
 
-    def show_output(self, title: str, text: str, refresh_choices: bool = True) -> None:
-        self.output_title.set(title)
+    def show_output(self, _title: str, text: str, refresh_choices: bool = True) -> None:
         self.output.delete("1.0", "end")
         self.output.insert("1.0", text.strip())
         self.output.see("1.0")
@@ -1071,6 +1132,7 @@ class JobTab(ttk.Frame):
         return ResumeInput(
             company=company,
             title=self.text_value(self.title_text) or "Software Engineer",
+            link=self.text_value(self.link),
             jd=jd,
             words=self.text_value(self.words),
             mode=self.mode_value,
@@ -1269,6 +1331,7 @@ class JobTab(ttk.Frame):
                 return
             if err:
                 self.set_busy(False, "PASS 1 failed")
+                self.refresh_output_choices()
                 messagebox.showerror("PASS 1 failed", str(err), parent=self)
                 return
             result, events, stage_err = result
@@ -1293,6 +1356,7 @@ class JobTab(ttk.Frame):
                         title = "JD Intelligence failed"
                     self.set_busy(False, status)
                     self.refresh_v1_mapping_actions()
+                    self.refresh_output_choices()
                     messagebox.showerror(title, str(stage_err), parent=self)
                 else:
                     self.set_busy(False, "PASS 1 failed")
@@ -1372,6 +1436,7 @@ class JobTab(ttk.Frame):
                 return
             if err:
                 self.set_busy(False, "Evidence Mapping failed")
+                self.refresh_output_choices()
                 messagebox.showerror("Evidence Mapping failed", str(err), parent=self)
                 return
             mapper, events, stage_err = result
@@ -1384,6 +1449,7 @@ class JobTab(ttk.Frame):
                 )
                 self.set_busy(False, status)
                 self.refresh_v1_mapping_actions()
+                self.refresh_output_choices()
                 messagebox.showerror("Evidence Mapping failed", str(stage_err), parent=self)
                 return
             self.pass1_raw = json.dumps(
@@ -1498,6 +1564,8 @@ class JobTab(ttk.Frame):
                     else "Generate call failed"
                 )
                 self.set_busy(False, status)
+                if is_v1_style_profile(prompt_profile):
+                    self.refresh_output_choices()
                 messagebox.showerror("Generate JSON call failed", str(err), parent=self)
                 return
             self.set_busy(
@@ -1521,16 +1589,7 @@ class JobTab(ttk.Frame):
                 self.set_stage("Raw response saved; JSON not extracted")
                 return
             if is_v1_style_profile(prompt_profile):
-                for stale_name in (
-                    "06_ats_gap_report.md",
-                    "06_ats_audit_api_error.json",
-                    "07_resume_v3_optimized.json",
-                    "07_optimizer_api_error.json",
-                    "07_optimizer_parse_error_raw.txt",
-                ):
-                    stale_path = request_dir / stale_name
-                    if stale_path.exists():
-                        stale_path.unlink()
+                clear_v1_post_validation_artifacts(request_dir)
                 save_v1_composer_files(
                     request_dir,
                     data,
@@ -1587,7 +1646,8 @@ class JobTab(ttk.Frame):
             messagebox.showerror("Validate needs a composed V1 resume", str(exc), parent=self)
             return
 
-        self.set_busy(True, "ATS audit + optimization running...", cancellable=True)
+        clear_v1_post_validation_artifacts(request_dir)
+        self.set_busy(True, "ATS + Optimizer running...", cancellable=True)
 
         def task():
             events: list[CostEvent] = []
@@ -1621,12 +1681,14 @@ class JobTab(ttk.Frame):
                 return
             if err:
                 self.set_busy(False, "Validation failed")
+                self.refresh_output_choices()
                 messagebox.showerror("V1 validation failed", str(err), parent=self)
                 return
             validation_result, events, stage_err = result
             self.add_cost_events(events)
             if stage_err:
                 self.set_busy(False, "Validation failed")
+                self.refresh_output_choices()
                 messagebox.showerror("V1 validation failed", str(stage_err), parent=self)
                 return
             _compact_path, self.final_json_path = save_v1_resume_files(
@@ -1710,7 +1772,155 @@ class JobTab(ttk.Frame):
         self.show_output("Approved DES", f"All DES candidates approved.\n\n{approval}")
         self.set_stage("Approved all DES")
 
+    def on_v1_auto(self) -> None:
+        try:
+            inp = self.make_input()
+            request_dir = self.ensure_request_dir(inp)
+            nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
+            saved_jd_path = self.request_file("jd", request_dir)
+            saved_jd = (
+                saved_jd_path.read_text(encoding="utf-8")
+                if saved_jd_path.exists()
+                else ""
+            )
+            reuse_analysis_map = saved_jd.strip() == inp.jd.strip()
+            save_text(saved_jd_path, inp.jd)
+        except Exception as exc:
+            messagebox.showerror("Auto needs input", str(exc), parent=self)
+            return
+
+        clear_v1_post_validation_artifacts(request_dir)
+        self.set_busy(True, "Auto: preparing Analyze + Map...", cancellable=True)
+
+        def notify(message: str) -> None:
+            self.app.after(0, lambda value=message: self.set_stage(value))
+
+        def save_stage(stage: str, data, reasoning: str) -> None:
+            self.save_v1_stage_artifact(request_dir, stage, data, reasoning)
+
+        def save_validation(stage: str, data, reasoning: str) -> None:
+            self.save_v1_validation_artifact(request_dir, stage, data, reasoning)
+
+        def task():
+            events: list[CostEvent] = []
+            analysis_path = request_dir / "02_jd_intelligence.json"
+            mapper_path = request_dir / "03_evidence_map.json"
+
+            if reuse_analysis_map and analysis_path.exists() and mapper_path.exists():
+                analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+                mapper = json.loads(mapper_path.read_text(encoding="utf-8"))
+                pass1_raw = json.dumps(
+                    {
+                        "schema_version": "v1",
+                        "stage": "v1_pass1",
+                        "jd_analysis": analysis,
+                        "evidence_map": mapper,
+                    },
+                    indent=2,
+                )
+                notify("Auto: reusing Analyze + Map...")
+            else:
+                notify("Auto: Analyze + Map running...")
+                pass1_raw = asyncio.run(run_pass1(
+                    inp,
+                    cost_cb=events.append,
+                    request_label=self.request_label(inp),
+                    cancel_event=self.cancel_event,
+                    nvidia_model=nvidia_model,
+                    nvidia_thinking=nvidia_thinking,
+                    prompt_profile="v1",
+                    stage_artifact_cb=save_stage,
+                ))
+                bundle = extract_json(pass1_raw)
+                analysis = bundle["jd_analysis"]
+                mapper = bundle["evidence_map"]
+
+            approval = self.approve_all_des_text(pass1_raw) or "No DES"
+            save_text(request_dir / "04_des_approval.txt", approval)
+
+            notify("Auto: all DES approved; Compose running...")
+            composer_raw = asyncio.run(run_pass2(
+                inp,
+                pass1_raw,
+                approval,
+                cost_cb=events.append,
+                request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
+                prompt_profile="v1",
+                stage_artifact_cb=save_stage,
+            ))
+            composer_resume = extract_json(composer_raw)
+            save_v1_composer_files(request_dir, composer_resume, inp, "v1")
+            save_v1_resume_files(request_dir, composer_resume, inp, "v1")
+
+            notify("Auto: ATS + Optimizer running...")
+            validation_result = asyncio.run(run_v1_post_validation(
+                inp,
+                analysis,
+                mapper,
+                approval,
+                composer_resume,
+                cost_cb=events.append,
+                request_label=self.request_label(inp),
+                cancel_event=self.cancel_event,
+                nvidia_model=nvidia_model,
+                nvidia_thinking=nvidia_thinking,
+                stage_artifact_cb=save_validation,
+            ))
+            return (
+                pass1_raw,
+                approval,
+                composer_raw,
+                composer_resume,
+                validation_result,
+                events,
+            )
+
+        def done(result, err):
+            if self.handle_cancelled(err):
+                return
+            if err:
+                self.set_busy(False, "Auto failed")
+                self.refresh_output_choices()
+                messagebox.showerror("V1 Auto failed", str(err), parent=self)
+                return
+
+            (
+                pass1_raw,
+                approval,
+                _composer_raw,
+                _composer_resume,
+                validation_result,
+                events,
+            ) = result
+            self.pass1_raw = pass1_raw
+            self.approval.delete("1.0", "end")
+            self.approval.insert("1.0", approval)
+            save_text(request_dir / "04_des_approval.txt", approval)
+            _compact_path, self.final_json_path = save_v1_resume_files(
+                request_dir,
+                validation_result.optimized_resume,
+                inp,
+                "v1",
+            )
+            self.add_cost_events(events)
+            self.recruiter_json_path = None
+            self.final_qa_json_path = None
+            self.docx_path = None
+            self.refresh_combined_02_to_07(request_dir)
+            self.refresh_v1_mapping_actions()
+            self.set_busy(False, "Auto optimized resume ready")
+            self.select_output_artifact("Output | Resume JSON")
+            self.set_stage(f"Auto optimized JSON: {self.final_json_path.name}")
+
+        run_bg(self.app, task, done)
+
     def on_auto_json(self) -> None:
+        if is_v1_style_profile(self.selected_prompt_profile()):
+            self.on_v1_auto()
+            return
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
@@ -2248,24 +2458,40 @@ class JobTab(ttk.Frame):
                     raise ValueError("Resume JSON must be a JSON object.")
                 renderer = normalize_resume_json(pasted)
                 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                request_id = f"{slug(company)}_JSON_DOCX_{stamp}"
-                request_dir = REQUESTS_DIR / request_id
-                request_dir.mkdir(parents=True, exist_ok=False)
+                existing_request_dir = self.request_dir
+                if existing_request_dir:
+                    request_id = self.request_id
+                    request_dir = existing_request_dir
+                    paste_dir = request_dir / f"pasted_json_docx_{stamp}"
+                    paste_dir.mkdir(parents=False, exist_ok=False)
+                    details_name = "00_pasted_json_details.txt"
+                else:
+                    request_id = f"{slug(company)}_JSON_DOCX_{stamp}"
+                    request_dir = REQUESTS_DIR / request_id
+                    request_dir.mkdir(parents=True, exist_ok=False)
+                    paste_dir = request_dir
+                    details_name = "00_request_details.txt"
                 save_text(
-                    request_dir / "00_request_details.txt",
-                    f"Request ID: {request_id}\nCompany: {company}\nSource: pasted V3 JSON\n",
+                    paste_dir / details_name,
+                    (
+                        f"Request ID: {request_id}\n"
+                        f"Company: {company}\n"
+                        "Source: pasted V3 JSON\n"
+                        f"Parent Request: {request_dir}\n"
+                    ),
                 )
-                save_json(request_dir / "05_resume_output.json", pasted)
-                renderer_path = request_dir / "06_docx_renderer_input.json"
+                save_json(paste_dir / "05_resume_output.json", pasted)
+                renderer_path = paste_dir / "06_docx_renderer_input.json"
                 save_json(renderer_path, renderer)
             except Exception as exc:
                 messagebox.showerror("Cannot build pasted resume JSON", str(exc), parent=dialog)
                 return
 
-            self.company.delete("1.0", "end")
-            self.company.insert("1.0", company)
-            self.request_id = request_id
-            self.request_dir = request_dir
+            if existing_request_dir is None:
+                self.company.delete("1.0", "end")
+                self.company.insert("1.0", company)
+                self.request_id = request_id
+                self.request_dir = request_dir
             self.final_json_path = renderer_path
             self.recruiter_json_path = None
             self.final_qa_json_path = None
@@ -2275,6 +2501,7 @@ class JobTab(ttk.Frame):
                 renderer_path,
                 company,
                 manager_script_for_profile("v3"),
+                artifact_dir=paste_dir,
             )
 
         ttk.Button(actions, text="Build DOCX", command=build).grid(row=0, column=0, padx=(0, 6))
@@ -2291,6 +2518,7 @@ class JobTab(ttk.Frame):
         *,
         ghi_first: bool = False,
         renderer_data: dict | None = None,
+        artifact_dir: Path | None = None,
     ) -> None:
         if not manager_script.exists():
             messagebox.showerror("Build DOCX failed", f"Renderer not found: {manager_script}", parent=self)
@@ -2322,7 +2550,19 @@ class JobTab(ttk.Frame):
                     _, value = line.split(":", 1)
                     docx_path = ROOT / value.strip()
                     break
-            return result.stdout, docx_path
+            build_output = result.stdout
+            artifact_docx_path = docx_path
+            if artifact_dir is not None:
+                artifact_dir.mkdir(parents=True, exist_ok=True)
+                artifact_docx_path = artifact_dir / docx_path.name
+                if artifact_docx_path.resolve() != docx_path.resolve():
+                    shutil.copy2(docx_path, artifact_docx_path)
+                build_output = (
+                    result.stdout.rstrip()
+                    + f"\nRequest copy saved: {artifact_docx_path}\n"
+                )
+                save_text(artifact_dir / "07_docx_build.txt", build_output)
+            return build_output, artifact_docx_path
 
         def done(result, err):
             label = "DOCX+GHI" if ghi_first else "DOCX"
@@ -2635,7 +2875,6 @@ class JobTab(ttk.Frame):
         self.job_description = ""
         self.jd_showing_des = False
         self.jd_title.set("Job Description")
-        self.output_title.set("Output")
         self.output_selector.configure(values=())
         self.output_selector.set("")
         self.prompt_selector.set(prompt_profile_label(DEFAULT_PROMPT_PROFILE))
@@ -2648,6 +2887,7 @@ class JobTab(ttk.Frame):
 class ResumeApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.configure_ui_theme()
         self.title("Resume Agent")
         self.geometry("1400x850")
         self.minsize(1260, 720)
@@ -2701,6 +2941,158 @@ class ResumeApp(tk.Tk):
         self.notebook.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self.tab_counter = 0
         self.add_tab()
+
+    def configure_ui_theme(self) -> None:
+        """Apply a low-glare dark-slate palette to Tk and ttk widgets."""
+        self.configure(background=UI_BG)
+        self.tk_setPalette(
+            background=UI_BG,
+            foreground=UI_TEXT,
+            activeBackground=UI_ACCENT_HOVER,
+            activeForeground=UI_TEXT,
+            highlightColor=UI_ACCENT,
+            selectBackground=UI_SELECTION,
+            selectForeground=UI_TEXT,
+        )
+
+        self.option_add("*Font", "{Segoe UI} 10")
+        self.option_add("*Text.background", UI_INPUT)
+        self.option_add("*Text.foreground", UI_TEXT)
+        self.option_add("*Text.insertBackground", UI_TEXT)
+        self.option_add("*Text.selectBackground", UI_SELECTION)
+        self.option_add("*Text.selectForeground", UI_TEXT)
+        self.option_add("*Text.highlightBackground", UI_BORDER)
+        self.option_add("*Text.highlightColor", UI_ACCENT)
+        self.option_add("*Text.highlightThickness", 1)
+        self.option_add("*Text.borderWidth", 0)
+
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure(
+            ".",
+            background=UI_BG,
+            foreground=UI_TEXT,
+            bordercolor=UI_BORDER,
+            darkcolor=UI_BORDER,
+            lightcolor=UI_BORDER,
+            troughcolor=UI_INPUT,
+            focuscolor=UI_ACCENT,
+            font=("Segoe UI", 10),
+        )
+        style.configure("TFrame", background=UI_BG)
+        style.configure("TLabel", background=UI_BG, foreground=UI_TEXT)
+        style.configure(
+            "TButton",
+            background=UI_ACCENT,
+            foreground=UI_TEXT,
+            bordercolor=UI_BORDER,
+            font=("Segoe UI", 9),
+            padding=(5, 2),
+            relief="flat",
+        )
+        style.map(
+            "TButton",
+            background=[
+                ("disabled", UI_PANEL),
+                ("pressed", UI_SELECTION),
+                ("active", UI_ACCENT_HOVER),
+            ],
+            foreground=[("disabled", UI_DISABLED), ("!disabled", UI_TEXT)],
+            bordercolor=[("focus", UI_ACCENT_HOVER), ("!focus", UI_BORDER)],
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground=UI_INPUT,
+            foreground=UI_TEXT,
+            insertcolor=UI_TEXT,
+            bordercolor=UI_BORDER,
+            padding=5,
+        )
+        style.map(
+            "TEntry",
+            fieldbackground=[("disabled", UI_PANEL), ("!disabled", UI_INPUT)],
+            foreground=[("disabled", UI_DISABLED), ("!disabled", UI_TEXT)],
+            bordercolor=[("focus", UI_ACCENT), ("!focus", UI_BORDER)],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=UI_INPUT,
+            background=UI_PANEL,
+            foreground=UI_TEXT,
+            arrowcolor=UI_TEXT,
+            bordercolor=UI_BORDER,
+            padding=4,
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[
+                ("disabled", UI_PANEL),
+                ("readonly", UI_INPUT),
+                ("!disabled", UI_INPUT),
+            ],
+            foreground=[("disabled", UI_DISABLED), ("!disabled", UI_TEXT)],
+            background=[("active", UI_SELECTION), ("!active", UI_PANEL)],
+            arrowcolor=[("disabled", UI_DISABLED), ("!disabled", UI_TEXT)],
+            bordercolor=[("focus", UI_ACCENT), ("!focus", UI_BORDER)],
+        )
+        style.configure(
+            "TNotebook",
+            background=UI_BG,
+            bordercolor=UI_BORDER,
+            tabmargins=(2, 4, 2, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=UI_PANEL,
+            foreground=UI_TEXT_MUTED,
+            bordercolor=UI_BORDER,
+            font=("Segoe UI", 9),
+            padding=(9, 3),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", UI_SELECTION), ("active", UI_ACCENT)],
+            foreground=[("selected", UI_TEXT), ("active", UI_TEXT)],
+        )
+        style.configure(
+            "Treeview",
+            background=UI_INPUT,
+            fieldbackground=UI_INPUT,
+            foreground=UI_TEXT,
+            bordercolor=UI_BORDER,
+            rowheight=25,
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", UI_SELECTION)],
+            foreground=[("selected", UI_TEXT)],
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=UI_PANEL,
+            foreground=UI_TEXT,
+            bordercolor=UI_BORDER,
+            relief="flat",
+            padding=(6, 5),
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", UI_SELECTION)],
+            foreground=[("active", UI_TEXT)],
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=UI_PANEL,
+            troughcolor=UI_INPUT,
+            bordercolor=UI_BG,
+            arrowcolor=UI_TEXT_MUTED,
+            relief="flat",
+        )
+        style.map(
+            "Vertical.TScrollbar",
+            background=[("pressed", UI_SELECTION), ("active", UI_ACCENT)],
+            arrowcolor=[("active", UI_TEXT)],
+        )
 
     def add_session_cost(self, amount: float) -> None:
         self.session_cost_usd += amount

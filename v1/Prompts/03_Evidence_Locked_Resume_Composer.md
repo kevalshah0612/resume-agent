@@ -325,6 +325,19 @@ If relevance conflicts with evidence, evidence wins.
 
 Do not use previous requests, prior resumes, memory, outside knowledge, unselected stories, or candidate inventory outside the mapper plan.
 
+## Keyword Strategy Authority
+
+Use `MAPPER_PLAN.keyword_strategy` only to rank already authorized wording and placements.
+
+- Preserve model-derived keywords even when no user keyword report exists.
+- Give `user_and_model` consensus terms extra attention in their mapper-authorized slots because both sources identified them as important.
+- Consensus priority never authorizes a fact, technology, story, metric, or extra bullet. Use a consensus term only when the selected slot directly supports it or an explicitly approved technical DES authorizes it there.
+- Use the exact concise JD wording when the mapper marks the evidence exact. Do not weaken an exact supported keyword into a synonym that an ATS may miss.
+- Normalize duplicate singular, plural, acronym, expanded, case, or punctuation variants to one natural visible term. Do not repeat a keyword merely because it appeared multiple times in a scanner report.
+- For OR groups, follow the mapper's selected evidence: target two distinct supported members and never exceed three. Do not invent a second member, and do not treat a literal one-of requirement as an AND requirement.
+- For AND and combined-stack groups, preserve each mapper-supported required member without implying that one member covers the others.
+- Nontechnical requirements listed in `auto_approved_nontechnical_requirement_ids` need no DES approval, but they may appear only in the story-bound slot and wording authorized by the mapper. Default approval never permits an unsupported compliance, risk, ownership, leadership, domain, or behavioral claim.
+
 ## DES Resolution
 
 For every mapper DES question:
@@ -337,6 +350,8 @@ For every mapper DES question:
 6. Do not add facts beyond the approved wording.
 
 An approved technology may appear only in the prepared role and slot and in Skills when the mapper explicitly planned it there.
+
+All mapper DES questions are technical by policy. Preserve each question's `logic_type`, `logic_group`, literal minimum, resume target, current supported members, priority source, and consensus boost when resolving it. Approval authorizes only the exact selected technical term in the prepared slot; it does not authorize another member of the same AND or OR group.
 
 ## Closest Work Writing Rule
 
@@ -717,6 +732,11 @@ Before returning JSON, silently verify:
 39. Every adjacent technology name is comma-separated correctly; no form such as `Java Spring Boot`, `Java and Spring Boot`, `Java/Spring Boot`, `C# .NET`, `Python FastAPI`, or `SQL/NoSQL` appears.
 40. Entry-level coursework contains only two to four exact verified course titles that directly support the JD, while mid-level coursework is an empty array.
 41. Every JSON string uses plain printable ASCII characters only and contains no Unicode, encoded special glyph, arrow shorthand, or comparator shorthand.
+42. User, model, and consensus keyword priorities follow `MAPPER_PLAN.keyword_strategy` without becoming evidence.
+43. Exact supported consensus wording is used in its strongest natural authorized placement when capacity permits.
+44. OR groups contain two supported members when available and never more than three; an unsupported second member is never invented.
+45. AND and combined-stack members remain independently supported.
+46. Default-approved nontechnical wording is used only where the mapper binds it to explicit story evidence and never requires DES.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 

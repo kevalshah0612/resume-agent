@@ -211,6 +211,7 @@ class ResumeInput:
     company: str
     jd: str
     title: str = "Software Engineer"
+    link: str = ""
     words: str = ""
     mode: str = ""
     des: str = ""
@@ -2755,16 +2756,17 @@ def extract_exact_json_object(text: str) -> dict[str, Any]:
         return parsed
 
     decoder = json.JSONDecoder()
-    candidates: list[dict[str, Any]] = []
+    candidates: list[tuple[int, int, dict[str, Any]]] = []
     for match in re.finditer(r"\{", stripped):
         try:
-            candidate, _end = decoder.raw_decode(stripped[match.start():])
+            candidate, relative_end = decoder.raw_decode(stripped[match.start():])
         except json.JSONDecodeError:
             continue
         if isinstance(candidate, dict):
-            candidates.append(candidate)
+            absolute_end = match.start() + relative_end
+            candidates.append((absolute_end, relative_end, candidate))
     if candidates:
-        return candidates[-1]
+        return max(candidates, key=lambda item: (item[0], item[1]))[2]
     raise ValueError("Could not extract one valid JSON object from model output.")
 
 

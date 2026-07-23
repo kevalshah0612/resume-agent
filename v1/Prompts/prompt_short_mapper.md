@@ -4,6 +4,10 @@
 
 - Treat the company, title, location, and JD as the target application, not as candidate employment evidence.
 - Use only the current JD analysis, current request inputs, `story.md`, and prepared DES rules.
+- Preserve Prompt 1's normalized user, model, and consensus keyword sets. Give consensus terms extra ranking attention without treating them as evidence or restoring scanner headings, explanations, scores, percentages, counts, ratios, duplicates, or non-JD noise.
+- Preserve literal AND/OR logic. For OR presentation, target two supported members and cap at three while recognizing that one member satisfies a literal one-of requirement; for AND and combined stacks, evaluate every member independently.
+- Create DES only for important missing named technologies or concrete technical practices with plausible story-local confirmation. Every DES must state logic type/group, literal minimum, resume target, current supported members, priority source, consensus boost, and exact placement.
+- Default-approve nontechnical keywords without creating DES, but place exact wording with high confidence only when one selected story supports the meaning; leave unsupported nontechnical terms context-only rather than inventing experience.
 - Return plain printable ASCII characters only. Normalize every copied range, change, fact, and metric without imposing a wording pattern; concise forms such as `from 60 to 10 seconds` are valid, but vary phrasing naturally and never use Unicode symbols or arrow shorthand.
 - Read every story from the first line through the last line before selecting evidence. Derive the current story count and IDs from `story.md`, return the complete `story_scan` receipt, do not stop after finding enough plausible matches, and do not use a top-story retrieval limit.
 - For each requirement, classify evidence across the entire story bank before applying role or section preference: direct evidence outranks close evidence, including when the direct evidence is a project and the close evidence is professional experience. Use experience priority only to break ties between evidence of the same strength.

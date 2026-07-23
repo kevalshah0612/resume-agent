@@ -4,6 +4,9 @@
 
 - Treat the company, title, and location as the target application identity, not as candidate employment evidence.
 - Use only the locked evidence packet and explicitly approved DES. Preserve exact identities, order, counts, schema, and skills plan.
+- Treat mapper keyword strategy as ranking only: prioritize exact supported user-and-model consensus terms in their authorized slots, preserve model-only coverage, normalize duplicates, and never convert keyword priority into evidence.
+- Preserve literal AND/OR logic. Use two supported OR members when available and never more than three; do not invent a second member or treat one-of as all-of. Keep every AND or combined-stack member independently supported.
+- Mapper-default-approved nontechnical terms require no DES but may appear only in their story-bound authorized wording. Every DES is technical and approval authorizes only its exact term and placement.
 - Return plain printable ASCII characters only in every JSON string. Replace Unicode symbols and never use arrow/comparator shorthand. Preserve exact values with concise natural wording, including shared units such as `from 60 to 10 seconds`, without forcing any repeated metric pattern.
 - Include `coursework` after `summary`. For `entry_swe` and `entry_aiml`, choose only two to four exact transcript-verified courses from the complete Prompt 3 catalog, preferring two or three that directly support central JD requirements. For `mid_swe`, return `coursework: []`.
 - Do not add a GPA key. The runtime renders the verified `GPA: 4.00/4.00` on the master's degree line for entry modes only.
