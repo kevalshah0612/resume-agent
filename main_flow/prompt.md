@@ -587,10 +587,9 @@ Classify:
 
 Never hide hard-stop risks inside a polished resume.
 
-For onsite roles, prefer honest header wording if user is willing to relocate:
-`[Target Role] | New York, NY | Open to relocate to [Target City, State]`
+For onsite roles, use the supplied target location as the sole header location. When no target location is supplied, use the verified base location `San Francisco, California`.
 
-Do not write only the target city unless the user currently lives there or explicitly confirms relocation date.
+Do not add `Moving to`, `Open to relocate`, or a second current-location value to the header.
 
 ## International Candidate Risk Gate
 
@@ -1109,25 +1108,21 @@ Do not infer Jest, Mocha, Cypress, React Testing Library, Playwright, Selenium, 
 Final resume header must render as three visual lines:
 
 Line 1: `name`  
-Line 2: `[Target Role] | New York, NY | [Relocation / work-location signal]`  
+Line 2: `[Target Role] | [Header Location]`
 Line 3: `phone | email | LinkedIn | GitHub`
 
 Because the JSON schema has no separate `role_line` or `location_line` key, encode Line 2 and Line 3 inside the existing `contact` field using `\n`.
 
 Use this dynamic contact format:
 
-`"[Target Role] | New York, NY | [Relocation / work-location signal]\n(518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612"`
+`"[Target Role] | [Header Location]\n(607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612"`
 
-Location / relocation rules:
-- If JD has strict onsite city outside New York: `[Target Role] | New York, NY | Open to relocate to [Target City, State]`
-- If JD targets a state or region: `[Target Role] | New York, NY | Open to relocate to [Target State/Region]`
-- If JD is broad U.S. or location-flexible: `[Target Role] | New York, NY | Open to relocate across the U.S.`
-- If JD is remote U.S.: `[Target Role] | New York, NY | Open to remote U.S. roles`
-- If JD is New York / NYC: `[Target Role] | New York, NY`
-- If user provides a different current location in current input, use that current location instead of New York, NY
+Location rules:
+- If the current runtime location is nonempty, use only that exact target location as `[Header Location]`.
+- If the current runtime location is empty, use `San Francisco, California`.
+- Never combine the target with the base location.
+- Never add `Moving to`, `Open to relocate`, or another relocation phrase.
 
-Do not write the target city as current location unless user confirms they currently live there.
-Do not write `Currently New York, NY` in the header unless needed to avoid ambiguity.
 Do not replace the GitHub URL with only `GitHub`.
 Do not add portfolio unless user has a strong portfolio URL in Story.md or current input.
 
@@ -1274,7 +1269,7 @@ Final JSON must follow this structure exactly:
     "role": "[Exact Job Title]"
   },
   "name": "Keval Shah",
-  "contact": "[Target Role] | New York, NY | [Relocation / work-location signal]\n(518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612",
+  "contact": "[Target Role] | [Header Location]\n(607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612",
   "linkedin_url": "https://www.linkedin.com/in/keval-shah0612",
   "github_url": "https://github.com/kevalshah0612",
   "summary": "[35 to 50 words, 2 sentences maximum, exact JD identity, strongest supported proof, no unsupported domain claim]",
@@ -1372,7 +1367,7 @@ Final JSON generation rules for this template:
 7. TA proof must appear only as a Professional Experience object when selected
 8. choose only one final project name per project object
 9. `contact` must contain exactly two visual lines separated by `\n`
-10. first contact line must be `[Target Role] | New York, NY | [Relocation / work-location signal]`
+10. first contact line must be `[Target Role] | [Header Location]`, using only the runtime target or `San Francisco, California` when the target is empty
 11. second contact line must be phone, email, LinkedIn URL, and GitHub URL
 12. do not use only `GitHub`; use `github.com/kevalshah0612`
 13. do not claim current target location unless confirmed
@@ -1589,7 +1584,7 @@ Before printing final JSON, silently verify:
 - section order matches layout standard
 - call reason is strong
 - contact field contains `\n` between role/location line and contact details line
-- contact line 1 follows `[Target Role] | New York, NY | [Relocation / work-location signal]`
+- contact line 1 follows `[Target Role] | [Header Location]` and contains no duplicate base or relocation wording
 - contact line 2 includes phone, email, LinkedIn URL, and GitHub URL
 - final contact line does not use only `GitHub`
 - no `[placeholder]`, `optional`, or unresolved option text remains anywhere in final JSON

@@ -150,7 +150,9 @@ The output `type` must exactly equal `MAPPER_PLAN_JSON.resolved_mode`.
   3. `TA`: 1
   4. `GHI`: 2
 * Return exactly the mapper's two selected projects, in mapper order.
-* Every project has exactly two bullets.
+* Every project has exactly one bullet.
+
+The one-bullet project rule applies only to `mid_swe` with split `TCS_SWE_II` and `TCS_SWE_I` roles. `entry_aiml` with `TCS_COMBINED` retains two bullets per project.
 
 Use these immutable experience identity values:
 
@@ -246,14 +248,37 @@ Docker must not become virtualization. Kubernetes must not become Linux-kernel e
 1. Use only normalized JD-matched keywords preserved in the JD analysis and mapper strategy. Never copy scanner headings, explanatory prose, scores, percentages, counts, ratios, or unrelated user terms into the resume.
 2. Normalize duplicate singular, plural, acronym, expanded, case, and punctuation variants to one natural term.
 3. Strengthen exact supported wording when the current resume uses a weaker synonym that an ATS may miss.
-4. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the three-keyword maximum.
-5. Apply an approved technical DES only to its exact term, logic member, and prepared placement. Approval of one AND or OR member never authorizes another.
-6. Use default-approved nontechnical wording without DES only when its mapper slot explicitly supports that behavior or responsibility. Do not introduce unsupported compliance, risk, ownership, leadership, domain, or behavioral claims.
-7. Treat mapper-authorized terms tied to priority-5 requirements as the first repair tier and priority-4 terms as the second tier.
-8. Put evidence-authorized priority-5 professional terms in their earliest mapper-planned experience bullets, normally bullet 1, and place remaining priority-5 and priority-4 terms before lower-priority wording when capacity permits.
-9. Keep project-only, DES-dependent, close, and unsupported terms within their truthful boundaries; never force them into Professional Experience.
-10. Do not add keyword-analysis, coverage, priority, or audit metadata to the compact resume JSON.
-11. Never create a new DES, remap evidence, or add an important missing technical keyword that lacks current mapper authority. Preserve the safe wording and leave the gap for a new Analyze + Map run.
+4. Build the complete targeting inventory from the normalized union of mapper-preserved user and model keywords. Audit and repair every evidence-authorized term; priority controls repair order, not whether user-only, model-only, or lower-priority terms are preserved.
+5. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the three-keyword maximum.
+6. Apply an approved DES only to its exact selected term, logic member, prepared story-local placement, and prepared evidence boundary. Approval of one AND or OR member never authorizes another or any unprepared mechanism, metric, ownership, or outcome.
+7. Use default-approved nontechnical wording without DES only when its mapper slot explicitly supports that behavior or responsibility. A close nontechnical term may use exact wording only when its prepared story-local evidence-confirmation DES was approved. Do not introduce unsupported compliance, risk, ownership, leadership, domain, or behavioral claims.
+8. Treat mapper-authorized terms tied to priority-5 requirements as the first repair tier and priority-4 terms as the second tier, then preserve every remaining exact, equivalent, approved-DES, project, and Skills term.
+9. Put evidence-authorized priority-5 professional terms in their earliest mapper-planned experience bullets, normally bullet 1, and place remaining priority-5 and priority-4 terms before lower-priority wording when capacity permits.
+10. Keep project-only, DES-dependent, close, and unsupported terms within their truthful boundaries; never force them into Professional Experience.
+11. Do not add keyword-analysis, coverage, priority, or audit metadata to the compact resume JSON.
+12. Never create a new DES, remap evidence, or add a missing keyword that lacks current mapper authority. Preserve safe wording and leave the gap for a new Analyze + Map + DES run.
+
+### Protected Keyword No-Loss Rule
+
+Before editing, build an internal protected-keyword ledger from:
+
+- exact story-supported terms,
+- truthful mapper-authorized equivalents,
+- explicitly approved DES terms,
+- evidence-supported terms in the resolved `skills_plan`,
+- valid protected terms already present in the current V1 JSON.
+
+After every wording, project-tech, or Skills change, compare the revised resume with this ledger. Do not reduce protected keyword coverage.
+
+When removing a protected term from one bullet would improve naturalness:
+
+1. rewrite that bullet to retain the exact supported term naturally,
+2. relocate it only to another mapper-authorized slot from the same role or project,
+3. retain it in the same project's `tech` array when authorized,
+4. retain it in Technical Skills when authorized,
+5. otherwise preserve the current valid wording.
+
+Never delete a protected keyword merely because it is lower priority, a synonym sounds smoother, the sentence is shorter without it, the Skills categories are being regrouped, or a related technology is already present. Removal is allowed only for unsupported, contradicted, unapproved, cross-story, non-JD, or duplicate-canonical wording.
 
 ## Summary rules
 
@@ -319,13 +344,13 @@ Preserve a current bullet when the proposed repair would make it less truthful, 
 
 ## Project rules
 
-Preserve the mapper-selected project IDs, names, order, and two-bullet allocation.
+Preserve the mapper-selected project IDs, names, order, and configured bullet allocation: two bullets per entry-mode project and one bullet per `mid_swe` project.
 
 For each project:
 
 * use only its mapper project plan,
 * keep `tech` within its allowed technology terms,
-* prioritize the technologies supported by the final two bullets,
+* prioritize the technologies supported by the final project bullet or bullets,
 * do not dump every allowed technology into `tech`,
 * distinguish data ingestion from code execution,
 * distinguish code analysis from security isolation,
@@ -353,6 +378,7 @@ You must:
 * exclude every term dependent on an unapproved DES,
 * avoid slash-separated alternatives,
 * avoid using a Skills entry as authorization for a new bullet fact.
+* preserve every evidence-supported or approved-DES protected term authorized by the resolved skills plan; regrouping or reprioritizing categories must not silently delete it.
 
 ## Bullet-check repair rules
 
@@ -426,6 +452,9 @@ Before returning, verify:
 31. Every mapper-authorized priority-5 professional term appears in its planned early experience bullet.
 32. Mapper-authorized priority-4 professional terms precede lower-priority wording when their slots have capacity.
 33. No keyword-analysis, coverage, priority, or audit metadata key was added to the resume JSON.
+34. Every other evidence-authorized user-only, model-only, consensus, project, and Skills keyword remains visible in at least one mapper-authorized field.
+35. No protected keyword present before optimization disappeared solely because of brevity, stylistic variation, synonym substitution, or Skills regrouping.
+36. Any keyword requiring new evidence or DES was left for a new Analyze + Map + DES run and was not invented.
 
 If a requested repair cannot pass every applicable check, preserve the safest valid current wording instead.
 

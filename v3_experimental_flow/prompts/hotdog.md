@@ -846,6 +846,8 @@ employment_note
 configuration fields
 ```
 
+Normalize `contact` and top-level `location` even though wrapper fields are normally preserved. When runtime `LOCATION` has a value, remove base-location and relocation text from `contact`, keep contact details only, and set top-level `location` to only the runtime target. Example: `LOCATION: San Jose` requires `"location": "San Jose"` and forbids `San Francisco, California`, `Moving to San Jose`, or a second copy of San Jose inside `contact`.
+
 Repair only controlled resume content fields.
 
 If any field changes, print:

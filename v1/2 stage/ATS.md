@@ -123,7 +123,9 @@ Use the following immutable mode rules:
 * Summary is present and no more than 40 words, using only `MAPPER_PLAN_JSON.summary_plan`.
 * Coursework is exactly an empty array and must not be rendered.
 * Experience order and bullet counts: `TCS_SWE_II` 4, `TCS_SWE_I` 2, `TA` 1, `GHI` 2.
-* Exactly two projects, with exactly two bullets per project.
+* Exactly two projects, with exactly one bullet per project.
+
+The one-bullet project rule applies only to `mid_swe` with split TCS roles. `entry_aiml` with `TCS_COMBINED` retains exactly two bullets per project.
 
 Every experience and project bullet must have one corresponding `bullet_checks` entry in the same order. The check's `ref`, `story_id`, requirement, alignment, word count, and answered-question labels must agree with the final bullet and mapper slot.
 
@@ -145,6 +147,10 @@ For every important JD requirement, classify the final resume using exactly one 
 * `MAPPER_LEVEL_OPPORTUNITY`: the mapper or skills plan points to evidence in a story that was not selected for a current bullet or project. This requires remapping and cannot be inserted into a locked slot by the Optimizer.
 * `GENUINE_EVIDENCE_GAP`: the JD requires it, but neither selected mapper evidence nor approved DES supports it.
 * `UNSAFE_OR_CONTRADICTED`: the resume claims more than the mapper allows, uses an unapproved DES fact, crosses story boundaries, or creates a false equivalence.
+* `KEYWORD_DROPPED_AFTER_MAPPING`: the mapper authorized an exact, equivalent, approved-DES, project, or Skills term, but the final V1 resume omitted it from every authorized visible field.
+* `EXACT_TERM_WEAKENED_TO_SYNONYM`: the mapper supports the exact concise JD wording, but the final resume replaced it with a broader or less searchable phrase.
+* `PROFESSIONAL_EVIDENCE_REDUCED_TO_SKILLS`: direct professional bullet evidence was planned, but the final resume shows the term only in Technical Skills.
+* `REQUIRES_NEW_V1_DES_RUN`: a retained material user/model keyword remains unresolved and needs a new Mapper/DES pass; the Optimizer must not invent it.
 
 The most important finding is `MISSED_PLANNED_EVIDENCE`: evidence V1 already possessed and was allowed to use, but failed to express in the JSON resume.
 
@@ -230,18 +236,21 @@ Docker is not virtualization. Kubernetes is not Linux-kernel engineering. Backen
 Audit Prompt 1 and Prompt 2 keyword metadata before scoring:
 
 1. Confirm user keywords were normalized and deduplicated case-insensitively.
-2. Confirm scanner headings, explanatory prose, scores, percentages, counts, and ratios such as `3/12` did not become requirements or keywords.
+2. Confirm combined JobAlytics, Simplify, and other pasted reports were treated as one discovery source. Scanner headings, match/missing labels, high/low labels, checked states, explanatory prose, scores, percentages, counts, and ratios such as `3/12` must not become evidence, coverage judgments, or requirements.
 3. Confirm every retained user keyword exists in or is faithfully equivalent to the current JD.
 4. Confirm model keywords were independently extracted from the JD and remain represented even when the user did not provide them.
 5. Confirm `user_and_model` consensus terms received the configured one-point priority boost only when their base priority was 3 to 5, with final priority capped at 5.
 6. Allocate more of the fixed 100-point scoring weight to legitimate consensus requirements according to their final priority. Do not add bonus points beyond 100 and do not double-count the same requirement.
 7. Give no evidence credit merely because the user and model both named a keyword. Apply the normal evidence multiplier to the final resume proof.
-8. Audit default-approved nontechnical requirements without expecting DES. Award high-confidence coverage only when mapper-bound story evidence supports the exact meaning; otherwise score close or absent evidence normally.
-9. If an important missing technical keyword lacks direct mapper evidence or approved DES, classify it as `REQUIRES_USER_VERIFICATION` or `REQUIRES_REMAPPING`. The Optimizer cannot introduce it.
-10. Build the audit's final-priority set from recruiter-searchable terms tied to priority-5 requirements first and priority-4 requirements second; do not add a new resume JSON key for this set.
-11. Verify every evidence-authorized priority-5 professional term appears in its mapper-planned experience bullet, normally the earliest bullet that directly proves it.
-12. Verify remaining evidence-authorized priority-5 and priority-4 professional terms appear before lower-priority terminology when their planned slots have capacity.
-13. Report project-only, DES-dependent, close, and unsupported terms honestly instead of demanding that they appear in Professional Experience.
+8. Build the complete audit inventory from the normalized union of all retained user and model keywords. Audit every term, including user-only, model-only, consensus, and lower-priority terms. Priority determines audit and repair order; it does not permit a term to be skipped.
+9. Audit directly supported nontechnical requirements without expecting DES. When the mapper prepared a role-local evidence-confirmation DES for a close nontechnical term, treat only its explicit approval as authority for the selected wording.
+10. If a material keyword lacks direct mapper evidence, truthful equivalent evidence, or approved DES, classify it as `REQUIRES_NEW_V1_DES_RUN`, `REQUIRES_REMAPPING`, or a genuine gap. The Optimizer cannot introduce it.
+11. Build the audit's placement priority from recruiter-searchable priority-5 terms first, priority-4 terms second, and all remaining retained terms afterward; do not add a new resume JSON key for this set.
+12. Verify every evidence-authorized priority-5 professional term appears in its mapper-planned experience bullet, normally the earliest bullet that directly proves it.
+13. Verify remaining evidence-authorized priority-5 and priority-4 professional terms appear before lower-priority terminology when their planned slots have capacity.
+14. Verify every other exact, equivalent, approved-DES, project-only, or Skills-authorized keyword remains visible in at least one authorized resume field.
+15. Classify a mapped term omitted everywhere as `KEYWORD_DROPPED_AFTER_MAPPING`; classify an exact supported term replaced by a weaker phrase as `EXACT_TERM_WEAKENED_TO_SYNONYM`.
+16. Report project-only, DES-dependent, close, unsupported, and genuine-gap terms honestly instead of demanding that they appear in Professional Experience.
 
 ## Step 3: Compare the mapper plan with the final resume
 
@@ -345,7 +354,9 @@ Report concise lists for:
 * independently derived model keywords,
 * user-and-model consensus keywords and their boosted requirement IDs,
 * ignored scanner framing or non-JD noise summarized without reproducing counts as keywords,
-* supported, close, DES-dependent, and uncovered consensus terms,
+* the complete normalized user-plus-model targeting inventory ordered by JD priority,
+* exact, truthful-equivalent, approved-DES, project-only, skills-only, context-only, and genuine-gap outcomes across the complete inventory,
+* every protected keyword dropped after mapping, weakened to a synonym, or reduced from professional evidence to Skills,
 * AND/OR logic status, including literal satisfaction and the separate two-to-three-member OR presentation target.
 
 ## Score Breakdown
@@ -461,10 +472,10 @@ Before returning the report, silently verify:
 * Every retained user keyword matches or is faithfully equivalent to the current JD.
 * Model keywords were evaluated independently and consensus boosts were applied only once, capped at priority 5.
 * Consensus weighting remained inside the fixed 100-point total and did not create evidence credit.
-* Priority-5 and priority-4 recruiter-searchable terms were checked against their mapper-authorized resume placements.
-* Missing evidence-authorized priority terms were reported without adding keyword metadata to the resume JSON.
+* Every retained user and model keyword was audited; priority-5 and priority-4 recruiter-searchable terms were checked first against their mapper-authorized resume placements.
+* Missing evidence-authorized terms were reported without adding keyword metadata to the resume JSON.
 * OR groups preserve literal satisfaction while separately targeting two and capping at three supported resume members.
-* Nontechnical requirements created no DES and received high-confidence credit only when story-bound evidence supports them.
+* Directly supported nontechnical requirements required no DES; any prepared nontechnical evidence-confirmation DES received credit only after explicit approval and only in its story-bound placement.
 * Skills-only evidence received limited credit.
 * Every schema claim follows the V1 compact contract.
 * Coursework is minimal, transcript-verified, directly JD-relevant, and present only for entry-level modes.

@@ -87,7 +87,7 @@ If a claim has no Evidence ID or approved DES ID, exclude it.
 Name: Keval Shah
 
 Default contact:
-New York, NY | (518) 328-3697 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612
+San Francisco, California | (607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612 | github.com/kevalshah0612
 
 LinkedIn: https://www.linkedin.com/in/keval-shah0612
 GitHub: https://github.com/kevalshah0612
@@ -95,14 +95,10 @@ GitHub: https://github.com/kevalshah0612
 Header guidance:
 - Final resume header should render as:
   1. Name
-  2. Target Role | New York, NY | relocation/work-location signal
+  2. Target Role | target location, or San Francisco, California when target location is empty
   3. phone | email | LinkedIn | GitHub
-- For strict onsite roles outside New York: `[Target Role] | New York, NY | Open to relocate to [Target City, State]`
-- For state/region roles: `[Target Role] | New York, NY | Open to relocate to [Target State/Region]`
-- For broad U.S. roles: `[Target Role] | New York, NY | Open to relocate across the U.S.`
-- For remote U.S. roles: `[Target Role] | New York, NY | Open to remote U.S. roles`
-- For New York / NYC roles: `[Target Role] | New York, NY`
-- Do not write target city as current city unless it is true
+- When a target location is supplied, show only that target location
+- Never add `Moving to`, `Open to relocate`, or a second location
 - Do not replace GitHub URL with only `GitHub`
 
 Education:

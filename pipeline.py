@@ -1807,9 +1807,7 @@ def compact_project_url(name: str) -> str:
 
 def header_location(inp: ResumeInput) -> str:
     target = str(inp.words or "").strip()
-    if target and target.lower() != CURRENT_LOCATION.lower():
-        return f"{CURRENT_LOCATION} | Moving to {target}"
-    return CURRENT_LOCATION
+    return target or CURRENT_LOCATION
 
 
 def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_profile: str = "v3") -> dict[str, Any]:

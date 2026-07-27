@@ -122,7 +122,7 @@ class RequestCombinerTests(unittest.TestCase):
         self.assertEqual(
             full_resume["contact"],
             (
-                "New York, NY | Moving to Boston, MA | "
+                "Boston, MA | "
                 "(607) 235-1181 | keval.shah098@gmail.com | "
                 "linkedin.com/in/keval-shah0612"
             ),

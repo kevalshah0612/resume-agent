@@ -35,7 +35,7 @@ Additional strict repair rules:
 - Repair config, header, TA placement, project count, bullet order, and repeated opening verbs when visible JSON evidence allows it
 - Keep `education.ta_bullet` empty
 - Keep `config.ta_active` false
-- Header must use `Target Role | New York, NY | relocation/work-location signal` plus a second contact-details line separated by `\n`
+- Header must use `Target Role | target location`, or `Target Role | San Francisco, California` when no target is supplied, plus a second contact-details line separated by `\n`; never add relocation wording or duplicate locations
 - Top two bullets of every experience must be strongest JD signals and different proof types
 - Cross-stack bullets must describe a real connected workflow, not a keyword list
 - Do not invent missing projects to satisfy project count

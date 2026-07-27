@@ -48,7 +48,7 @@ The following configuration is immutable. Use only the configuration matching `M
         "GHI": 2
       },
       "project_count": 2,
-      "project_bullets_each": 2
+      "project_bullets_each": 1
     }
   },
   "locked_experience_identity": {
@@ -255,7 +255,7 @@ Return exactly one JSON object with this complete shape and key order:
 - `summary`: Empty for `entry_swe` and `entry_aiml`. For `mid_swe`, write one targeted paragraph of no more than 40 words using only `summary_plan`.
 - `coursework`: For `entry_swe` and `entry_aiml`, select the smallest useful set of two to four verified graduate courses that directly supports central JD requirements. Prefer two or three. For `mid_swe`, return `[]`.
 - `experience`: Must use the exact configured role order, identity values, and bullet counts for the resolved mode.
-- `projects`: Must use the mapper's exact selected project IDs, names, order, and configured count. Every project has exactly two bullets.
+- `projects`: Must use the mapper's exact selected project IDs, names, order, configured count, and configured bullets per project. Entry modes use two bullets per project; `mid_swe` uses one.
 - `tech`: Use only the most JD-relevant technologies allowed by that project's mapper plan. Do not dump the project's complete stack.
 - `technical_skills`: Use only `MAPPER_PLAN.skills_plan`; maximum five nonempty categories; no duplicate terms.
 - `bullet_checks`: Include exactly one compact check object for every experience and project bullet, in the same order as the bullets. `ref` uses `<role_id>.<slot>` or `<project_story_id>.<slot>`. `story_id` and `requirement_id` must match the locked slot; use an empty requirement ID only when the slot has no primary requirement. `alignment` is exactly `direct`, `close`, or `context`. `word_count` is the count of the final accepted bullet. `questions_answered` contains only applicable values from `what`, `how`, `with_what`, `result`, and `amount`.
@@ -309,7 +309,9 @@ Return experience rows in this exact order and count:
 3. `TA`: 1 bullet
 4. `GHI`: 2 bullets
 
-Return exactly 2 projects with 2 bullets each. Write the required summary from `summary_plan` in no more than 40 words. Return `"coursework": []`.
+Return exactly 2 projects with 1 bullet each. Write the required summary from `summary_plan` in no more than 40 words. Return `"coursework": []`.
+
+This one-bullet project shape applies only to `mid_swe`, where TCS is split into `TCS_SWE_II` and `TCS_SWE_I`. `entry_aiml` uses `TCS_COMBINED` and must retain 2 bullets per project.
 
 ## Source Hierarchy
 
@@ -330,6 +332,7 @@ Do not use previous requests, prior resumes, memory, outside knowledge, unselect
 Use `MAPPER_PLAN.keyword_strategy` only to rank already authorized wording and placements.
 
 - Preserve model-derived keywords even when no user keyword report exists.
+- Treat the normalized union of mapper-preserved user and model keywords as the complete targeting inventory. Priority controls placement order; it does not permit an evidence-authorized user-only, model-only, or lower-priority keyword to be silently discarded.
 - Give `user_and_model` consensus terms extra attention in their mapper-authorized slots because both sources identified them as important.
 - Treat mapper-authorized terms tied to priority-5 requirements as the first placement tier and priority-4 terms as the second tier.
 - When a priority-5 term has direct professional evidence and its mapper-authorized destination is an experience slot, visibly use the exact supported JD term in that planned bullet, normally the role's first bullet.
@@ -343,6 +346,21 @@ Use `MAPPER_PLAN.keyword_strategy` only to rank already authorized wording and p
 - For AND and combined-stack groups, preserve each mapper-supported required member without implying that one member covers the others.
 - Nontechnical requirements listed in `auto_approved_nontechnical_requirement_ids` need no DES approval, but they may appear only in the story-bound slot and wording authorized by the mapper. Default approval never permits an unsupported compliance, risk, ownership, leadership, domain, or behavioral claim.
 
+### Protected Keyword Preservation
+
+Every exact story-supported term, truthful mapper-authorized equivalent, approved-DES term, and evidence-supported term in `skills_plan` is a protected keyword.
+
+A protected keyword must remain naturally visible in at least one mapper-authorized resume field. Its primary destination should be the planned bullet. When that bullet cannot carry the term naturally within its evidence and capacity:
+
+1. use another mapper-planned bullet from the same role or project only when that slot also authorizes the term,
+2. retain it in the same project's `tech` array when the project plan authorizes it,
+3. retain it in Technical Skills when `skills_plan` authorizes it,
+4. use the mode-authorized summary only when `summary_plan` authorizes it.
+
+Never move evidence across roles, employers, projects, or story boundaries. Never silently omit a protected keyword merely to shorten a sentence, vary vocabulary, regroup Skills, or prefer a broader synonym. If no authorized destination exists, preserve the strongest valid planned wording rather than deleting the term.
+
+Optional metrics, secondary facts, redundant stack details, and unprotected allowlist items may still be omitted. Protected keyword preservation does not require every allowed fact or metric to appear.
+
 ## DES Resolution
 
 For every mapper DES question:
@@ -354,9 +372,9 @@ For every mapper DES question:
 5. Do not infer partial approval.
 6. Do not add facts beyond the approved wording.
 
-An approved technology may appear only in the prepared role and slot and in Skills when the mapper explicitly planned it there.
+An approved term may appear only in the prepared role and slot and in Skills when the mapper explicitly planned it there.
 
-All mapper DES questions are technical by policy. Preserve each question's `logic_type`, `logic_group`, literal minimum, resume target, current supported members, priority source, and consensus boost when resolving it. Approval authorizes only the exact selected technical term in the prepared slot; it does not authorize another member of the same AND or OR group.
+Mapper DES questions may confirm a technical term or a concrete role-local example for a material responsibility, methodology, domain, or behavioral term. Preserve each question's `logic_type`, `logic_group`, literal minimum, resume target, current supported members, priority source, and consensus boost when resolving it. Approval authorizes only the exact selected term and prepared story-local placement; it does not authorize another member of the same AND or OR group or any unprepared mechanism, metric, ownership, or outcome.
 
 ## Closest Work Writing Rule
 
@@ -391,6 +409,8 @@ Do not move a term, metric, user count, domain, action, result, or ownership cla
 
 Enforce the mapper's evidence-origin boundary from the story ID: TA bullets use only `TA-*`, GHI bullets only `GHI-*`, TCS bullets may use `TCS-I-*` or `TCS-II-*`, and project bullets only `PROJ-*`. If the packet violates this boundary, do not disguise the mismatch by writing the story under the wrong employer.
 
+Enforce the candidate-specific AI chronology boundary as a final safety check. Do not write generative-AI, LLM, AI-agent, agentic-development, RAG, embedding, vector-search, prompt-engineering, chatbot, conversational-AI, dialog-engine, model-development, or AI-specific observability implementation claims under TCS, even if a malformed mapper packet or DES approval places one there. The same restriction applies to Slack, Microsoft Teams, web chat, notifications, tracing, or analytics when they are framed as parts of an AI assistant, agent, or conversational system. TCS may contain only mapper-authorized, explicitly verified AI or machine-learning conceptual exposure, never an AI/ML development, integration, model, agent, product-feature, launch, or production claim. AI and ML implementation belongs only to authorized GHI, TA, or project packets.
+
 Within the selected story, use only one coherent method group and at most one performance outcome per bullet. A before-and-after comparison is one outcome. You may include one essential scope value only when it materially proves JD-relevant scale. Omit every secondary performance metric even when it is true and mapper-authorized; an allowlist is not an inclusion requirement.
 
 The mapper plan is an allowlist, not a suggestion.
@@ -409,7 +429,7 @@ These questions are an evidence checklist, not a rigid sentence template. Do not
 
 There is no required bullet formula. The action, system, method, scope, and result may appear in whichever natural order best communicates that specific achievement.
 
-Build the achievement first and add only the smallest set of terms needed to explain it. The mapper packet is an allowlist, not a checklist. A permitted technology, fact, metric, or requirement may be omitted when including it would weaken grammar, exceed keyword capacity, repeat another bullet, or turn the sentence into an inventory.
+Build the achievement first and add only the smallest coherent set of terms needed to explain it. Mapper facts and metrics are an allowlist, not a checklist. Optional facts, secondary metrics, redundant tools, and unprotected supporting details may be omitted when they weaken grammar, exceed capacity, repeat another bullet, or create an inventory. A protected keyword may not be silently omitted; preserve it naturally in its authorized placement or another authorized resume field under the Protected Keyword Preservation rules.
 
 ### Three-Keyword Maximum
 
@@ -452,7 +472,7 @@ Every bullet must:
 - Place the result wherever it reads naturally. Do not repeat the same metric phrasing or clause order across bullets.
 - Remain interview-defensible from its locked evidence packet.
 
-Treat 18 to 22 words as the normal completion range, not a suggestion to fill every available word. A final bullet may use 23 or 24 words only when essential verified meaning cannot fit naturally within 22 words. There is no exception above 24 words. Compress or remove a secondary keyword, tool, adjective, metric, scope detail, or claim until the bullet fits.
+Treat 18 to 22 words as the normal completion range, not a suggestion to fill every available word. A final bullet may use 23 or 24 words only when essential verified meaning cannot fit naturally within 22 words. There is no exception above 24 words. Compress or remove an unprotected secondary tool, adjective, metric, scope detail, or claim until the bullet fits. A protected keyword must follow the relocation rules instead of being silently deleted.
 
 Every bullet must avoid:
 
@@ -589,14 +609,15 @@ Follow the mapper's placement exactly.
 
 - Use exactly the selected project IDs and order from `project_plan`.
 - Use the exact project name from the selected project packet.
-- Write exactly two bullets per project.
-- Bullet 1 should explain the verified system, workflow, and relevant implementation.
-- Bullet 2 should explain a distinct verified evaluation, scale, performance, quality, or result.
+- Write the configured bullet count: one bullet per project for `mid_swe`; two bullets per project for `entry_swe` and `entry_aiml`.
+- For `mid_swe`, write one self-contained bullet that explains the verified system and most JD-relevant implementation, evaluation, scale, quality, or result.
+- For entry modes, bullet 1 should explain the verified system, workflow, and relevant implementation.
+- For entry modes, bullet 2 should explain a distinct verified evaluation, scale, performance, quality, or result.
 - Use only that project's technologies, facts, and metrics.
 - Keep `tech` concise and JD-relevant.
 - Do not add a project technology to Technical Skills unless it also appears in `skills_plan`.
 - Do not present self-tested project evidence as professional production experience.
-- Do not give multiple projects the same two-bullet sentence pattern. Preserve the required implementation and result purposes while varying accurate opening verbs, clause order, and emphasis naturally.
+- Do not give multiple projects the same sentence pattern. Preserve the configured project purpose while varying accurate opening verbs, clause order, and emphasis naturally.
 
 ## Summary Rules
 
@@ -669,6 +690,7 @@ Rules:
 10. Preserve standard technology spelling.
 11. Order categories and terms by current JD importance.
 12. Use only as many categories and terms as the locked plan contains; do not pad.
+13. Treat every evidence-supported or approved-DES term in the resolved `skills_plan` as protected. Do not remove it merely because the same or a related term appears in a bullet, because the category is being shortened, or because another supported technology seems more important.
 
 ## Internal Composition and Review Sequence
 
@@ -706,7 +728,7 @@ Before returning JSON, silently verify:
 8. Every experience role has the exact configured bullet count.
 9. Project IDs and order exactly match the mapper plan.
 10. Project count exactly matches configuration.
-11. Every project has exactly two bullets.
+11. Every project has exactly the configured bullet count: two for entry modes and one for `mid_swe`.
 12. Every bullet uses only its selected packet slot and approved DES.
 13. Every named technology is allowed for that bullet or project.
 14. Every metric is allowed for that bullet or project.
@@ -745,6 +767,9 @@ Before returning JSON, silently verify:
 47. Every mapper-authorized priority-5 exact professional term appears in its planned experience bullet, normally the earliest bullet that directly proves it.
 48. Mapper-authorized priority-4 professional terms appear before lower-priority terms when their planned slots have capacity.
 49. No keyword-analysis, coverage, or priority metadata key was added to the resume JSON.
+50. Every evidence-authorized user-only, model-only, and consensus keyword remains visible in an authorized bullet, project technology array, Technical Skills, or mode-authorized summary unless the mapper classified it as context-only, excluded, or a genuine gap.
+51. No protected keyword was deleted solely for brevity, stylistic variation, Skills regrouping, or replacement with a broader synonym.
+52. No TCS bullet contains an AI-development claim or an AI-system component misattributed from later GHI, TA, or project evidence.
 
 If any check fails, correct it silently before returning the object. Do not return an error report, partial JSON, draft JSON, or second JSON object.
 

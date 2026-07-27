@@ -211,6 +211,34 @@ Mandatory defaults unless the current runtime message explicitly overrides:
 - Do not require story-to-title/date mapping inside TCS.
 - Do not move evidence across scopes: TCS cannot move to TA/GHI/Projects, GHI cannot move to TCS/TA/Projects, TA cannot become production engineering, and Project evidence cannot enter Experience.
 
+### Contact and Target Location Contract
+
+When the runtime or application wrapper contains top-level `contact` and `location` fields, keep their responsibilities separate:
+
+- `contact` contains only phone, email, LinkedIn, and any explicitly supported profile links.
+- `contact` must not contain a current city, target city, role title, `Moving to`, `Open to relocate`, or another location/relocation phrase.
+- When the current runtime `LOCATION` is nonempty, set top-level `location` to only that supplied target location after trimming whitespace.
+- Do not combine the target location with `San Francisco, California`, another city, or a relocation phrase.
+- Do not duplicate top-level `location` inside `contact`.
+- This rule applies only to the resume-header wrapper fields. Never replace Education or Professional Experience locations with the target job location.
+
+Example for runtime `LOCATION: San Jose`:
+
+```json
+{
+  "contact": "(607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612",
+  "location": "San Jose"
+}
+```
+
+The intended rendered contact line is:
+
+```text
+San Jose | (607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612
+```
+
+If an input wrapper already repeats location in both fields, normalize it before final output: remove every header-location and relocation fragment from `contact`, then keep only the current runtime target in top-level `location`. This normalization is required and is not a forbidden wrapper change.
+
 ---
 
 ## 4. Source Hierarchy
@@ -1593,6 +1621,8 @@ Examples:
 ## 26. Wrapper Preservation Rule
 
 If the generated JSON contains wrapper fields, preserve them unless the exact field violates evidence or current runtime fields.
+
+Contact/location normalization is an explicit exception to literal wrapper preservation. When runtime `LOCATION` is nonempty, `contact` must contain contact details only and top-level `location` must contain only that runtime target. Remove duplicated base-location and relocation wording such as `San Francisco, California | Moving to San Jose` from `contact`; for `LOCATION: San Jose`, preserve only `"location": "San Jose"`.
 
 Do not blank or remove:
 

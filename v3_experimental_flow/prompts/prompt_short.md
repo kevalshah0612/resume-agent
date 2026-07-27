@@ -46,6 +46,16 @@ Default to `Entry` unless the JD clearly indicates `NewGrad` or `Mid`. Preserve 
 
 Old resumes, old runs, examples, and generated bullets are not evidence.
 
+## Contact and Location
+
+Keep top-level `contact` and `location` separate. `contact` contains only phone, email, LinkedIn, and supported profile links. When runtime `LOCATION` is nonempty, top-level `location` contains only that target value; never add `San Francisco, California`, `Moving to`, or `Open to relocate`, and never repeat location inside `contact`.
+
+For `LOCATION: San Jose`, use:
+
+```json
+{"contact":"(607) 235-1181 | keval.shah098@gmail.com | linkedin.com/in/keval-shah0612","location":"San Jose"}
+```
+
 ## Official Company Research
 
 Use official/runtime company sources only for company goals, future plans, revenue, product direction, or roadmap. If unavailable, print that official company research is not provided and use the JD only.

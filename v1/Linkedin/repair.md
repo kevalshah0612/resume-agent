@@ -185,9 +185,9 @@ Use the JD's exact terminology when the candidate evidence supports the same tec
 
 Do not convert an adjacent technology or responsibility into an exact match. If the JD term is unsupported, report it as a gap instead of inserting it. Never add a skill or phrase solely because it appears in the JD.
 
-Internally build a final-priority keyword set from recruiter-searchable priority-5 terms first and priority-4 terms second. Use the current official posting when accessible, reconcile it with the supplied JD, and keep only concise technologies, technical practices, engineering methods, and role-defining phrases.
+Internally build the complete targeting inventory from the normalized union of all JD-valid user keywords and independently derived model keywords in the supplied V1 artifacts. The original DES / Existing field may contain JobAlytics, Simplify, or several reports pasted together; their match, missing, high, low, checked, and unchecked labels are discovery framing only and are never candidate evidence or final-resume coverage judgments. Use the current official posting when accessible, reconcile it with the supplied JD, and retain every current-JD-valid user-only, model-only, and consensus term. Order the inventory by priority-5 terms first, priority-4 terms second, and all remaining material terms afterward.
 
-Every final-priority term must receive one outcome:
+Every targeting term must receive one outcome:
 
 * exact supported placement,
 * truthful close placement,
@@ -198,6 +198,22 @@ Every final-priority term must receive one outcome:
 When direct professional evidence supports a priority-5 term, place the exact supported JD wording in the earliest coherent experience bullet, normally the first bullet of the earliest relevant role. Place remaining supported priority-5 and priority-4 professional terms before lower-priority terminology, normally within the first two bullets of the relevant role.
 
 Never force project-only, education-only, skills-only, DES-dependent, or unsupported terminology into Professional Experience. Do not add keyword-analysis, coverage, priority, or audit metadata to the corrected resume JSON; important supported terms must appear naturally inside existing resume-content fields.
+
+### Protected keyword preservation
+
+Every exact story-supported term, truthful mapper-authorized equivalent, approved-DES term, evidence-supported optimized-resume term, and evidence-supported term in the mapper Skills plan is protected.
+
+Do not remove a protected keyword from the complete resume merely to shorten a bullet, vary vocabulary, use a broader synonym, reduce repetition, regroup Skills, or prefer another related technology. A protected term may leave one sentence only after it has been preserved naturally in another truthful authorized location.
+
+Use this relocation order:
+
+1. another bullet from the same role and evidence source,
+2. another bullet from the same project,
+3. the same project's technology array,
+4. Technical Skills when evidence-supported,
+5. the mode-authorized summary when supported.
+
+Never move evidence between employers, roles, projects, or stories. If no truthful authorized relocation exists, preserve the current valid wording. Delete a protected term from the complete resume only when it is unsupported, contradicted, based on an unapproved or invalid DES, attached to the wrong evidence source, absent from the current JD, or a duplicate canonical variant. Identify every such safety-driven removal and its reason in `Repair Strategy`.
 
 You may merge, split, remove, rewrite, or reorder bullets within the same experience role or project. You may move supported facts between bullets only within that same role or project. Never move evidence, metrics, technologies, or ownership claims from one employer, role, project, or story to another.
 
@@ -236,7 +252,7 @@ A strong claim should explain as many of these as the source supports:
 
 Do not invent missing details.
 
-This is a full repair pass, so you may improve selection, structure, terminology, ordering, and natural wording within the editable fields defined below. Do not add a technical term, responsibility, metric, outcome, or ownership claim merely because it appears in the Job Description, research, or ATS report.
+This is a full content-repair pass, so you may improve terminology, bullet selection within existing roles/projects, bullet order within those objects, supported Skills organization, and natural wording inside the editable fields defined below. Do not change Python-controlled object or section order. Do not add a technical term, responsibility, metric, outcome, or ownership claim merely because it appears in the Job Description, research, or ATS report.
 
 ## 5. JSON contract
 
@@ -248,6 +264,7 @@ Do not change:
 
 * `type`
 * `section_order`
+* `experience_order`
 * `config`
 * name
 * contact information
@@ -268,13 +285,12 @@ Do not change:
 You may freely repair values within:
 
 * `summary`, subject to the mode rules below
-* `professional_experience`
-* `projects`
+* experience bullet text and bullet order within each existing role
+* project bullet text and supported project technology arrays within each existing project
 * `education`, for truthful formatting and presentation improvements
 * `technical_skills`
-* `experience_order`, only to keep it synchronized with the repaired physical experience order
 
-Within `professional_experience` and `projects`, you may rewrite, merge, split, add, remove, and reorder bullets; reorder the existing role or project objects; and repair supported technology arrays. Do not create a new employer, role, project identity, degree, university, or credential that is absent from the candidate evidence.
+Within each existing `professional_experience` role and project, you may rewrite, merge, split, add, remove, and reorder bullets and repair supported project technology arrays. Do not reorder role objects, project objects, education objects, or sections. Do not create a new employer, role, project identity, degree, university, or credential that is absent from the candidate evidence.
 
 Within `education`, you may improve degree wording, punctuation, abbreviations, coursework presentation, and ordering for clarity and relevance. Preserve the factual institution, credential, field of study, graduation status and date, GPA value, and location. Do not create coursework, honors, certifications, or credentials.
 
@@ -282,23 +298,18 @@ Within `technical_skills`, you may add, remove, rename, regroup, and reorder cat
 
 You may change list lengths only inside bullets, project technology arrays, coursework presentation, and technical skills. Preserve all identity and renderer fields not explicitly made editable.
 
-## 6. Repair and synchronize resume order
+## 6. Preserve Python-controlled resume order
 
-Preserve `section_order` and `config.section_order`.
+The supplied final rendered resume already contains the authoritative Python-controlled structure and order. Preserve exactly:
 
-Order `professional_experience` for the clearest recruiter scan while preserving truthful chronology and career progression. Prefer reverse chronology by default. Use a different order only when the supplied `experience_order`, resolved V1 strategy, or strong role relevance clearly requires it.
+* `section_order`,
+* `config.section_order`,
+* top-level `experience_order`,
+* physical `professional_experience` object order,
+* project object order,
+* education object order.
 
-After choosing the order, make the physical `professional_experience` array and top-level `experience_order` contain the same IDs in exactly the same sequence. Never return conflicting order metadata.
-
-For example, when:
-
-`"experience_order": ["TCS_SWE_II", "TCS_SWE_I", "TA", "GHI"]`
-
-the physical `professional_experience` array must appear in that exact order.
-
-Do not rely on downstream code to repair an order mismatch.
-
-Order projects by relevance to the current role, strength of implementation evidence, and validation quality. Preserve every existing project identity and story ID.
+Do not choose, repair, synchronize, or describe changes to section, experience, project, or education-object order. Python and the completed V1 strategy own those decisions. Optimize the recruiter scan only by rewriting and reordering bullets inside the already ordered role or project and by reordering supported terms inside Technical Skills.
 
 ## 7. Optimize the recruiter scan path
 
@@ -392,7 +403,7 @@ Use conventional ASCII resume formatting such as `120+`, `7+ applications`, `92%
 
 ## 10. Repair projects
 
-Order projects by relevance to the target role.
+Preserve the supplied project-object order. Improve relevance only through project bullet wording, bullet order within the same project, and supported technology-array ordering.
 
 For each project:
 
@@ -420,7 +431,7 @@ Add, remove, rename, regroup, and reorder skills or categories when doing so imp
 
 Add a JD skill only when the candidate evidence explicitly supports that skill or a genuinely equivalent term. When equivalent, prefer the exact JD wording. Do not turn adjacent exposure into proficiency, and do not add every technology from an OR branch.
 
-Remove unsupported, obsolete, duplicative, misleading, or distracting skills. Preserve a non-JD skill when it is strongly evidenced and materially supports the candidate's professional profile.
+Remove unsupported, obsolete, duplicative, misleading, or distracting skills. Preserve every protected current-JD skill authorized by candidate evidence or approved DES, even when categories are renamed or regrouped. Preserve a non-JD skill when it is strongly evidenced and materially supports the candidate's professional profile.
 
 ## 12. Required analysis output
 
@@ -501,8 +512,7 @@ Before responding, verify:
 * No key was added, removed, renamed, or restructured.
 * `type`, config, identity fields, employer and project identities, factual dates, and URLs are unchanged.
 * Company Name, Title, Link, contact information, factual education credentials, GPA value, and renderer metadata are unchanged.
-* The physical `professional_experience` array and top-level `experience_order` contain the same IDs in the same sequence.
-* Projects are ordered by relevance without changing their identities or story IDs.
+* `section_order`, `config.section_order`, `experience_order`, physical experience-object order, project-object order, and education-object order are unchanged from the supplied JSON.
 * Entry-mode summary remains empty; only a `mid_swe` summary may be naturally repaired.
 * The first two bullets contain the strongest relevant evidence.
 * Opening verbs avoid unnecessary repetition without sacrificing accuracy or natural wording.
@@ -512,7 +522,9 @@ Before responding, verify:
 * Every repaired claim is traceable to candidate evidence from the same role or project.
 * Supported equivalent terminology uses the current JD's preferred wording.
 * Unsupported JD terminology is reported as a gap rather than inserted.
-* Every supported priority-5 and priority-4 professional term appears in its strongest early experience placement.
+* Every supported user-only, model-only, and consensus keyword remains in a truthful authorized resume field; priority-5 and priority-4 professional terms appear in their strongest early bullet placements.
+* No protected keyword disappeared for brevity, stylistic variation, synonym substitution, related-tool overlap, or Skills regrouping.
+* Every safety-driven protected-keyword removal is explained in `Repair Strategy`.
 * No keyword-analysis, coverage, priority, or audit metadata key was added to the corrected resume JSON.
 * Every repaired bullet reads naturally as standalone English and is concise.
 * Every retained or added technical skill is supported by candidate evidence.

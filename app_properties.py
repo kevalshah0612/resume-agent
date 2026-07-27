@@ -11,7 +11,7 @@ CANDIDATE_PROFILE = {
     "schema_version": "candidate_profile_v1",
     "candidate": {
         "name": "Keval Shah",
-        "location": "New York, NY",
+        "location": "San Francisco, California",
         "phone": "(607) 235-1181",
         "email": "keval.shah098@gmail.com",
     },

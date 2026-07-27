@@ -51,7 +51,7 @@ The following configuration is immutable. Select the configuration matching `JD_
         "GHI": 2
       },
       "project_count": 2,
-      "project_bullets_each": 2
+      "project_bullets_each": 1
     }
   },
   "evidence_policy": {
@@ -313,7 +313,7 @@ Return exactly one JSON object with this complete shape and key order:
 - `truthful_resume_terms`: Only words that the selected story or current DES directly supports.
 - `placement`: The single primary destination for the requirement.
 - `experience_plan`: Must contain every configured role in exact display order and every configured bullet slot.
-- `project_plan`: Must contain exactly the configured number of projects, and every project must contain exactly two locked bullet slots.
+- `project_plan`: Must contain exactly the configured number of projects and configured bullets per project. Entry modes use two locked bullet slots per project; `mid_swe` uses one.
 - `allowed_fact_fragments`: Carry only the smallest coherent story-local action, system, method, and result or scope group needed for that slot. Use faithful compact fragments, not vague labels, and do not copy unrelated facts from the same story.
 - `allowed_metrics`: Select at most one performance outcome that best proves the slot's strongest central JD requirement. A before-and-after comparison is one outcome even though it contains two values. You may additionally carry at most one essential scope value, such as users, records, transactions, applications, or releases, only when that scale materially strengthens the JD match. Do not carry a second speed, latency, throughput, quality, reliability, accuracy, efficiency, cost, delivery, or reduction outcome. Do not carry every available number from the story.
 - `skills_plan`: Maximum five nonempty categories. Every term must be current-JD-relevant and evidence-supported.
@@ -328,9 +328,24 @@ Treat Prompt 1's `keyword_signals` and per-requirement priority metadata as rank
 
 1. Preserve the independently derived model keywords even when the user supplies no keyword report.
 2. Preserve only user terms Prompt 1 matched to the current JD. Do not recover ignored scanner headings, explanations, scores, percentages, counts, ratios, or unrelated terms from `CURRENT INITIAL DES`.
-3. Map `user_and_model` consensus requirements before otherwise equal model-only or user-only requirements. A consensus boost breaks priority ties and raises attention; it does not override a stronger JD-requiredness tier, a literal AND/OR rule, story strength, or truth.
-4. Use the exact concise JD wording when the selected story directly supports the same meaning. Use truthful close wording when it does not.
-5. Do not create duplicate placements merely because singular, plural, acronym, expanded, or case variants appeared in the user report.
+3. Treat all JD-valid keywords pasted from JobAlytics, Simplify, or other reports as one normalized user set. The scanner's match, missing, high, low, checked, or unchecked state has no evidentiary meaning and must not affect mapping.
+4. Map `user_and_model` consensus requirements before otherwise equal model-only or user-only requirements. A consensus boost breaks priority ties and raises attention; it does not override a stronger JD-requiredness tier, a literal AND/OR rule, story strength, or truth.
+5. Use the exact concise JD wording when the selected story directly supports the same meaning. Use truthful close wording when it does not.
+6. Do not create duplicate placements merely because singular, plural, acronym, expanded, or case variants appeared in the user report.
+
+The complete keyword-resolution inventory is the normalized union of Prompt 1's user and model keyword sets. Process every retained keyword, not only consensus, priority-5, or priority-4 terms. Priority determines search and placement order; it never permits a valid keyword to disappear without an evidence resolution.
+
+Every inventory term must receive one traceable outcome through the existing requirement evidence, DES, placement, skills plan, and coverage fields:
+
+- exact story evidence,
+- truthful close or canonical-equivalent story evidence,
+- prepared DES confirmation,
+- project-only evidence,
+- skills-only evidence,
+- context-only treatment,
+- excluded or genuine evidence gap.
+
+Do not add a new output key for this ledger. Represent it through the existing contract, and ensure that no user-only, model-only, or consensus keyword is left without a requirement/member and evidence outcome.
 
 Before finalizing bullet slots, internally rank recruiter-searchable terms from Prompt 1's priority-5 and priority-4 requirements:
 
@@ -360,10 +375,11 @@ For `all_of` and `combined_stack` groups:
 
 For nontechnical requirements, including behavioral competencies, responsibilities, methodologies, business processes, and soft skills:
 
-- Treat the requirement as approved by default for mapping and do not create DES.
-- Add its requirement ID to `auto_approved_nontechnical_requirement_ids`.
-- Place the exact concise JD wording with high confidence only when a selected story explicitly supports the same behavior or responsibility.
-- When evidence is only close, use the truthful close phrasing. When no evidence exists, leave it `context_only`; default approval never invents compliance, risk, ownership, leadership, domain, or other factual experience.
+- Add a requirement ID to `auto_approved_nontechnical_requirement_ids` only when a selected story directly supports the same behavior or responsibility without further confirmation.
+- Place the exact concise JD wording with high confidence only when a selected story explicitly supports the same meaning.
+- When evidence is close and a role-local confirmation could establish a material keyword such as problem solving, collaboration, mentoring, onboarding, transformation, refactoring, product delivery, or technical leadership, prepare an evidence-confirmation DES tied to that same story and placement.
+- Ask for the concrete action or example, not a self-rating or unsupported yes/no claim.
+- When no plausible story-local confirmation exists, leave the term `context_only` or excluded as a genuine evidence gap; never invent compliance, risk, ownership, leadership, domain, or other factual experience.
 - Bind every placed nontechnical term to one selected story and one coherent achievement like every other claim.
 
 ## Core Evidence Rule
@@ -489,7 +505,9 @@ Plan exactly:
 - TCS SWE I: 2 bullets
 - TA: 1 bullet
 - GHI: 2 bullets
-- Projects: 2, with 2 bullets each
+- Projects: 2, with 1 bullet each
+
+The one-bullet project rule applies only to `mid_swe`, where TCS remains split into `TCS_SWE_II` and `TCS_SWE_I`. It does not apply to `entry_aiml`; the `TCS_COMBINED` mode keeps 3 projects with 2 bullets each.
 
 ## Role and Story Boundary
 
@@ -502,6 +520,30 @@ Apply these source boundaries before judging JD fit:
 - Never place a TCS story under TA or GHI, never place a TA or GHI story under TCS, and never move project evidence into Professional Experience.
 
 These are evidence-origin boundaries, not ranking preferences. If an exact JD match is unavailable inside a role's eligible inventory, select the strongest truthful adjacent story from that same eligible inventory. Never cross an employer boundary merely to fill a configured slot.
+
+## Candidate-Specific AI Chronology and Provenance Boundary
+
+Treat the candidate's dated work chronology as an evidence constraint, not merely a display detail:
+
+- TCS: Mar 2021 through Dec 2024.
+- GHI: May 2025 through Jun 2025.
+- TA: Aug 2025 through Present.
+- Personal projects: project evidence only.
+
+For this candidate, TCS may prove transferable, period-appropriate engineering work such as APIs, distributed systems, automation, data processing, search infrastructure, observability, testing, and platform development. Those concepts may be truthful close evidence for a general software-engineering requirement. `AI concepts` or `machine-learning concepts` may appear under TCS only as clearly labeled conceptual exposure when a TCS story or a narrowly scoped, chronology-safe DES explicitly confirms that exposure. Never convert conceptual exposure into a claim that Keval built, trained, customized, evaluated, integrated, served, operated, or launched an AI/ML system at TCS.
+
+Do not map generative-AI, LLM, AI-agent, agentic-development, RAG, embedding, vector-search, prompt-engineering, chatbot, dialog-engine, conversational-AI, model-training, model-customization, model-evaluation, model-serving, LLM-observability, prompt-metric, or conversation-analytics implementation work to a TCS story. The current TCS inventory does not gain any of these claims from adjacent APIs, file ingestion, Kafka, Redis, notifications, telemetry, dashboards, testing, CI/CD, full-cycle development, or conceptual AI/ML exposure.
+
+When a JD requirement belongs to a generative, conversational, agentic, or model-development system, keep its component requirements inside the same AI provenance boundary. For example, Slack, Microsoft Teams, web-chat integration, real-time notifications, dialog optimization, tracing, and analytics are AI-development evidence when the JD asks for them as parts of an AI assistant or conversational platform. Do not detach those components from the AI system and use generic TCS APIs, notifications, dashboards, or observability as a speculative TCS DES anchor.
+
+Map AI and ML implementation evidence to `GHI-*`, `TA-*`, or `PROJ-*` stories according to directness:
+
+1. Prefer direct story evidence, such as `GHI-04` for machine-learning prediction work, `GHI-05` or `TA-01` for verified AI-assisted development, and the appropriate `PROJ-*` story for generative-AI, agent, RAG, embedding, conversational, or model-related project work.
+2. If the exact AI term is missing, choose the closest semantically related GHI, TA, or project story before considering generic older infrastructure.
+3. Create DES only against that same plausible GHI, TA, or project provenance.
+4. If no plausible GHI, TA, or project confirmation exists, use truthful non-AI close wording or classify the AI-specific requirement as context-only, excluded, or a genuine gap.
+
+Historical product availability, broad conceptual similarity, or a user's bare DES approval never authorizes moving later AI work into TCS. A TCS safe fallback may use verified general engineering work or explicitly verified AI/ML conceptual exposure, but it must not imply that the TCS system supported models, agents, prompts, chat, or conversations.
 
 ## Exact Slot Planning
 
@@ -555,7 +597,7 @@ Use this precedence:
 
 Professional or academic experience preference is only a tie-breaker between evidence of the same strength. Never select close professional evidence over direct project evidence for the same requirement. When a project directly proves an important requirement and every eligible experience story is only close, map the requirement to that project and do not create DES merely to force it into experience.
 
-Tool availability does not prove candidate usage. Never attach a named tool, AI-assisted practice, metric, or result to an employer or dated role unless that role's story or an explicitly approved role-local DES proves it. A story that proves code review, testing, CI/CD, or the full development cycle is not direct evidence of AI-assisted software development.
+Tool availability does not prove candidate usage. Never attach a named tool, AI-assisted practice, metric, or result to an employer or dated role unless that role's story proves it or a chronology-eligible role-local DES explicitly confirms it. A story that proves code review, testing, CI/CD, or the full development cycle is not direct evidence of AI-assisted software development. The Candidate-Specific AI Chronology and Provenance Boundary overrides generic role-local DES eligibility.
 
 ## Prime Technology Placement
 
@@ -596,13 +638,18 @@ Behavioral competencies and responsibilities should normally be demonstrated thr
 
 Create DES only when all conditions are true:
 
-1. The requirement is an important named technology or concrete technical practice with final priority 4 or 5, including a base-priority-3 term raised to 4 by valid user-and-model consensus.
-2. The exact named technology or technical practice is not directly established anywhere in the entire story bank.
+1. The requirement is a retained JD-valid keyword or requirement whose exact material meaning is not directly established anywhere in the entire story bank. This may be a named technology, concrete technical practice, methodology, domain term, responsibility, or behavioral term that requires a concrete role-local example.
+2. The keyword is intended for resume targeting rather than eligibility-only or company-context use. Priority controls question order but creates no P4/P5 cutoff.
 3. A close story exists in the same role or project where the approved fact would be placed.
 4. A short user confirmation could truthfully establish the exact term for that specific role or project.
 5. For an OR group, the question helps reach the two-member presentation target without exceeding three selected members; for an AND or combined-stack group, it addresses a genuinely missing required member.
+6. The proposed story and placement satisfy the Candidate-Specific AI Chronology and Provenance Boundary.
 
-Never create DES for nontechnical requirements; those follow the default-approval evidence rule above. Do not create DES when any story already directly proves the requirement. Do not attach a DES to an older or unrelated role merely because that role proves an adjacent process. Named examples in a DES question must be plausible for the role, but plausibility or product availability never substitutes for confirmation of actual candidate use.
+Do not create DES when any story already directly proves the requirement. Do not create filler questions for eligibility-only, company-context, duplicate canonical, or clearly implausible terms. Do not attach a DES to an older or unrelated role merely because that role proves an adjacent process. Named examples in a DES question must be plausible for the role, but plausibility or product availability never substitutes for confirmation of actual candidate use.
+
+For a technical DES, ask whether the exact technology or practice was used and what it did in the named role or project. For a nontechnical evidence-confirmation DES, ask for the concrete action that demonstrates the exact responsibility or behavior. A bare approval never authorizes invented mechanisms, metrics, ownership, or outcomes beyond the prepared story-local branch.
+
+Never create a TCS DES for generative AI, LLMs, AI agents, agentic development, RAG, embeddings, vector search, prompt engineering, chatbots, conversational AI, dialog engines, model development, or AI-specific observability and analytics. This prohibition also covers Slack, Microsoft Teams, web chat, notifications, tracing, and analytics when the JD frames them as components of an AI assistant, agent, or conversational platform. A TCS DES may confirm only narrowly worded, period-appropriate AI or machine-learning conceptual exposure, with no model, agent, product feature, development, launch, or production claim. Map all AI/ML implementation requirements to direct or close `GHI-*`, `TA-*`, or `PROJ-*` evidence; if none is plausible, record the gap without asking a speculative TCS implementation question.
 
 Every DES question must contain:
 
@@ -755,7 +802,7 @@ Before returning JSON, silently verify:
 4. `story_scan` reports every story ID discovered in the current `story.md` exactly once and confirms that every story was considered before selection.
 5. `experience_plan` contains every configured role in exact display order.
 6. Every configured experience slot exists exactly once.
-7. Project count exactly matches the resolved configuration and every project has exactly two planned bullet slots.
+7. Project count and per-project bullet slots exactly match the resolved configuration: two slots for each entry-mode project and one slot for each `mid_swe` project.
 8. Every selected story ID exists in `story.md`.
 9. Every selected story obeys the Role and Story Boundary; TCS stories never appear under TA or GHI.
 10. Every slot is bound to one nonempty story ID.
@@ -788,11 +835,15 @@ Before returning JSON, silently verify:
 37. Every OR group preserves literal satisfaction, targets two supported members, caps selection at three, and never invents a second member.
 38. Every AND and combined-stack member is evaluated independently.
 39. Every DES states its logic metadata, priority source, consensus boost, current supported members, and exact approved placement.
-40. No nontechnical requirement creates DES; supported nontechnical terms are default-approved and story-bound, while unsupported ones remain context-only.
+40. Directly supported nontechnical terms are default-approved and story-bound; unresolved material nontechnical terms receive a story-local evidence-confirmation DES only when a concrete confirmation is plausible, otherwise they remain context-only or excluded.
 41. Every evidence-authorized priority-5 term with professional proof is assigned to the earliest coherent experience placement, normally bullet 1.
 42. Remaining evidence-authorized priority-5 and priority-4 professional terms are assigned before lower-priority terms, normally within the first two bullets.
 43. Every prioritized exact JD term is present in its destination slot allowlist or approved DES branch.
 44. Project-only and unsupported priority terms are never forced into Professional Experience.
+45. Every normalized user keyword and model keyword has a requirement/member and exactly one traceable evidence, DES, context-only, or excluded resolution.
+46. No scanner match, missing, high, low, checked, or unchecked state was treated as candidate evidence or final-resume coverage.
+47. No AI-development requirement or AI-system component uses a TCS story as its DES anchor, approved placement, or AI-implying fallback.
+48. Machine-learning and AI implementation evidence is mapped to direct GHI, TA, or project provenance, while any TCS AI/ML wording is limited to explicitly verified conceptual exposure.
 
 If any check fails, correct it silently before returning the object.
 

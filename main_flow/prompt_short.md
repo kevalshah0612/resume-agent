@@ -42,7 +42,7 @@ Additional strict controls:
 - TA must never be written under Education
 - `education.ta_bullet` must always be empty
 - If TA is used, it must be a Professional Experience object
-- Header must be: `Target Role | New York, NY | relocation/work-location signal`
+- Header must be `Target Role | target location`; when target location is empty, use `Target Role | San Francisco, California`. Never add `Moving to`, `Open to relocate`, or a second location.
 - Contact field must contain `\n` between role/location line and contact details line
 - Top two bullets of every experience must be strongest JD signals and different proof types
 - Cross-stack bullets must describe one connected workflow, not a tool list

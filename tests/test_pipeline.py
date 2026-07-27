@@ -161,11 +161,15 @@ class PromptProfileTests(unittest.TestCase):
         self.assertIn("Exact JD Alignment Anchor Planning", mapper)
         self.assertIn("two or three distinct, evidence-supported action intents", mapper)
         self.assertIn("Preferred opening verbs are unique", mapper)
+        self.assertIn("Candidate-Specific AI Chronology and Provenance Boundary", mapper)
+        self.assertIn("Never create a TCS DES for generative AI", mapper)
+        self.assertIn("Map AI and ML implementation requirements", mapper_controller)
         self.assertIn("Exact JD Alignment Anchor", composer)
         self.assertIn("Never repeat an opening verb", composer)
         self.assertIn("Draft and validate exactly one bullet at a time", composer)
         self.assertIn("reject and rewrite every bullet above 24 words", composer)
         self.assertIn("Do not open a project result bullet with `Self-tested`", composer)
+        self.assertIn("candidate-specific AI chronology boundary", composer)
 
     def test_v1_short_controller_is_sent_to_all_three_stages(self):
         inp = pipeline.ResumeInput(
@@ -549,7 +553,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(
             mapped["contact"],
             (
-                "New York, NY | Moving to Boston, MA | "
+                "Boston, MA | "
                 "(607) 235-1181 | keval.shah098@gmail.com | "
                 "linkedin.com/in/keval-shah0612"
             ),
@@ -794,7 +798,7 @@ class PromptProfileTests(unittest.TestCase):
         self.assertEqual(mapped["config"]["prompt_profile"], "v3")
         self.assertEqual(mapped["config"]["company"], "Acme")
         self.assertIn("(607) 235-1181", mapped["contact"])
-        self.assertEqual(mapped["location"], "New York, NY | Moving to Boston, MA")
+        self.assertEqual(mapped["location"], "Boston, MA")
         self.assertEqual(mapped["professional_experience"][0]["dates"], "Oct 2022 - Dec 2024")
         self.assertEqual(mapped["projects"][0]["github_url"], "https://github.com/kevalshah0612/jobpulse")
 
@@ -804,7 +808,7 @@ class PromptProfileTests(unittest.TestCase):
             compact,
             pipeline.ResumeInput(company="Acme", title="Backend Engineer", jd="Build APIs"),
         )
-        self.assertEqual("New York, NY", mapped["location"])
+        self.assertEqual("San Francisco, California", mapped["location"])
 
 
     def test_des_facts_file_replaces_existing_request_block(self):

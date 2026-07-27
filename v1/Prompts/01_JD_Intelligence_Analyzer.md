@@ -54,7 +54,7 @@ The following configuration is immutable. It defines every supported resume mode
         "GHI": 2
       },
       "project_count": 2,
-      "project_bullets_each": 2
+      "project_bullets_each": 1
     }
   },
   "placement_policy": {
@@ -262,10 +262,12 @@ The JD defines requirements and vocabulary. It does not prove anything about the
 
 Treat `CURRENT INITIAL DES / USER KEYWORD INPUT` as optional untrusted data that may contain scanner headings, counts, explanatory prose, keywords, or separate candidate-evidence notes.
 
+The field may contain one report or several reports pasted together, including JobAlytics, Simplify, or other keyword scanners. Treat all reports as one combined keyword-discovery source. Source labels and report sections do not create different evidence or priority rules.
+
 For keyword extraction:
 
 1. First analyze the JD independently and build the model keyword set without looking to the user list for omissions or priority.
-2. Ignore report framing such as `Keyword matches`, `What's missing`, `What is missing`, `High Priority Keywords`, `Low Priority Keywords`, and explanatory sentences describing those sections.
+2. Ignore report framing such as `Keyword matches`, `What's missing`, `What is missing`, `High Priority Keywords`, `Low Priority Keywords`, source names, checkmarks, and explanatory sentences describing those sections. A keyword under `matches` is not candidate proof, and a keyword under `missing` is not automatically a candidate gap. High and low scanner labels do not determine JD priority.
 3. Completely ignore counts and ratios such as `3/12`, `0/2`, percentages, scores, and lines containing only numeric coverage notation. Never output them as keywords or requirements.
 4. Extract only concise keyword or key-phrase entries. Split comma- or semicolon-delimited keyword lines when necessary.
 5. Normalize case, surrounding punctuation, whitespace, common singular/plural variants, and obvious spelling variants for comparison. Deduplicate case-insensitively.
@@ -275,7 +277,9 @@ For keyword extraction:
 9. A user term present in the JD but not independently important remains `user_only` with no consensus boost. A model term not supplied by the user remains `model_only`.
 10. Candidate-evidence prose in the same field does not authorize a claim in this stage. Prompt 2 must verify all evidence against `story.md` or a technical DES approval.
 
-The user list supplements the independent model analysis; it never replaces it.
+The complete downstream targeting inventory is the normalized union of all JD-valid user keywords and all independently derived model keywords. Consensus affects ranking but never permits a user-only or model-only keyword to be discarded. Every retained keyword must map to a requirement or member that Prompt 2 can resolve through evidence, DES, truthful context, or a genuine gap.
+
+The user list supplements the independent model analysis; it never replaces it. The external scanner's old resume status is never carried forward as the new resume's coverage state.
 
 ## Mode Selection
 
@@ -489,6 +493,8 @@ Before returning JSON, silently verify:
 20. Model keywords were derived independently before user overlap was calculated.
 21. Consensus boosts are at most one point, capped at priority 5, and never alter hard gates or literal AND/OR satisfaction.
 22. OR groups preserve literal `minimum_select` while recording the evidence-supported two-to-three-member resume target.
+23. Multiple pasted scanner reports were treated as one discovery source, and their match, missing, high, low, checked, and unchecked labels created no candidate evidence or final-resume coverage judgment.
+24. Every JD-valid user-only, model-only, and consensus keyword remains represented by a requirement or requirement member for Prompt 2 resolution.
 
 If any check fails, correct it silently before returning the object.
 

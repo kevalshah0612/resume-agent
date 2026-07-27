@@ -163,7 +163,8 @@ Final resume JSON must preserve visible evidence and may not invent unseen Story
 
 Header/contact:
 - final `contact` must use two visual lines separated by `\n`
-- first contact line must be `[Target Role] | New York, NY | [Relocation / work-location signal]` when visible location supports New York, NY
+- first contact line must be `[Target Role] | [Header Location]`, using only the supplied target or `San Francisco, California` when no target is supplied
+- do not add `Moving to`, `Open to relocate`, or a duplicate location
 - second contact line must include phone, email, LinkedIn URL, and GitHub URL
 - do not replace GitHub URL with only `GitHub`
 
