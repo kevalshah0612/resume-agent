@@ -172,6 +172,213 @@ def read_saved_request_inputs(request_dir: Path) -> tuple[dict[str, str], str]:
     return metadata, jd_path.read_text(encoding="utf-8")
 
 
+def request_folder_candidates(parent_dir: Path) -> list[Path]:
+    """Return saved-request folders immediately inside a selected parent folder."""
+    parent_dir = Path(parent_dir)
+    if existing_request_file_for_key(parent_dir, "request") and existing_request_file_for_key(
+        parent_dir, "jd"
+    ):
+        return [parent_dir]
+    if not parent_dir.is_dir():
+        return []
+    candidates = [
+        path
+        for path in parent_dir.iterdir()
+        if path.is_dir()
+        and existing_request_file_for_key(path, "request")
+        and existing_request_file_for_key(path, "jd")
+    ]
+    return sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+class MultiRequestFolderDialog(tk.Toplevel):
+    """Select one or more saved request folders from a common parent folder."""
+
+    def __init__(self, parent: tk.Misc, *, title: str, initialdir: Path):
+        super().__init__(parent)
+        self.title(title)
+        self.geometry("940x600")
+        self.minsize(720, 420)
+        self.transient(parent.winfo_toplevel())
+        self.result: list[Path] = []
+        self.parent_dir = Path(initialdir)
+        self.row_paths: dict[str, Path] = {}
+
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1)
+
+        ttk.Label(
+            self,
+            text="Select multiple request folders with Ctrl-click or Shift-click.",
+            padding=(12, 12, 12, 4),
+        ).grid(row=0, column=0, sticky="w")
+
+        location = ttk.Frame(self, padding=(12, 4, 12, 8))
+        location.grid(row=1, column=0, sticky="ew")
+        location.columnconfigure(1, weight=1)
+        ttk.Button(location, text="Choose Parent Folder", command=self.choose_parent).grid(
+            row=0, column=0, padx=(0, 8)
+        )
+        self.parent_label = ttk.Label(location, text=str(self.parent_dir))
+        self.parent_label.grid(row=0, column=1, sticky="ew")
+
+        table_frame = ttk.Frame(self, padding=(12, 0, 12, 8))
+        table_frame.grid(row=2, column=0, sticky="nsew")
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=("folder", "company", "title", "modified"),
+            show="headings",
+            selectmode="extended",
+        )
+        for column, heading, width in (
+            ("folder", "Request Folder", 390),
+            ("company", "Company", 145),
+            ("title", "Title", 220),
+            ("modified", "Modified", 130),
+        ):
+            self.tree.heading(column, text=heading)
+            self.tree.column(column, width=width, anchor="w", stretch=True)
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.tree.bind("<<TreeviewSelect>>", self.update_selection_count)
+        self.tree.bind("<Control-a>", self.select_all)
+        self.tree.bind("<Return>", lambda _event: self.accept())
+
+        footer = ttk.Frame(self, padding=(12, 4, 12, 12))
+        footer.grid(row=3, column=0, sticky="ew")
+        footer.columnconfigure(1, weight=1)
+        ttk.Button(footer, text="Select All", command=self.select_all).grid(row=0, column=0)
+        self.selection_label = ttk.Label(footer, text="0 selected")
+        self.selection_label.grid(row=0, column=1, padx=12, sticky="w")
+        ttk.Button(footer, text="Cancel", command=self.cancel).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(footer, text="Open Selected", command=self.accept).grid(row=0, column=3)
+
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.populate()
+        self.after_idle(self._activate)
+
+    def _activate(self) -> None:
+        self.grab_set()
+        self.tree.focus_set()
+
+    def choose_parent(self) -> None:
+        selected = filedialog.askdirectory(
+            parent=self,
+            title="Choose the parent containing request folders",
+            initialdir=str(self.parent_dir),
+            mustexist=True,
+        )
+        if selected:
+            self.parent_dir = Path(selected)
+            self.populate()
+
+    def populate(self) -> None:
+        self.parent_label.config(text=str(self.parent_dir))
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self.row_paths.clear()
+        for index, request_dir in enumerate(request_folder_candidates(self.parent_dir)):
+            company = ""
+            title = ""
+            try:
+                metadata, _saved_jd = read_saved_request_inputs(request_dir)
+                company = metadata.get("company", "")
+                title = metadata.get("title", "")
+            except Exception:
+                pass
+            iid = f"request_{index}"
+            self.row_paths[iid] = request_dir
+            self.tree.insert(
+                "",
+                "end",
+                iid=iid,
+                values=(
+                    request_dir.name,
+                    company,
+                    title,
+                    datetime.fromtimestamp(request_dir.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+                ),
+            )
+        self.update_selection_count()
+
+    def select_all(self, _event=None):
+        children = self.tree.get_children()
+        if children:
+            self.tree.selection_set(children)
+        return "break"
+
+    def update_selection_count(self, _event=None) -> None:
+        self.selection_label.config(text=f"{len(self.tree.selection())} selected")
+
+    def accept(self) -> None:
+        selected = set(self.tree.selection())
+        if not selected:
+            messagebox.showwarning(
+                "Select request folders",
+                "Select at least one request folder.",
+                parent=self,
+            )
+            return
+        self.result = [
+            self.row_paths[iid]
+            for iid in self.tree.get_children()
+            if iid in selected
+        ]
+        self.destroy()
+
+    def cancel(self) -> None:
+        self.result = []
+        self.destroy()
+
+
+def select_request_folders(
+    parent: tk.Misc,
+    *,
+    title: str,
+    initialdir: Path,
+) -> list[Path]:
+    dialog = MultiRequestFolderDialog(parent, title=title, initialdir=initialdir)
+    parent.wait_window(dialog)
+    return dialog.result
+
+
+def open_request_folders_in_new_tabs(
+    app: "ResumeApp",
+    request_dirs: list[Path],
+    *,
+    rerun: bool,
+) -> tuple[list["JobTab"], list[tuple[Path, str]]]:
+    """Load every selected request into a separate new tab."""
+    opened: list[JobTab] = []
+    failures: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for selected in request_dirs:
+        request_dir = Path(selected)
+        identity = str(request_dir.resolve()).casefold()
+        if identity in seen:
+            continue
+        seen.add(identity)
+        try:
+            read_saved_request_inputs(request_dir)
+            tab = app.add_tab()
+            try:
+                if rerun:
+                    tab.load_rerun_request(request_dir)
+                else:
+                    tab.load_request(request_dir)
+            except Exception:
+                app.remove_tab(tab)
+                raise
+            opened.append(tab)
+        except Exception as exc:
+            failures.append((request_dir, str(exc)))
+    return opened, failures
+
+
 def saved_setting_enabled(value: str, default: bool = True) -> bool:
     normalized = str(value or "").strip().lower()
     if not normalized:
@@ -698,19 +905,21 @@ class JobTab(ttk.Frame):
         if is_v1_style_profile(prompt_profile):
             self.words.master.grid()
             self.des.master.grid()
-            self.des.field_label.config(text="DES / Existing Evidence")
+            self.des.field_label.config(text="DES / Keywords / Existing Evidence")
             self.words.field_label.config(text="Location")
-            self.pass1_btn.config(text="Analyze + Map")
-            self.pass1_btn.grid()
-            self.auto_btn.config(text="Auto")
-            self.auto_btn.grid()
-            self.refresh_v1_mapping_actions()
-            self.json_btn.grid()
-            self.json_btn.config(text="Compose")
-            self.validate_btn.grid()
+            self.pass1_btn.config(text="Analyze")
+            self.pass1_btn.grid(row=0, column=0, padx=(0, 6))
+            self.approve_des_btn.config(text="Auto DES")
+            self.approve_des_btn.grid(row=0, column=1, padx=(0, 6))
+            self.auto_btn.config(text="Auto Compose")
+            self.auto_btn.grid(row=0, column=2, padx=(0, 6))
+            self.json_btn.config(text="Auto Opt")
+            self.json_btn.grid(row=0, column=3, padx=(0, 6))
+            self.validate_btn.grid_remove()
             self.recruiter_btn.grid_remove()
             self.final_qa_btn.grid_remove()
             self.questions_btn.grid()
+            self.approval.field_label.config(text="DES Approval - edit IDs before composing")
             self.approval.master.grid()
             self.app_questions.master.grid()
             self.link.master.grid()
@@ -733,6 +942,7 @@ class JobTab(ttk.Frame):
             self.questions_btn.grid()
             self.json_btn.config(text="Prompt")
             self.recruiter_btn.config(text="Hotdog", command=self.on_recruiter_review)
+            self.approval.field_label.config(text="DES Approval: 1 to 4, optional explanation")
             self.approval.master.grid()
             if self.text_value(self.approval).lower() in {"approved:", "approved", "confirm", "confirm:"}:
                 self.approval.delete("1.0", "end")
@@ -760,6 +970,7 @@ class JobTab(ttk.Frame):
             self.pdf_btn.grid()
             self.json_btn.config(text="Generate JSON")
             self.recruiter_btn.config(text="Recruiter", command=self.on_recruiter_review)
+            self.approval.field_label.config(text="DES Approval: 1 to 4, optional explanation")
             self.approval.master.grid()
             self.app_questions.master.grid()
             self.link.master.grid_remove()
@@ -769,9 +980,13 @@ class JobTab(ttk.Frame):
             self.resume_map_btn.grid_remove()
             return
         self.resume_map_btn.grid_remove()
-        self.approve_des_btn.grid_remove()
-        self.auto_btn.config(text="Auto")
-        self.auto_btn.grid()
+        self.approve_des_btn.config(text="Auto DES")
+        self.approve_des_btn.grid(row=0, column=1, padx=(0, 6))
+        self.auto_btn.config(text="Auto Compose")
+        self.auto_btn.grid(row=0, column=2, padx=(0, 6))
+        self.json_btn.config(text="Auto Opt")
+        self.json_btn.grid(row=0, column=3, padx=(0, 6))
+        self.validate_btn.grid_remove()
 
     def update_request_metadata(self, updates: dict[str, str]) -> None:
         metadata_path = self.existing_request_file("request") or self.request_file("request")
@@ -1372,7 +1587,12 @@ class JobTab(ttk.Frame):
                 })
             return self.request_dir
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.request_id = f"{slug(inp.company)}_{slug(inp.title or 'Software_Engineer')}_{stamp}"
+        base_request_id = f"{slug(inp.company)}_{slug(inp.title or 'Software_Engineer')}_{stamp}"
+        self.request_id = base_request_id
+        suffix = 2
+        while (REQUESTS_DIR / self.request_id).exists():
+            self.request_id = f"{base_request_id}_{suffix}"
+            suffix += 1
         self.request_dir = REQUESTS_DIR / self.request_id
         self.request_dir.mkdir(parents=True, exist_ok=True)
         nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
@@ -1590,7 +1810,7 @@ class JobTab(ttk.Frame):
                 )
             self.show_output(
                 "Evidence Mapping" if is_v1_style_profile(prompt_profile) else "PASS 1",
-                "Evidence Mapping complete. DES suggestions are pinned in the left panel."
+                "Analyze complete. Review DES suggestions, then click Auto DES to fill the approval box."
                 if is_v1_style_profile(prompt_profile)
                 else "PASS 1 complete. DES suggestions are pinned in the left panel.",
             )
@@ -1671,12 +1891,31 @@ class JobTab(ttk.Frame):
             self.refresh_v1_mapping_actions()
             self.show_output(
                 "Evidence Mapping",
-                "Evidence Mapping complete. Review the DES suggestions, record approval, then click Compose.",
+                "Analyze complete. Review DES suggestions, then click Auto DES to fill the approval box.",
             )
 
         run_bg(self.app, task, done)
 
     def on_generate_json(self) -> None:
+        if is_v1_style_profile(self.selected_prompt_profile()):
+            self.on_v1_auto_opt()
+            return
+        self._compose_json()
+
+    def on_v1_auto_compose(self) -> None:
+        try:
+            if not self.request_dir:
+                raise ValueError("Run Analyze first.")
+            pass1_text = self.pass1_raw or self.load_v1_pass1_bundle(self.request_dir)
+            if not pass1_text:
+                raise ValueError("Run Analyze first so the V1 evidence map exists.")
+            self.pass1_raw = pass1_text
+        except Exception as exc:
+            messagebox.showerror("Auto Compose needs Analyze", str(exc), parent=self)
+            return
+        self._compose_json()
+
+    def _compose_json(self) -> None:
         try:
             inp = self.make_input()
             request_dir = self.ensure_request_dir(inp)
@@ -1950,12 +2189,12 @@ class JobTab(ttk.Frame):
             prompt_profile = self.selected_prompt_profile()
             pass1_text = self.latest_pass1_des_text()
             if not pass1_text:
-                raise ValueError("Run PASS 1 first so DES candidates exist.")
+                raise ValueError("Run Analyze first so DES candidates exist.")
             approval = self.approve_all_des_text(pass1_text)
             if not approval:
                 raise ValueError("No DES candidates found in PASS 1 output.")
         except Exception as exc:
-            messagebox.showerror("Approved DES needs PASS 1", str(exc), parent=self)
+            messagebox.showerror("Auto DES needs Analyze", str(exc), parent=self)
             return
 
         self.pass1_raw = pass1_text
@@ -1974,28 +2213,40 @@ class JobTab(ttk.Frame):
                 pass1_text=pass1_text,
                 approval_text=approval,
             )
-        self.show_output("Approved DES", f"All DES candidates approved.\n\n{approval}")
-        self.set_stage("Approved all DES")
+        self.show_output(
+            "Auto DES",
+            "DES Approval box filled. Edit or delete IDs before Auto Compose or Auto Opt."
+            f"\n\n{approval}",
+        )
+        self.set_stage("Auto DES approval ready")
 
-    def on_v1_auto(self) -> None:
+    def on_v1_auto_opt(self) -> None:
         try:
+            if not self.request_dir:
+                raise ValueError("Run Analyze first.")
             inp = self.make_input()
-            request_dir = self.ensure_request_dir(inp)
+            request_dir = self.request_dir
+            analysis_path = request_dir / "02_jd_intelligence.json"
+            mapper_path = request_dir / "03_evidence_map.json"
+            pass1_raw = self.pass1_raw or self.load_v1_pass1_bundle(request_dir)
+            missing = [
+                path.name
+                for path in (analysis_path, mapper_path)
+                if not path.exists()
+            ]
+            if missing or not pass1_raw:
+                detail = ", ".join(missing) if missing else "V1 pass-one bundle"
+                raise ValueError(f"Run Analyze first; missing {detail}.")
+            self.pass1_raw = pass1_raw
+            approval = self.text_value(self.approval).strip() or "No DES"
+            save_text(request_dir / "04_des_approval.txt", approval)
             nvidia_model, nvidia_thinking = self.selected_nvidia_profile()
-            saved_jd_path = self.request_file("jd", request_dir)
-            saved_jd = (
-                saved_jd_path.read_text(encoding="utf-8")
-                if saved_jd_path.exists()
-                else ""
-            )
-            reuse_analysis_map = saved_jd.strip() == inp.jd.strip()
-            save_text(saved_jd_path, inp.jd)
         except Exception as exc:
-            messagebox.showerror("Auto needs input", str(exc), parent=self)
+            messagebox.showerror("Auto Opt needs Analyze", str(exc), parent=self)
             return
 
         clear_v1_post_validation_artifacts(request_dir)
-        self.set_busy(True, "Auto: preparing Analyze + Map...", cancellable=True)
+        self.set_busy(True, "Auto Opt: Compose running...", cancellable=True)
 
         def notify(message: str) -> None:
             self.app.after(0, lambda value=message: self.set_stage(value))
@@ -2008,42 +2259,9 @@ class JobTab(ttk.Frame):
 
         def task():
             events: list[CostEvent] = []
-            analysis_path = request_dir / "02_jd_intelligence.json"
-            mapper_path = request_dir / "03_evidence_map.json"
+            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+            mapper = json.loads(mapper_path.read_text(encoding="utf-8"))
 
-            if reuse_analysis_map and analysis_path.exists() and mapper_path.exists():
-                analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
-                mapper = json.loads(mapper_path.read_text(encoding="utf-8"))
-                pass1_raw = json.dumps(
-                    {
-                        "schema_version": "v1",
-                        "stage": "v1_pass1",
-                        "jd_analysis": analysis,
-                        "evidence_map": mapper,
-                    },
-                    indent=2,
-                )
-                notify("Auto: reusing Analyze + Map...")
-            else:
-                notify("Auto: Analyze + Map running...")
-                pass1_raw = asyncio.run(run_pass1(
-                    inp,
-                    cost_cb=events.append,
-                    request_label=self.request_label(inp),
-                    cancel_event=self.cancel_event,
-                    nvidia_model=nvidia_model,
-                    nvidia_thinking=nvidia_thinking,
-                    prompt_profile="v1",
-                    stage_artifact_cb=save_stage,
-                ))
-                bundle = extract_json(pass1_raw)
-                analysis = bundle["jd_analysis"]
-                mapper = bundle["evidence_map"]
-
-            approval = self.approve_all_des_text(pass1_raw) or "No DES"
-            save_text(request_dir / "04_des_approval.txt", approval)
-
-            notify("Auto: all DES approved; Compose running...")
             composer_raw = asyncio.run(run_pass2(
                 inp,
                 pass1_raw,
@@ -2060,7 +2278,7 @@ class JobTab(ttk.Frame):
             save_v1_composer_files(request_dir, composer_resume, inp, "v1")
             save_v1_resume_files(request_dir, composer_resume, inp, "v1")
 
-            notify("Auto: ATS + Optimizer running...")
+            notify("Auto Opt: ATS + Optimizer running...")
             validation_result = asyncio.run(run_v1_post_validation(
                 inp,
                 analysis,
@@ -2074,36 +2292,18 @@ class JobTab(ttk.Frame):
                 nvidia_thinking=nvidia_thinking,
                 stage_artifact_cb=save_validation,
             ))
-            return (
-                pass1_raw,
-                approval,
-                composer_raw,
-                composer_resume,
-                validation_result,
-                events,
-            )
+            return validation_result, events
 
         def done(result, err):
             if self.handle_cancelled(err):
                 return
             if err:
-                self.set_busy(False, "Auto failed")
+                self.set_busy(False, "Auto Opt failed")
                 self.refresh_output_choices()
-                messagebox.showerror("V1 Auto failed", str(err), parent=self)
+                messagebox.showerror("V1 Auto Opt failed", str(err), parent=self)
                 return
 
-            (
-                pass1_raw,
-                approval,
-                _composer_raw,
-                _composer_resume,
-                validation_result,
-                events,
-            ) = result
-            self.pass1_raw = pass1_raw
-            self.approval.delete("1.0", "end")
-            self.approval.insert("1.0", approval)
-            save_text(request_dir / "04_des_approval.txt", approval)
+            validation_result, events = result
             _compact_path, self.final_json_path = save_v1_resume_files(
                 request_dir,
                 validation_result.optimized_resume,
@@ -2116,15 +2316,15 @@ class JobTab(ttk.Frame):
             self.docx_path = None
             self.refresh_combined_02_to_07(request_dir)
             self.refresh_v1_mapping_actions()
-            self.set_busy(False, "Auto optimized resume ready")
+            self.set_busy(False, "Auto Opt resume ready")
             self.select_output_artifact("Output | Resume JSON")
-            self.set_stage(f"Auto optimized JSON: {self.final_json_path.name}")
+            self.set_stage(f"Auto Opt JSON: {self.final_json_path.name}")
 
         run_bg(self.app, task, done)
 
     def on_auto_json(self) -> None:
         if is_v1_style_profile(self.selected_prompt_profile()):
-            self.on_v1_auto()
+            self.on_v1_auto_compose()
             return
         try:
             inp = self.make_input()
@@ -2872,35 +3072,40 @@ class JobTab(ttk.Frame):
 
     def on_open_request(self) -> None:
         REQUESTS_DIR.mkdir(exist_ok=True)
-        selected = filedialog.askdirectory(
-            title="Open saved resume request",
+        selected = select_request_folders(
+            self,
+            title="Open saved resume requests",
             initialdir=str(self.request_dir.parent if self.request_dir else REQUESTS_DIR),
-            mustexist=True,
         )
         if not selected:
             return
-        try:
-            self.load_request(Path(selected))
-        except Exception as exc:
-            messagebox.showerror("Open request failed", str(exc), parent=self)
+        _opened, failures = open_request_folders_in_new_tabs(
+            self.app,
+            selected,
+            rerun=False,
+        )
+        if failures:
+            details = "\n".join(f"- {path.name}: {error}" for path, error in failures)
+            messagebox.showerror("Some requests could not be opened", details, parent=self)
 
 
     def on_load_rerun(self) -> None:
         REQUESTS_DIR.mkdir(exist_ok=True)
-        selected = filedialog.askdirectory(
-            title="Load saved inputs into a new re-run request",
+        selected = select_request_folders(
+            self,
+            title="Load saved inputs into new re-run tabs",
             initialdir=str(self.request_dir.parent if self.request_dir else REQUESTS_DIR),
-            mustexist=True,
         )
         if not selected:
             return
-        source_dir = Path(selected)
-        try:
-            read_saved_request_inputs(source_dir)
-            rerun_tab = self.app.add_tab()
-            rerun_tab.load_rerun_request(source_dir)
-        except Exception as exc:
-            messagebox.showerror("Load re-run failed", str(exc), parent=self)
+        _opened, failures = open_request_folders_in_new_tabs(
+            self.app,
+            selected,
+            rerun=True,
+        )
+        if failures:
+            details = "\n".join(f"- {path.name}: {error}" for path, error in failures)
+            messagebox.showerror("Some re-runs could not be loaded", details, parent=self)
 
 
     def on_open_folder(self) -> None:
@@ -3319,6 +3524,15 @@ class ResumeApp(tk.Tk):
         self.notebook.select(tab)
         self.update_tab_status(tab)
         return tab
+
+    def remove_tab(self, tab: JobTab) -> None:
+        """Remove a specific tab created for a load operation that failed."""
+        iid = str(tab)
+        if self.status_tree.exists(iid):
+            self.status_tree.delete(iid)
+        if iid in self.notebook.tabs():
+            self.notebook.forget(tab)
+        tab.destroy()
 
     def rename_current_tab(self, name: str) -> None:
         tab_id = self.notebook.select()

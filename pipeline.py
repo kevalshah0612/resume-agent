@@ -72,7 +72,15 @@ DEFAULT_NVIDIA_SEED = 42
 DEFAULT_NVIDIA_VALIDATOR_SEED = 43
 DEFAULT_NVIDIA_REASONING_BUDGET = 32768
 DEFAULT_RESPONSE_MAX_TOKENS = 65536
-WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR = "Worker local total request limit reached"
+
+# V1 stage budgets use the measured 50-request median plus 30% headroom,
+# rounded upward to a 1,024-token boundary. The response-token window remains
+# unchanged so these reasoning limits do not constrain the final JSON output.
+V1_REASONING_BUDGET_JD = 4096
+V1_REASONING_BUDGET_EVIDENCE = 8192
+V1_REASONING_BUDGET_COMPOSER = 20480
+V1_REASONING_BUDGET_ATS = 8192
+V1_REASONING_BUDGET_OPTIMIZER = 6144
 
 _log_cb = None
 _nvidia_gate_lock = threading.Lock()
@@ -1831,6 +1839,12 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
             "entry_aiml": (2, "aiml_entry"),
             "mid_swe": (3, "mid"),
         }[v1_mode]
+        if (
+            v1_mode in {"entry_swe", "entry_aiml"}
+            and summary_text
+            and "summary" not in section_order
+        ):
+            section_order = ["summary", *section_order]
     else:
         strategy_type = strategy_from_order(provided_experience_order, type_value)
         section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
@@ -2529,51 +2543,14 @@ async def call_model(
     return text
 
 
-def is_worker_local_total_request_limit_error(exc: Exception) -> bool:
-    """Match only the worker-local request-limit failure, including wrapped errors."""
-    pending: list[BaseException] = [exc]
-    seen: set[int] = set()
-    while pending:
-        current = pending.pop()
-        if id(current) in seen:
-            continue
-        seen.add(id(current))
-        if WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR in str(current):
-            return True
-        response = getattr(current, "response", None)
-        if response is not None:
-            try:
-                if WORKER_LOCAL_TOTAL_REQUEST_LIMIT_ERROR in str(
-                    getattr(response, "text", "") or ""
-                ):
-                    return True
-            except Exception:
-                pass
-        for nested in (current.__cause__, current.__context__):
-            if nested is not None:
-                pending.append(nested)
-    return False
-
-
 async def call_v1_stage_model(
     *,
     cancel_event: threading.Event | None = None,
     **call_kwargs: Any,
 ) -> str:
-    """Restart the active V1 stage immediately for the worker-local limit only."""
-    while True:
-        raise_if_cancelled(cancel_event)
-        try:
-            return await call_model(cancel_event=cancel_event, **call_kwargs)
-        except OperationCancelled:
-            raise
-        except Exception as exc:
-            if not is_worker_local_total_request_limit_error(exc):
-                raise
-            log(
-                f"{call_kwargs.get('label', 'V1 stage')}: "
-                "worker-local total request limit reached; restarting stage immediately."
-            )
+    """Run one V1 provider request; failures are left for a manual rerun."""
+    raise_if_cancelled(cancel_event)
+    return await call_model(cancel_event=cancel_event, **call_kwargs)
 
 
 def pass1_system(prompt_profile: str | None = None) -> list[dict[str, Any]]:
@@ -3132,6 +3109,7 @@ async def run_v1_post_validation(
             nvidia_validation_pass_override=False,
             nvidia_max_attempts_override=1,
             provider_fallback_override=False,
+            nvidia_reasoning_budget_override=V1_REASONING_BUDGET_ATS,
         )
     except Exception as exc:
         if stage_artifact_cb:
@@ -3172,6 +3150,7 @@ async def run_v1_post_validation(
             nvidia_validation_pass_override=False,
             nvidia_max_attempts_override=1,
             provider_fallback_override=False,
+            nvidia_reasoning_budget_override=V1_REASONING_BUDGET_OPTIMIZER,
         )
     except Exception as exc:
         if stage_artifact_cb:
@@ -3257,6 +3236,7 @@ async def run_v1_pass1(
             nvidia_validation_pass_override=False,
             nvidia_max_attempts_override=1,
             provider_fallback_override=False,
+            nvidia_reasoning_budget_override=V1_REASONING_BUDGET_JD,
         )
     except Exception as exc:
         if stage_artifact_cb:
@@ -3339,6 +3319,7 @@ async def run_v1_evidence_mapping(
             nvidia_validation_pass_override=False,
             nvidia_max_attempts_override=1,
             provider_fallback_override=False,
+            nvidia_reasoning_budget_override=V1_REASONING_BUDGET_EVIDENCE,
         )
     except Exception as exc:
         if stage_artifact_cb:
@@ -3403,6 +3384,7 @@ async def run_v1_pass2(
             nvidia_validation_pass_override=False,
             nvidia_max_attempts_override=1,
             provider_fallback_override=False,
+            nvidia_reasoning_budget_override=V1_REASONING_BUDGET_COMPOSER,
         )
     except Exception as exc:
         if stage_artifact_cb:

@@ -142,6 +142,62 @@ def resume_fixture(mapper):
 
 
 class V1PostValidationFlowTests(unittest.TestCase):
+    def test_v1_stage_budgets_are_median_plus_thirty_percent(self):
+        self.assertEqual(4096, pipeline.V1_REASONING_BUDGET_JD)
+        self.assertEqual(8192, pipeline.V1_REASONING_BUDGET_EVIDENCE)
+        self.assertEqual(20480, pipeline.V1_REASONING_BUDGET_COMPOSER)
+        self.assertEqual(8192, pipeline.V1_REASONING_BUDGET_ATS)
+        self.assertEqual(6144, pipeline.V1_REASONING_BUDGET_OPTIMIZER)
+
+    def test_v1_precomposition_calls_use_their_stage_budgets(self):
+        inp = pipeline.ResumeInput(
+            company="Acme",
+            title="Software Engineer",
+            jd="Build reliable Python services.",
+        )
+        with (
+            patch("pipeline.read_prompt", return_value="prompt"),
+            patch(
+                "pipeline.call_v1_stage_model",
+                new=AsyncMock(side_effect=['{"requirements": []}', '{}']),
+            ) as pass1_call,
+        ):
+            asyncio.run(pipeline.run_v1_pass1(inp))
+
+        self.assertEqual(
+            pipeline.V1_REASONING_BUDGET_JD,
+            pass1_call.await_args_list[0].kwargs["nvidia_reasoning_budget_override"],
+        )
+        self.assertEqual(
+            pipeline.V1_REASONING_BUDGET_EVIDENCE,
+            pass1_call.await_args_list[1].kwargs["nvidia_reasoning_budget_override"],
+        )
+
+        pass1_text = json.dumps({"jd_analysis": {}, "evidence_map": {}})
+        with (
+            patch("pipeline.read_prompt", return_value="prompt"),
+            patch(
+                "pipeline.call_v1_stage_model",
+                new=AsyncMock(return_value='{}'),
+            ) as composer_call,
+        ):
+            asyncio.run(pipeline.run_v1_pass2(inp, pass1_text, "No DES"))
+
+        self.assertEqual(
+            pipeline.V1_REASONING_BUDGET_COMPOSER,
+            composer_call.await_args.kwargs["nvidia_reasoning_budget_override"],
+        )
+
+    def test_v1_stage_call_does_not_retry_worker_limit(self):
+        error = RuntimeError(
+            "ResourceExhausted: Worker local total request limit reached (33/32)"
+        )
+        with patch("pipeline.call_model", new=AsyncMock(side_effect=error)) as call_mock:
+            with self.assertRaisesRegex(RuntimeError, "Worker local total request limit reached"):
+                asyncio.run(pipeline.call_v1_stage_model(label="V1 TEST"))
+
+        self.assertEqual(1, call_mock.await_count)
+
     def test_post_short_controllers_preserve_existing_v1_contract(self):
         ats_controller = pipeline.v1_post_short_controller("POST_V1_ATS_AUDIT")
         optimizer_controller = pipeline.v1_post_short_controller("POST_V1_OPTIMIZATION")
@@ -194,6 +250,14 @@ class V1PostValidationFlowTests(unittest.TestCase):
             ))
 
         self.assertEqual(2, call_mock.await_count)
+        self.assertEqual(
+            pipeline.V1_REASONING_BUDGET_ATS,
+            call_mock.await_args_list[0].kwargs["nvidia_reasoning_budget_override"],
+        )
+        self.assertEqual(
+            pipeline.V1_REASONING_BUDGET_OPTIMIZER,
+            call_mock.await_args_list[1].kwargs["nvidia_reasoning_budget_override"],
+        )
         validation_mock.assert_not_called()
         self.assertEqual(resume, result.optimized_resume)
         self.assertEqual(["ats_audit", "optimizer"], artifacts)

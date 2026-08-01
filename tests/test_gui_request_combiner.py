@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,164 @@ import gui
 
 
 class RequestCombinerTests(unittest.TestCase):
+
+    def test_request_folder_candidates_returns_valid_children_newest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            older = root / "older_request"
+            newer = root / "newer_request"
+            invalid = root / "not_a_request"
+            for request_dir in (older, newer):
+                request_dir.mkdir()
+                (request_dir / "00_request.json").write_text(
+                    '{"company":"Acme","title":"Engineer","prompt_profile":"v1"}',
+                    encoding="utf-8",
+                )
+                (request_dir / "01_job_description.txt").write_text(
+                    "Build reliable services.",
+                    encoding="utf-8",
+                )
+            invalid.mkdir()
+            older_time = older.stat().st_mtime - 10
+            newer_time = newer.stat().st_mtime + 10
+            os.utime(older, (older_time, older_time))
+            os.utime(newer, (newer_time, newer_time))
+
+            candidates = gui.request_folder_candidates(root)
+
+        self.assertEqual([newer, older], candidates)
+
+    def test_open_request_folders_creates_one_new_tab_per_folder(self):
+        class FakeTab:
+            def __init__(self):
+                self.loaded = None
+
+            def load_request(self, request_dir):
+                self.loaded = ("request", request_dir)
+
+            def load_rerun_request(self, request_dir):
+                self.loaded = ("rerun", request_dir)
+
+        class FakeApp:
+            def __init__(self):
+                self.tabs = []
+                self.removed = []
+
+            def add_tab(self):
+                tab = FakeTab()
+                self.tabs.append(tab)
+                return tab
+
+            def remove_tab(self, tab):
+                self.tabs.remove(tab)
+                self.removed.append(tab)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request_dirs = []
+            for index in range(3):
+                request_dir = root / f"request_{index}"
+                request_dir.mkdir()
+                (request_dir / "00_request.json").write_text(
+                    json.dumps({
+                        "company": f"Company {index}",
+                        "title": "Engineer",
+                        "prompt_profile": "v1",
+                    }),
+                    encoding="utf-8",
+                )
+                (request_dir / "01_job_description.txt").write_text(
+                    "Build reliable services.",
+                    encoding="utf-8",
+                )
+                request_dirs.append(request_dir)
+            app = FakeApp()
+
+            opened, failures = gui.open_request_folders_in_new_tabs(
+                app,
+                request_dirs,
+                rerun=False,
+            )
+
+        self.assertEqual([], failures)
+        self.assertEqual(3, len(opened))
+        self.assertEqual(
+            [("request", request_dir) for request_dir in request_dirs],
+            [tab.loaded for tab in opened],
+        )
+        self.assertEqual([], app.removed)
+
+    def test_open_request_folders_creates_one_rerun_tab_per_folder(self):
+        class FakeTab:
+            def __init__(self):
+                self.loaded = None
+
+            def load_request(self, request_dir):
+                self.loaded = ("request", request_dir)
+
+            def load_rerun_request(self, request_dir):
+                self.loaded = ("rerun", request_dir)
+
+        class FakeApp:
+            def __init__(self):
+                self.tabs = []
+
+            def add_tab(self):
+                tab = FakeTab()
+                self.tabs.append(tab)
+                return tab
+
+            def remove_tab(self, tab):
+                self.tabs.remove(tab)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request_dirs = []
+            for index in range(2):
+                request_dir = root / f"request_{index}"
+                request_dir.mkdir()
+                (request_dir / "00_request.json").write_text(
+                    json.dumps({
+                        "company": f"Company {index}",
+                        "title": "Engineer",
+                        "prompt_profile": "v1",
+                    }),
+                    encoding="utf-8",
+                )
+                (request_dir / "01_job_description.txt").write_text(
+                    "Build reliable services.",
+                    encoding="utf-8",
+                )
+                request_dirs.append(request_dir)
+            app = FakeApp()
+
+            opened, failures = gui.open_request_folders_in_new_tabs(
+                app,
+                request_dirs,
+                rerun=True,
+            )
+
+        self.assertEqual([], failures)
+        self.assertEqual(
+            [("rerun", request_dir) for request_dir in request_dirs],
+            [tab.loaded for tab in opened],
+        )
+
+    def test_v1_auto_des_fills_approval_with_mapper_ids_only(self):
+        pass1 = json.dumps(
+            {
+                "evidence_map": {
+                    "des_questions": [
+                        {"id": "DES001"},
+                        {"id": "DES004"},
+                    ]
+                }
+            }
+        )
+
+        approval = gui.JobTab.approve_all_des_text(None, pass1)
+
+        self.assertEqual("Approved: DES001, DES004", approval)
 
     def test_reads_v1_json_request_inputs_without_generated_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
