@@ -11,7 +11,7 @@ Strict rules:
 - Preserve employment_note exactly. Do not create, remove, or rewrite it.
 - Do not invent evidence or introduce placeholders.
 - Do not add unsupported keywords simply to improve the match score.
-- Do not rearrange TCS, GHI, TA, education, projects, skills, or sections outside the supplied render profile.
+- Do not rearrange configured experience roles, education, projects, skills, or sections outside the supplied render profile.
 - Make a final edit only when it fixes a real ATS or hiring-manager problem and is fully supported by the original source JSON.
 - Keep bullets concise for the existing one-page layout.
 - Use ASCII punctuation only. Do not use em dashes or en dashes.

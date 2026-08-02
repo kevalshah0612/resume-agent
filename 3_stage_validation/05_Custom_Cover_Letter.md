@@ -2,18 +2,7 @@
 
 ## Candidate reference for this cover letter
 
-Use these facts only when they are accurate to the current uploaded resume or final resume JSON. If there is any conflict, the current resume/final JSON controls.
-
-```text
-Name: Keval Shah
-Current location: Binghamton, NY
-Education: Completing an M.S. in Computer Science with an AI specialization at Binghamton University, GPA 4.00, expected Aug 2026
-Prior experience: 3+ years of software engineering experience at Tata Consultancy Services
-Recent U.S. experience: Software Engineer, Global Health Impact Project, New York, NY
-Teaching: Teaching Assistant for Database Systems and Object-Oriented Programming
-Core proven areas: Java, Spring Boot, REST APIs, distributed systems, CI/CD, cloud operations, observability, production debugging, React/TypeScript workflows, SQL/NoSQL, data pipelines, AI/ML and AI-tooling projects where supported by the resume
-Representative proven outcomes: reduced a Java upload workflow from 60 seconds to 10 seconds for 10,000+ users; supported 40+ production releases; reduced incident diagnosis from hours to minutes across connected applications; processed 10M+ weekly WHO health records into PostgreSQL and MongoDB pipelines; reduced reporting turnaround to 30 seconds across 150+ countries
-```
+Use only facts in the current uploaded resume or final resume JSON. The current resume/final JSON controls every identity, contact, education, experience, skill, and outcome value.
 
 ```text
 Write a cover letter for this role. Rules:
@@ -49,14 +38,14 @@ Do NOT sound like AI wrote it.
 After drafting and checking the cover letter, create one polished one-page PDF named:
 
 ```text
-Keval_Shah_[Company]_Cover_Letter.pdf
+[Configured_Resume_Stem]_[Company]_Cover_Letter.pdf
 ```
 
 Use a clean business-letter layout:
 
 ```text
-Keval Shah
-Binghamton, NY | (607) 235-1181 | keval.shah61298@gmail.com
+[Candidate name from final resume JSON]
+[Candidate contact line from final resume JSON]
 
 [Date]
 
@@ -68,7 +57,7 @@ Dear Hiring Team,
 [Three short cover-letter paragraphs]
 
 Sincerely,
-Keval Shah
+[Candidate name from final resume JSON]
 ```
 
 PDF rules:

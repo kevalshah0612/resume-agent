@@ -6,94 +6,15 @@ Every output string must use plain printable ASCII characters only. Never output
 
 ## Authoritative System Configuration
 
-The following configuration is immutable. It defines every supported resume mode and the downstream resume capacity. Use it to select exactly one mode. Do not change section order, role order, bullet counts, project counts, or summary policy.
+The separately supplied `V1 RUNTIME CONFIGURATION - AUTHORITATIVE` block is immutable. It defines every supported resume mode, downstream capacity, writing limits, and skills limits. Use it to select exactly one mode. Do not change configured section order, role order, bullet counts, project counts, or summary policy.
 
-```json
-{
-  "schema_version": "v1",
-  "supported_modes": {
-    "entry_swe": {
-      "role_family": "software_engineering",
-      "summary_enabled": false,
-      "resume_section_order": ["education", "experience", "projects", "technical_skills"],
-      "experience_search_priority": ["TA", "GHI", "TCS_SWE_II", "TCS_SWE_I"],
-      "experience_display_order": ["TA", "GHI", "TCS_SWE_II", "TCS_SWE_I"],
-      "bullet_counts": {
-        "TA": 2,
-        "GHI": 3,
-        "TCS_SWE_II": 3,
-        "TCS_SWE_I": 2
-      },
-      "project_count": 2,
-      "project_bullets_each": 2
-    },
-    "entry_aiml": {
-      "role_family": "ai_ml_engineering",
-      "summary_enabled": false,
-      "resume_section_order": ["education", "experience", "projects", "technical_skills"],
-      "experience_search_priority": ["TA", "GHI", "TCS_COMBINED"],
-      "experience_display_order": ["TA", "GHI", "TCS_COMBINED"],
-      "bullet_counts": {
-        "TA": 2,
-        "GHI": 3,
-        "TCS_COMBINED": 3
-      },
-      "project_count": 3,
-      "project_bullets_each": 2
-    },
-    "mid_swe": {
-      "role_family": "software_engineering",
-      "summary_enabled": true,
-      "resume_section_order": ["summary", "experience", "projects", "education", "technical_skills"],
-      "experience_search_priority": ["TCS_SWE_II", "TCS_SWE_I", "GHI", "TA"],
-      "experience_display_order": ["TCS_SWE_II", "TCS_SWE_I", "TA", "GHI"],
-      "bullet_counts": {
-        "TCS_SWE_II": 4,
-        "TCS_SWE_I": 2,
-        "TA": 1,
-        "GHI": 2
-      },
-      "project_count": 2,
-      "project_bullets_each": 1
-    }
-  },
-  "placement_policy": {
-    "experience_before_projects": true,
-    "projects_are_not_priority_evidence": true,
-    "prime_technology_rule": "Place the prime technology in the first bullet of the earliest-priority experience role that has exact verified evidence. If exact evidence is unavailable, place the closest truthful work there using only the technology actually supported by the story."
-  },
-  "writing_policy": {
-    "tense": "past",
-    "voice": "active",
-    "target_bullet_words": "18-22",
-    "hard_maximum_bullet_words": 24,
-    "maximum_jd_keyword_units_per_bullet": 3,
-    "em_dash_allowed": false,
-    "first_person_allowed": false,
-    "filler_allowed": false,
-    "buzzwords_allowed": false,
-    "unsupported_facts_allowed": false
-  },
-  "skills_policy": {
-    "maximum_categories": 5,
-    "empty_categories_allowed": false,
-    "duplicate_terms_allowed": false,
-    "jd_irrelevant_terms_allowed": false,
-    "unsupported_terms_allowed": false
-  },
-  "validation_policy": {
-    "quality_validation_owner": "prompt_internal_self_check",
-    "python_quality_validation": false,
-    "automatic_retry": false
-  }
-}
-```
+Projects do not displace equally direct professional or academic evidence. Place the prime technology in the first bullet of the earliest-priority configured experience role that has exact verified evidence. If exact evidence is unavailable, plan the closest truthful work using only the technology actually supported by the story.
 
 ## Downstream Keyword Capacity
 
 Extract every important JD requirement and every explicitly named technology. Do not hide or discard a JD term merely because a resume bullet has limited capacity.
 
-The later mapper and composer may intentionally place no more than three visible JD keyword units in one bullet. A JD keyword unit is one recruiter-searchable term or phrase intentionally used for alignment, including a named technology, language, framework, database, cloud service, engineering practice, technical method, or role-defining concept. A standard multiword name counts as one unit. Metrics, company names, system nouns, and ordinary action words do not count unless the JD uses them as a specific searchable requirement.
+The later mapper and composer may intentionally place no more than the runtime-configured maximum number of visible JD keyword units in one bullet. A JD keyword unit is one recruiter-searchable term or phrase intentionally used for alignment, including a named technology, language, framework, database, cloud service, engineering practice, technical method, or role-defining concept. A standard multiword name counts as one unit. Metrics, company names, system nouns, and ordinary action words do not count unless the JD uses them as a specific searchable requirement.
 
 Your responsibility is to keep requirements atomic, prioritized, and independently placeable so later stages can distribute them across bullets instead of stuffing several requirements into one sentence. Do not merge separate technologies or requirements into a synthetic combined keyword.
 
@@ -486,7 +407,7 @@ Before returning JSON, silently verify:
 13. Long JD sentences are not used as concise terms.
 14. Action intents do not assert candidate experience.
 15. Empty arrays remain present.
-16. The writing policy targets 18 to 22 words and never permits more than 24 words in a final bullet.
+16. The downstream writing policy uses the runtime target word range and never permits more than the runtime hard maximum in a final bullet.
 17. Every output string uses plain printable ASCII characters only and contains no Unicode or arrow/comparator shorthand.
 18. Scanner headings, explanations, scores, percentages, counts, and ratios were excluded from keyword signals.
 19. User keywords were normalized, deduplicated, and retained only when present in or faithfully equivalent to the JD.

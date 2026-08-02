@@ -60,76 +60,13 @@ When artifacts disagree, report the disagreement. Do not silently choose the ver
 
 ## V1 compact resume contract
 
-The top-level keys must be exactly, and in this order:
+Apply `schema_contract` from the runtime configuration exactly, including top-level and nested key order. No `config`, `section_order`, `experience_order`, `education`, `gpa`, contact fields, `professional_experience`, validation report, or renderer metadata belongs in this compact object. The runtime supplies the configured verified GPA only when the selected mode enables it.
 
-1. `type`
-2. `summary`
-3. `coursework`
-4. `experience`
-5. `projects`
-6. `technical_skills`
-7. `bullet_checks`
-
-No `config`, `section_order`, `experience_order`, `education`, `gpa`, contact fields, `professional_experience`, validation report, or renderer metadata belongs in this compact object. The runtime renders the verified `GPA: 4.00/4.00` for entry modes only.
-
-Every experience object must contain exactly:
-
-1. `id`
-2. `title`
-3. `company`
-4. `location`
-5. `dates`
-6. `bullets`
-
-Every project object must contain exactly:
-
-1. `story_id`
-2. `name`
-3. `tech`
-4. `bullets`
-
-Every technical-skills object must contain exactly:
-
-1. `category`
-2. `skills`
-
-Every bullet-check object must contain exactly:
-
-1. `ref`
-2. `story_id`
-3. `requirement_id`
-4. `alignment`
-5. `word_count`
-6. `questions_answered`
-
-Use the following immutable mode rules:
-
-### `entry_swe`
-
-* Summary is an empty string.
-* Coursework contains two to four exact transcript-verified graduate course titles, preferring the smallest set that directly supports central JD requirements.
-* Experience order and bullet counts: `TA` 2, `GHI` 3, `TCS_SWE_II` 3, `TCS_SWE_I` 2.
-* Exactly two projects, with exactly two bullets per project.
-
-### `entry_aiml`
-
-* Summary is an empty string.
-* Coursework contains two to four exact transcript-verified graduate course titles, preferring the smallest set that directly supports central JD requirements.
-* Experience order and bullet counts: `TA` 2, `GHI` 3, `TCS_COMBINED` 3.
-* Exactly three projects, with exactly two bullets per project.
-
-### `mid_swe`
-
-* Summary is present and no more than 40 words, using only `MAPPER_PLAN_JSON.summary_plan`.
-* Coursework is exactly an empty array and must not be rendered.
-* Experience order and bullet counts: `TCS_SWE_II` 4, `TCS_SWE_I` 2, `TA` 1, `GHI` 2.
-* Exactly two projects, with exactly one bullet per project.
-
-The one-bullet project rule applies only to `mid_swe` with split TCS roles. `entry_aiml` with `TCS_COMBINED` retains exactly two bullets per project.
+Use the immutable selected-mode configuration exactly: summary behavior and maximum, coursework visibility, experience order, experience bullet counts, project count, and project-bullet count.
 
 Every experience and project bullet must have one corresponding `bullet_checks` entry in the same order. The check's `ref`, `story_id`, requirement, alignment, word count, and answered-question labels must agree with the final bullet and mapper slot.
 
-The only verified coursework titles are: `Database Systems`, `Programming Languages`, `Design and Analysis of Computer Algorithms`, `Programming Systems and Tools`, `Introduction to Machine Learning`, `Programming for the Web`, `Systems Programming`, `Introduction to Computer Vision`, `Introduction to Artificial Intelligence`, and `Natural Language Processing`. For entry modes, flag unverified, weakly related, excessive, or keyword-stuffed selections. Prefer two or three courses and allow four only when each supports a distinct central JD requirement.
+The only verified coursework titles are those in runtime `verified_coursework`. When coursework is enabled, enforce runtime `coursework_selection` and flag unverified, weakly related, excessive, or keyword-stuffed selections.
 
 ## Audit objective
 
@@ -161,7 +98,7 @@ Audit metrics by meaning, not by counting numeric tokens.
 * One before-and-after comparison is one performance outcome even though it contains two values.
 * A performance outcome includes speed, latency, throughput, quality, reliability, accuracy, efficiency, cost, delivery time, failure reduction, or another measured change.
 * A scope value describes scale, such as users, records, transactions, applications, teams, prompts, or releases.
-* Each bullet may contain at most one performance outcome and, only when it materially strengthens the central JD match, one essential scope value.
+* Each bullet must obey the runtime maximum for performance outcomes and essential scope values; include scope only when it materially strengthens the central JD match.
 * A technical label such as `OAuth 2.0` or `p95` is not a separate performance outcome.
 * When multiple verified performance outcomes exist, identify the one that best proves the bullet's strongest central JD requirement. Prefer direct relevance, evidentiary strength, recruiter clarity, and distinctness from other bullets.
 * Flag stacked performance outcomes as a recruiter-readability problem and instruct the Optimizer which single outcome to retain.
@@ -182,7 +119,7 @@ Check:
 * configured experience order and counts,
 * selected project IDs, order, and counts,
 * immutable experience identity values,
-* Technical Skills object shape and maximum five nonempty categories,
+* Technical Skills object shape and runtime maximum for nonempty categories,
 * one bullet check per bullet in exact order,
 * correct `ref` and story ID for every mapper slot,
 * correct word counts,
@@ -425,7 +362,7 @@ For each provide:
 
 Suggested wording is allowed only when every word is supported by the same selected mapper slot or approved DES branch.
 
-Every bullet-level fix must name the single performance outcome to retain, identify secondary performance outcomes to omit when present, preserve at most one essential scope value, and avoid prescribing one repeated sentence formula. Do not direct the Optimizer to append all mapper-authorized metrics.
+Every bullet-level fix must identify the performance outcome or outcomes to retain within the runtime limit, identify secondary performance outcomes to omit when present, preserve only the runtime-allowed essential scope values, and avoid prescribing one repeated sentence formula. Do not direct the Optimizer to append all mapper-authorized metrics.
 
 ## Requires Remapping or User Verification
 
@@ -478,7 +415,7 @@ Before returning the report, silently verify:
 * Directly supported nontechnical requirements required no DES; any prepared nontechnical evidence-confirmation DES received credit only after explicit approval and only in its story-bound placement.
 * Skills-only evidence received limited credit.
 * Every schema claim follows the V1 compact contract.
-* Coursework is minimal, transcript-verified, directly JD-relevant, and present only for entry-level modes.
+* Coursework is minimal, transcript-verified, directly JD-relevant, and obeys the selected runtime mode's visibility and selection configuration.
 * The report and every quoted or suggested resume string use plain printable ASCII characters only.
 * Every bullet-check claim was compared with the actual final bullet.
 * The total score is mathematically correct.

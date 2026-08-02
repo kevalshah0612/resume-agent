@@ -10,7 +10,7 @@ Strict rules:
 - Preserve identity/contact fields, role identities and array order, employment_note values, project identities/order, education identities/order, skill-row labels, and renderer-defined output order.
 - Preserve employment_note exactly. Do not create, remove, or rewrite it.
 - Do not add, remove, merge, or move a role, project, education item, skill row, or bullet.
-- Do not move evidence between TCS, GHI, TA, projects, or education.
+- Do not move evidence between configured experience roles, projects, or education.
 - Never invent metrics, tools, frameworks, users, domains, dates, titles, responsibilities, or outcomes.
 - Never output `[FILL IN]`, TBD, TODO, optional language, or realistic guesses.
 - Include a JD keyword only when the source JSON already contains defensible evidence for it.

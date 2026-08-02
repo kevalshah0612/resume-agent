@@ -69,100 +69,11 @@ Do not return:
 
 ## Authoritative V1 compact schema
 
-The output top-level keys must be exactly, and in this order:
-
-1. `type`
-2. `summary`
-3. `coursework`
-4. `experience`
-5. `projects`
-6. `technical_skills`
-7. `bullet_checks`
-
-Do not preserve invalid extra keys from the current JSON. Normalize the result to this contract.
-
-Do not add `config`, `section_order`, `experience_order`, `education`, `gpa`, contact information, `professional_experience`, status, coverage, reasoning, repairs, or renderer metadata. The runtime renders the verified `GPA: 4.00/4.00` for entry modes only.
-
-Every experience object must contain exactly these keys in this order:
-
-1. `id`
-2. `title`
-3. `company`
-4. `location`
-5. `dates`
-6. `bullets`
-
-Every project object must contain exactly these keys in this order:
-
-1. `story_id`
-2. `name`
-3. `tech`
-4. `bullets`
-
-Every technical-skills object must contain exactly these keys in this order:
-
-1. `category`
-2. `skills`
-
-Every bullet-check object must contain exactly these keys in this order:
-
-1. `ref`
-2. `story_id`
-3. `requirement_id`
-4. `alignment`
-5. `word_count`
-6. `questions_answered`
+Apply `schema_contract` from the runtime configuration exactly, including top-level and nested key order. Do not preserve invalid extra keys from the current JSON. Do not add `config`, `section_order`, `experience_order`, `education`, `gpa`, contact information, `professional_experience`, status, coverage, reasoning, repairs, or renderer metadata. The runtime supplies the configured verified GPA only when the selected mode enables it.
 
 ## Immutable V1 mode configuration
 
-The output `type` must exactly equal `MAPPER_PLAN_JSON.resolved_mode`.
-
-### `entry_swe`
-
-* `summary` must be `""`.
-* `coursework` must contain the smallest useful set of two to four exact verified graduate course titles directly related to central JD requirements; prefer two or three.
-* Experience order and exact bullet counts:
-  1. `TA`: 2
-  2. `GHI`: 3
-  3. `TCS_SWE_II`: 3
-  4. `TCS_SWE_I`: 2
-* Return exactly the mapper's two selected projects, in mapper order.
-* Every project has exactly two bullets.
-
-### `entry_aiml`
-
-* `summary` must be `""`.
-* `coursework` must contain the smallest useful set of two to four exact verified graduate course titles directly related to central JD requirements; prefer two or three.
-* Experience order and exact bullet counts:
-  1. `TA`: 2
-  2. `GHI`: 3
-  3. `TCS_COMBINED`: 3
-* Return exactly the mapper's three selected projects, in mapper order.
-* Every project has exactly two bullets.
-
-### `mid_swe`
-
-* `summary` must be one targeted paragraph of no more than 40 words, built only from `MAPPER_PLAN_JSON.summary_plan`.
-* `coursework` must be exactly `[]`.
-* Experience order and exact bullet counts:
-  1. `TCS_SWE_II`: 4
-  2. `TCS_SWE_I`: 2
-  3. `TA`: 1
-  4. `GHI`: 2
-* Return exactly the mapper's two selected projects, in mapper order.
-* Every project has exactly one bullet.
-
-The one-bullet project rule applies only to `mid_swe` with split `TCS_SWE_II` and `TCS_SWE_I` roles. `entry_aiml` with `TCS_COMBINED` retains two bullets per project.
-
-Use these immutable experience identity values:
-
-* `TA`: Teaching Assistant | Binghamton University | Binghamton, NY | Aug 2025 - Present
-* `GHI`: Software Engineering Intern | Global Health Impact | New York, NY | May 2025 - Jun 2025
-* `TCS_SWE_II`: Software Engineer II | Tata Consultancy Services | Gandhinagar, India | Oct 2022 - Dec 2024
-* `TCS_SWE_I`: Software Engineer I | Tata Consultancy Services | Gandhinagar, India | Mar 2021 - Sep 2022
-* `TCS_COMBINED`: Software Engineer II | Tata Consultancy Services | Gandhinagar, India | Mar 2021 - Dec 2024
-
-Do not change these values even if the audit report suggests different positioning.
+The output `type` must exactly equal `MAPPER_PLAN_JSON.resolved_mode`. Apply the selected runtime mode's summary behavior and maximum, coursework visibility, experience order, experience bullet counts, project count, and project-bullet count exactly. Use `locked_experience_identity` from the runtime configuration and do not change those values even if the audit report suggests different positioning. A configured combined role may use only its configured source roles while each bullet remains attached to one source story.
 
 ## Evidence-lock contract
 
@@ -249,7 +160,7 @@ Docker must not become virtualization. Kubernetes must not become Linux-kernel e
 2. Normalize duplicate singular, plural, acronym, expanded, case, and punctuation variants to one natural term.
 3. Strengthen exact supported wording when the current resume uses a weaker synonym that an ATS may miss.
 4. Build the complete targeting inventory from the normalized union of mapper-preserved user and model keywords. Audit and repair every evidence-authorized term; priority controls repair order, not whether user-only, model-only, or lower-priority terms are preserved.
-5. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the three-keyword maximum.
+5. Prioritize mapper-authorized `user_and_model` consensus terms within the existing fixed bullet and Skills capacity. Consensus never overrides stronger evidence, requiredness, readability, or the runtime keyword-unit maximum.
 6. Apply an approved DES only to its exact selected term, logic member, prepared story-local placement, and prepared evidence boundary. Approval of one AND or OR member never authorizes another or any unprepared mechanism, metric, ownership, or outcome.
 7. Use default-approved nontechnical wording without DES only when its mapper slot explicitly supports that behavior or responsibility. A close nontechnical term may use exact wording only when its prepared story-local evidence-confirmation DES was approved. Do not introduce unsupported compliance, risk, ownership, leadership, domain, or behavioral claims.
 8. Treat mapper-authorized terms tied to priority-5 requirements as the first repair tier and priority-4 terms as the second tier, then preserve every remaining exact, equivalent, approved-DES, project, and Skills term.
@@ -282,13 +193,13 @@ Never delete a protected keyword merely because it is lower priority, a synonym 
 
 ## Summary rules
 
-For `entry_swe` and `entry_aiml`, return an empty summary. Do not add a summary to recover keywords.
+When the selected runtime mode disables a summary, return an empty summary. Do not add a summary to recover keywords.
 
-For `mid_swe`:
+When the selected runtime mode enables a summary:
 
 * use only `MAPPER_PLAN_JSON.summary_plan`,
 * use only its allowed story IDs, technologies, scope, and metrics,
-* remain at or below 40 words,
+* remain at or below the selected runtime mode's `summary_max_words`,
 * avoid unsupported specialist titles,
 * avoid generic phrases such as `results-driven`,
 * do not exceed chronology-supported seniority,
@@ -296,22 +207,9 @@ For `mid_swe`:
 
 ## Relevant Coursework rules
 
-For `entry_swe` and `entry_aiml`, preserve or safely refine `coursework` using only these transcript-verified titles:
+When the selected runtime mode enables coursework, preserve or safely refine it using only runtime `verified_coursework` and obey every minimum, maximum, and preferred-count value in runtime `coursework_selection`. Every selected course must directly support a central or high-priority JD requirement. Order by JD relevance. Remove weak, redundant, unverified, or keyword-stuffed selections. Do not add course codes, grades, GPA, explanations, or technologies that are not exact course titles.
 
-* `Database Systems`
-* `Programming Languages`
-* `Design and Analysis of Computer Algorithms`
-* `Programming Systems and Tools`
-* `Introduction to Machine Learning`
-* `Programming for the Web`
-* `Systems Programming`
-* `Introduction to Computer Vision`
-* `Introduction to Artificial Intelligence`
-* `Natural Language Processing`
-
-Return two to four titles and prefer two or three. Every selected course must directly support a central or high-priority JD requirement. Order by JD relevance. Remove weak, redundant, unverified, or keyword-stuffed selections. Do not add course codes, grades, GPA, explanations, or technologies that are not exact course titles.
-
-For `mid_swe`, return exactly `"coursework": []` and do not add coursework to recover keywords.
+When the selected runtime mode disables coursework, return exactly `"coursework": []` and do not add coursework to recover keywords.
 
 ## Experience-bullet rules
 
@@ -324,15 +222,15 @@ For every bullet:
 * express one coherent achievement,
 * identify the actual system or component when allowed,
 * include one useful technical method group when allowed,
-* use at most one performance outcome: one measured change in speed, latency, throughput, quality, reliability, accuracy, efficiency, cost, delivery time, failure rate, or another result,
+* obey the runtime maximum for performance outcomes such as measured changes in speed, latency, throughput, quality, reliability, accuracy, efficiency, cost, delivery time, failure rate, or another result,
 * treat one before-and-after comparison as one performance outcome even though it contains two values,
-* optionally use at most one essential scope value, such as users, records, transactions, applications, teams, prompts, or releases, only when it materially proves JD-relevant scale,
+* obey the runtime maximum for essential scope values, such as users, records, transactions, applications, teams, prompts, or releases, and include scope only when it materially proves JD-relevant scale,
 * when several verified outcomes are available, retain only the one that best proves the bullet's strongest central JD requirement; rank direct relevance, evidentiary strength, recruiter clarity, and distinctness from other bullets,
 * remove secondary performance outcomes instead of stacking them,
 * do not force a number into every bullet,
-* target 18-22 words,
-* never exceed 24 words,
-* use no more than three visible JD keyword units,
+* apply the runtime target word range,
+* never exceed the runtime hard maximum,
+* use no more than the runtime-configured maximum number of visible JD keyword units,
 * do not use an em dash or en dash,
 * do not use first person, passive responsibility language, filler, or buzzwords,
 * do not create a technology-inventory bullet,
@@ -344,7 +242,7 @@ Preserve a current bullet when the proposed repair would make it less truthful, 
 
 ## Project rules
 
-Preserve the mapper-selected project IDs, names, order, and configured bullet allocation: two bullets per entry-mode project and one bullet per `mid_swe` project.
+Preserve the mapper-selected project IDs, configured names, order, and selected runtime mode's project-bullet allocation.
 
 For each project:
 
@@ -367,7 +265,7 @@ You may:
 * restore a mapper-planned term omitted by the current resume,
 * remove a term not authorized by the mapper plan,
 * reorder categories and terms for this JD when the V1 plan permits it,
-* retain at most five nonempty categories.
+* retain at most the runtime-configured maximum number of nonempty categories.
 
 You must:
 
@@ -425,18 +323,18 @@ Before returning, verify:
 4. No invalid extra key from the input was preserved.
 5. `type` matches the mapper's resolved mode.
 6. Summary behavior matches the mode.
-7. Coursework is minimal, transcript-verified, directly JD-relevant, and present only for entry-level modes.
+7. Coursework is minimal, transcript-verified, directly JD-relevant, and obeys the selected runtime mode's visibility and selection configuration.
 8. Experience IDs, identities, order, and bullet counts match the immutable configuration.
 9. Project IDs, names, order, count, and bullet counts match the mapper plan.
 10. Every bullet uses only its selected mapper slot and explicitly approved DES.
 11. No fact, technology, metric, or result crossed story boundaries.
 12. No unselected story was used.
 13. No unsupported or adjacent technology was presented as an exact match.
-14. Every bullet is active past tense and no bullet exceeds 24 words.
-15. Every bullet remains one coherent achievement with no more than three visible JD keyword units, at most one performance outcome, and at most one essential scope value.
+14. Every bullet is active past tense and no bullet exceeds the runtime hard maximum.
+15. Every bullet remains one coherent achievement and obeys the runtime keyword-unit, performance-outcome, and essential-scope limits.
 16. Before-and-after values share units naturally when possible, but metric grammar and clause order are not repeated as a fixed pattern across bullets.
 17. No achievement or opening verb is unnecessarily repeated.
-18. Technical Skills uses no more than five nonempty categories and only mapper-plan terms authorized by DES approval.
+18. Technical Skills uses no more than the runtime-configured maximum number of nonempty categories and only mapper-plan terms authorized by DES approval.
 19. Every bullet has exactly one matching bullet check in the correct order.
 20. Every `ref`, story ID, requirement ID, alignment, word count, and answered-question list matches the final bullet and mapper slot.
 21. Every applied ATS gap report fix belongs to an allowed repair category.

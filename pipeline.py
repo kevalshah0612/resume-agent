@@ -35,24 +35,32 @@ from urllib.request import Request, urlopen
 import anthropic
 
 from app_properties import (
+    CANDIDATE_PROFILE,
     CANDIDATE_NAME,
     CURRENT_LOCATION,
     GITHUB_URL,
     LINKEDIN_URL,
     PROMPT_PROFILE_LABELS,
     PROJECT_URLS,
+    V1_CONFIG,
     VERIFIED_GRADUATE_COURSEWORK,
     VERIFIED_GRADUATE_GPA,
     candidate_contact_line,
     candidate_education_profile,
+    candidate_experience_by_id,
+    candidate_experience_identities,
     candidate_experience_profile,
+    candidate_project_profile,
+    candidate_role_id,
+    primary_education_profile,
+    v1_runtime_configuration,
 )
 from manager import build_render_profile
 
 
 ROOT = Path(__file__).parent
 PROMPT_DIR = ROOT / "main_flow"
-PROMPT_V1_DIR = ROOT / "V1" / "Prompts"
+PROMPT_V1_DIR = ROOT / "v1" / "Prompts"
 V1_POST_STAGE_DIR = ROOT / "v1" / "2 stage"
 PROMPT_V3_DIR = ROOT / "v3_experimental_flow"
 FINAL_QA_PROMPT_DIR = ROOT / "3_stage_validation"
@@ -76,11 +84,11 @@ DEFAULT_RESPONSE_MAX_TOKENS = 65536
 # V1 stage budgets use the measured 50-request median plus 30% headroom,
 # rounded upward to a 1,024-token boundary. The response-token window remains
 # unchanged so these reasoning limits do not constrain the final JSON output.
-V1_REASONING_BUDGET_JD = 4096
-V1_REASONING_BUDGET_EVIDENCE = 8192
-V1_REASONING_BUDGET_COMPOSER = 20480
-V1_REASONING_BUDGET_ATS = 8192
-V1_REASONING_BUDGET_OPTIMIZER = 6144
+V1_REASONING_BUDGET_JD = int(V1_CONFIG["stage_reasoning_budgets"]["jd_analysis"])
+V1_REASONING_BUDGET_EVIDENCE = int(V1_CONFIG["stage_reasoning_budgets"]["evidence_mapping"])
+V1_REASONING_BUDGET_COMPOSER = int(V1_CONFIG["stage_reasoning_budgets"]["resume_composition"])
+V1_REASONING_BUDGET_ATS = int(V1_CONFIG["stage_reasoning_budgets"]["post_ats_audit"])
+V1_REASONING_BUDGET_OPTIMIZER = int(V1_CONFIG["stage_reasoning_budgets"]["post_optimizer"])
 
 _log_cb = None
 _nvidia_gate_lock = threading.Lock()
@@ -156,7 +164,7 @@ You are the final evidence-safe resume quality gate for this application.
 SOURCE OF TRUTH AND EDITING RULES:
 - The supplied source resume JSON is the only editable resume source.
 - The job description is a targeting reference, never evidence that the candidate has a skill.
-- The render profile is authoritative for section order, level, layout, experience order, project order, TA placement, and visible counts.
+- The render profile is authoritative for section order, level, layout, experience order, project order, configured role placement, and visible counts.
 - Never invent or infer a metric, technology, framework, domain, user count, business result, title, employer, date, project, degree, location, leadership claim, or responsibility.
 - Never emit placeholders such as [FILL IN], TBD, TODO, optional, or invented estimates.
 - Preserve the exact JSON schema, key set, value types, list lengths, config object, identity/contact fields, role identities, role array order, project identities/order, education identities/order, employment_note values, and bullet counts.
@@ -1044,7 +1052,141 @@ def read_prompt(name: str, prompt_profile: str | None = None) -> str:
         if not matches:
             raise FileNotFoundError(f"Missing prompt file: {path}")
         path = matches[0]
-    return path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    return render_v1_prompt_values(text) if normalize_prompt_profile(prompt_profile) == "v1" else text
+
+
+def render_v1_prompt_values(text: str) -> str:
+    """Resolve V1 prompt markers exclusively from the authoritative config."""
+
+    target_range = str(V1_CONFIG["writing_policy"]["target_bullet_words"]).replace("-", " to ")
+    maximum_words = str(V1_CONFIG["writing_policy"]["hard_maximum_bullet_words"])
+    keyword_maximum = int(V1_CONFIG["writing_policy"]["maximum_jd_keyword_units_per_bullet"])
+    number_words = {
+        0: "zero",
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        7: "seven",
+        8: "eight",
+        9: "nine",
+        10: "ten",
+    }
+    policy_markers = {
+        "{{V1_MAPPER_POLICY_REINFORCEMENT}}": "\n".join(
+            str(policy.get("mapper_prompt_reinforcement") or "").strip()
+            for policy in V1_CONFIG["evidence_policies"]
+            if str(policy.get("mapper_prompt_reinforcement") or "").strip()
+        ),
+        "{{V1_MAPPER_CONTROLLER_REINFORCEMENT}}": "\n".join(
+            str(policy.get("mapper_controller_reinforcement") or "").strip()
+            for policy in V1_CONFIG["evidence_policies"]
+            if str(policy.get("mapper_controller_reinforcement") or "").strip()
+        ),
+        "{{V1_COMPOSER_POLICY_REINFORCEMENT}}": "\n".join(
+            str(policy.get("composer_prompt_reinforcement") or "").strip()
+            for policy in V1_CONFIG["evidence_policies"]
+            if str(policy.get("composer_prompt_reinforcement") or "").strip()
+        ),
+    }
+    coursework_disabled_modes = [
+        mode
+        for mode, config in V1_CONFIG["supported_modes"].items()
+        if not config.get("show_coursework")
+    ]
+    if len(coursework_disabled_modes) == 1:
+        coursework_rule = (
+            f"For `{coursework_disabled_modes[0]}`, return `coursework: []`."
+        )
+    else:
+        formatted_modes = ", ".join(f"`{mode}`" for mode in coursework_disabled_modes)
+        coursework_rule = (
+            f"For modes with coursework disabled ({formatted_modes}), return `coursework: []`."
+        )
+    replacements = {
+        "{{V1_TARGET_WORD_RANGE}}": target_range,
+        "{{V1_HARD_MAXIMUM_WORDS}}": maximum_words,
+        "{{V1_KEYWORD_UNIT_MAXIMUM_WORD}}": number_words.get(keyword_maximum, str(keyword_maximum)),
+        "{{V1_COURSEWORK_DISABLED_RULE}}": coursework_rule,
+        **policy_markers,
+    }
+    for marker, value in replacements.items():
+        text = text.replace(marker, value)
+    return text
+
+
+def scan_v1_story_catalog(story_library: str) -> list[dict[str, str]]:
+    """Return the configured story headings in source order."""
+
+    stories: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for match in re.finditer(
+        r"(?m)^##\s+([A-Za-z0-9][A-Za-z0-9_-]*)\s+-\s+(.+?)\s*$",
+        story_library or "",
+    ):
+        story_id = match.group(1).strip()
+        if story_id in seen:
+            raise ValueError(f"Duplicate V1 story ID in story.md: {story_id}")
+        seen.add(story_id)
+        stories.append({"story_id": story_id, "title": match.group(2).strip()})
+    if not stories:
+        raise ValueError("V1 story.md must contain headings formatted as '## STORY-ID - Title'.")
+    return stories
+
+
+def v1_prompt_configuration_block(story_library: str = "") -> str:
+    """Serialize the one authoritative V1 configuration for model prompts."""
+
+    configuration = v1_runtime_configuration()
+    if story_library:
+        try:
+            story_catalog = scan_v1_story_catalog(story_library)
+        except ValueError:
+            # Some callers (including model-call harnesses) replace read_prompt
+            # with a stub. Validate against the real story file in that case;
+            # a genuinely malformed on-disk story.md still raises below.
+            canonical_story = (PROMPT_V1_DIR / "story.md").read_text(encoding="utf-8")
+            if canonical_story == story_library:
+                raise
+            story_catalog = scan_v1_story_catalog(canonical_story)
+        story_ids = {item["story_id"] for item in story_catalog}
+        missing_projects = [
+            item["story_id"]
+            for item in configuration["project_catalog"]
+            if item["story_id"] not in story_ids
+        ]
+        if missing_projects:
+            raise ValueError(
+                "Configured projects missing from v1/Prompts/story.md: "
+                + ", ".join(missing_projects)
+            )
+        story_titles = {item["story_id"]: item["title"] for item in story_catalog}
+        mismatched_project_names = [
+            f"{item['story_id']} ({item['name']!r} != {story_titles[item['story_id']]!r})"
+            for item in configuration["project_catalog"]
+            if item["story_id"] in story_titles and item["name"] != story_titles[item["story_id"]]
+        ]
+        if mismatched_project_names:
+            raise ValueError(
+                "Configured project names must match their v1/Prompts/story.md headings: "
+                + "; ".join(mismatched_project_names)
+            )
+        configuration["story_catalog"] = {
+            "expected_story_count": len(story_catalog),
+            "stories": story_catalog,
+        }
+    return (
+        "=== V1 RUNTIME CONFIGURATION - AUTHORITATIVE ===\n"
+        "This block is generated from app_properties.py and, when present, the current story.md. "
+        "Use it for every configured identity, order, count, project, education value, story boundary, "
+        "and candidate-specific evidence policy. It does not weaken the prompt's evidence-safety, "
+        "writing-quality, schema, or anti-fabrication rules.\n\n"
+        + json.dumps(configuration, indent=2)
+        + "\n=== END V1 RUNTIME CONFIGURATION ==="
+    )
 
 
 def read_prompt_with_fallback(name: str, prompt_profile: str | None = None) -> str:
@@ -1277,32 +1419,33 @@ def normalize_experience_order_value(value: Any) -> list[str]:
     if "," in raw:
         return [part.strip() for part in raw.split(",") if part.strip()]
     normalized = raw.lower().replace("-", "_").replace(" ", "_")
+    def output_order(mode: str) -> list[str]:
+        result: list[str] = []
+        for role_id in V1_CONFIG["supported_modes"][mode]["experience_display_order"]:
+            profile = candidate_experience_by_id(role_id) or {}
+            result.append(str(profile.get("resume_output_id") or role_id))
+        return result
     if normalized in {"tcs", "tcs_first", "professional_first", "mid", "production_first"}:
-        return ["TCS-SWE-II", "TCS-SWE", "GHI", "TA"]
+        return output_order("mid_swe")
     if normalized in {"ghi", "ghi_first", "internship_first", "entry", "chronological"}:
-        return ["TA", "GHI", "TCS-SWE-II", "TCS-SWE"]
+        return output_order("entry_swe")
     return []
 
 
 def experience_order_rank(order: list[str]) -> dict[str, int]:
-    aliases: dict[str, str] = {
-        "ta": "TA",
-        "teachingassistant": "TA",
-        "binghamtonuniversity": "TA",
-        "ghi": "GHI",
-        "globalhealthimpact": "GHI",
-        "tcssweii": "TCS-SWE-II",
-        "softwareengineerii": "TCS-SWE-II",
-        "tcsii": "TCS-SWE-II",
-        "tcsswe": "TCS-SWE",
-        "softwareengineer": "TCS-SWE",
-        "tcs": "TCS-SWE",
-    }
     rank: dict[str, int] = {}
     for index, item in enumerate(order):
-        key = re.sub(r"[^a-z0-9]+", "", item.lower())
-        canonical = aliases.get(key, item)
-        rank[canonical] = index
+        profile = candidate_experience_by_id(item)
+        canonical_values = {str(item)}
+        if profile:
+            canonical_values.update({
+                str(profile.get("role_id") or ""),
+                str(profile.get("resume_output_id") or ""),
+                *(str(alias) for alias in profile.get("aliases", [])),
+            })
+        for canonical in canonical_values:
+            if canonical:
+                rank[canonical] = index
     return rank
 
 
@@ -1312,15 +1455,9 @@ def experience_identity(job: dict[str, Any]) -> str:
     company = str(job.get("company") or job.get("Company") or "").strip().lower()
     if job_id:
         return job_id
-    if "binghamton university" in company or "teaching assistant" in title:
-        return "TA"
-    if "global health impact" in company:
-        return "GHI"
-    if "tata consultancy services" in company and "ii" in title:
-        return "TCS-SWE-II"
-    if "tata consultancy services" in company:
-        return "TCS-SWE"
-    return ""
+    role_id = candidate_role_id(company=company, title=title)
+    profile = candidate_experience_by_id(role_id) or {}
+    return str(profile.get("resume_output_id") or role_id)
 
 
 def strategy_from_order(order: list[str], fallback: Any = "") -> str:
@@ -1342,9 +1479,12 @@ def canonical_strategy_section_order(strategy_type: str) -> list[str]:
 
 
 def canonical_strategy_experience_order(strategy_type: str) -> list[str]:
-    if strategy_type == "Mid":
-        return ["TCS-SWE-II", "TCS-SWE", "GHI", "TA"]
-    return ["TA", "GHI", "TCS-SWE-II", "TCS-SWE"]
+    mode = "mid_swe" if strategy_type == "Mid" else "entry_swe"
+    result: list[str] = []
+    for role_id in V1_CONFIG["supported_modes"][mode]["experience_display_order"]:
+        profile = candidate_experience_by_id(role_id) or {}
+        result.append(str(profile.get("resume_output_id") or role_id))
+    return result
 
 
 def normalize_section_order_value(value: Any) -> list[str]:
@@ -1803,14 +1943,9 @@ def compact_experience_lock(role_id: str, company: str, title: str) -> dict[str,
     return candidate_experience_profile(role_id, company, title)
 
 
-def compact_project_url(name: str) -> str:
-    lower = name.lower()
-    normalized = re.sub(r"[^a-z0-9]+", "", lower)
-    for key, url in PROJECT_URLS.items():
-        normalized_key = re.sub(r"[^a-z0-9]+", "", key.lower())
-        if key in lower or (normalized_key and normalized_key in normalized):
-            return url
-    return ""
+def compact_project_url(name: str, story_id: str = "") -> str:
+    project = candidate_project_profile(story_id=story_id, name=name)
+    return str(project.get("url") or "") if project else ""
 
 
 def header_location(inp: ResumeInput) -> str:
@@ -1826,22 +1961,22 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
     raw_order_value = compact.get("experience_order") or compact.get("Experience_Order")
     provided_section_order = normalize_section_order_value(compact.get("section_order") or compact.get("Section_Order"))
     provided_experience_order = normalize_experience_order_value(raw_order_value)
-    if v1_mode in {"entry_swe", "entry_aiml", "mid_swe"}:
-        strategy_type = "Mid" if v1_mode == "mid_swe" else "Entry"
+    v1_mode_config = V1_CONFIG["supported_modes"].get(v1_mode) if profile == "v1" else None
+    if v1_mode_config:
+        strategy_type = str(v1_mode_config["renderer_strategy_type"])
         requested_order = provided_experience_order or [
             str(item.get("id") or "").strip()
             for item in compact.get("experience") or []
             if isinstance(item, dict) and str(item.get("id") or "").strip()
         ]
-        section_order = provided_section_order or canonical_strategy_section_order(strategy_type)
-        level, layout_profile = {
-            "entry_swe": (2, "professional_entry"),
-            "entry_aiml": (2, "aiml_entry"),
-            "mid_swe": (3, "mid"),
-        }[v1_mode]
+        section_order = provided_section_order or [
+            "professional_experience" if item == "experience" else str(item)
+            for item in v1_mode_config["resume_section_order"]
+        ]
+        level = int(v1_mode_config["renderer_level"])
+        layout_profile = str(v1_mode_config["renderer_layout_profile"])
         if (
-            v1_mode in {"entry_swe", "entry_aiml"}
-            and summary_text
+            summary_text
             and "summary" not in section_order
         ):
             section_order = ["summary", *section_order]
@@ -1908,14 +2043,14 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
             "tech": item.get("tech") or [],
             "location": "",
             "dates": "",
-            "github_url": compact_project_url(name),
+            "github_url": compact_project_url(name, str(item.get("story_id") or "")),
             "bullets": [str(b).strip() for b in (item.get("bullets") or item.get("Bullets") or []) if str(b).strip()],
         })
 
     config = {
         "type": (
-            "aiml"
-            if v1_mode == "entry_aiml"
+            str(v1_mode_config["renderer_config_type"])
+            if v1_mode_config
             else compact_config_type(compact.get("role_type") or compact.get("Role_Type") or compact.get("role_family") or compact.get("Role_Family"))
         ),
         "level": level,
@@ -1940,8 +2075,15 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
         config["experience_order"] = "json_order"
 
     education = candidate_education_profile()
-    if v1_mode in {"entry_swe", "entry_aiml"}:
-        education[0]["gpa"] = VERIFIED_GRADUATE_GPA
+    mode_config = V1_CONFIG["supported_modes"].get(v1_mode, {}) if profile == "v1" else {}
+    primary_education = primary_education_profile()
+    primary_index = next(
+        (index for index, item in enumerate(education) if item == primary_education),
+        0,
+    )
+    if education and mode_config.get("show_gpa") and VERIFIED_GRADUATE_GPA:
+        education[primary_index]["gpa"] = VERIFIED_GRADUATE_GPA
+    if education and mode_config.get("show_coursework"):
         allowed_coursework = {
             course.casefold(): course for course in VERIFIED_GRADUATE_COURSEWORK
         }
@@ -1952,10 +2094,12 @@ def compact_to_resume_json(compact: dict[str, Any], inp: ResumeInput, prompt_pro
                 canonical = allowed_coursework.get(str(item).strip().casefold())
                 if canonical and canonical not in selected_coursework:
                     selected_coursework.append(canonical)
-                if len(selected_coursework) == 4:
+                if len(selected_coursework) == int(
+                    CANDIDATE_PROFILE["education_settings"]["coursework_selection"]["maximum"]
+                ):
                     break
         if selected_coursework:
-            education[0]["coursework"] = selected_coursework
+            education[primary_index]["coursework"] = selected_coursework
 
     resume_header_location = header_location(inp)
     return normalize_resume_json({
@@ -2623,84 +2767,33 @@ def v1_composer_input(inp: ResumeInput) -> list[str]:
 
 
 V1_POST_MODE_CONFIG: dict[str, dict[str, Any]] = {
-    "entry_swe": {
-        "roles": [("TA", 2), ("GHI", 3), ("TCS_SWE_II", 3), ("TCS_SWE_I", 2)],
-        "projects": 2,
-        "summary_max_words": 0,
-    },
-    "entry_aiml": {
-        "roles": [("TA", 2), ("GHI", 3), ("TCS_COMBINED", 3)],
-        "projects": 3,
-        "summary_max_words": 0,
-    },
-    "mid_swe": {
-        "roles": [("TCS_SWE_II", 4), ("TCS_SWE_I", 2), ("TA", 1), ("GHI", 2)],
-        "projects": 2,
-        "summary_max_words": 40,
-    },
+    mode: {
+        "roles": [
+            (role_id, int(mode_config["bullet_counts"][role_id]))
+            for role_id in mode_config["experience_display_order"]
+        ],
+        "projects": int(mode_config["project_count"]),
+        "project_bullets_each": int(mode_config["project_bullets_each"]),
+        "summary_max_words": int(mode_config["summary_max_words"]),
+    }
+    for mode, mode_config in V1_CONFIG["supported_modes"].items()
 }
 
-V1_LOCKED_EXPERIENCE_IDENTITY: dict[str, dict[str, str]] = {
-    "TA": {
-        "title": "Teaching Assistant",
-        "company": "Binghamton University",
-        "location": "Binghamton, NY",
-        "dates": "Aug 2025 - Present",
-    },
-    "GHI": {
-        "title": "Software Engineering Intern",
-        "company": "Global Health Impact",
-        "location": "New York, NY",
-        "dates": "May 2025 - Jun 2025",
-    },
-    "TCS_SWE_II": {
-        "title": "Software Engineer II",
-        "company": "Tata Consultancy Services",
-        "location": "Gandhinagar, India",
-        "dates": "Oct 2022 - Dec 2024",
-    },
-    "TCS_SWE_I": {
-        "title": "Software Engineer I",
-        "company": "Tata Consultancy Services",
-        "location": "Gandhinagar, India",
-        "dates": "Mar 2021 - Sep 2022",
-    },
-    "TCS_COMBINED": {
-        "title": "Software Engineer II",
-        "company": "Tata Consultancy Services",
-        "location": "Gandhinagar, India",
-        "dates": "Mar 2021 - Dec 2024",
-    },
-}
+V1_LOCKED_EXPERIENCE_IDENTITY: dict[str, dict[str, str]] = candidate_experience_identities()
 
-V1_TOP_LEVEL_KEYS = [
-    "type",
-    "summary",
-    "coursework",
-    "experience",
-    "projects",
-    "technical_skills",
-    "bullet_checks",
-]
-V1_EXPERIENCE_KEYS = ["id", "title", "company", "location", "dates", "bullets"]
-V1_PROJECT_KEYS = ["story_id", "name", "tech", "bullets"]
-V1_SKILLS_KEYS = ["category", "skills"]
-V1_BULLET_CHECK_KEYS = [
-    "ref",
-    "story_id",
-    "requirement_id",
-    "alignment",
-    "word_count",
-    "questions_answered",
-]
-V1_QUESTION_LABELS = ["what", "how", "with_what", "result", "amount"]
+V1_TOP_LEVEL_KEYS = list(V1_CONFIG["schema_contract"]["top_level_keys"])
+V1_EXPERIENCE_KEYS = list(V1_CONFIG["schema_contract"]["experience_keys"])
+V1_PROJECT_KEYS = list(V1_CONFIG["schema_contract"]["project_keys"])
+V1_SKILLS_KEYS = list(V1_CONFIG["schema_contract"]["skills_keys"])
+V1_BULLET_CHECK_KEYS = list(V1_CONFIG["schema_contract"]["bullet_check_keys"])
+V1_QUESTION_LABELS = list(V1_CONFIG["schema_contract"]["question_labels"])
 
 
 def read_v1_post_stage_prompt(name: str) -> str:
     path = V1_POST_STAGE_DIR / name
     if not path.exists():
         raise FileNotFoundError(f"Missing V1 post-composition prompt: {path}")
-    return path.read_text(encoding="utf-8")
+    return render_v1_prompt_values(path.read_text(encoding="utf-8"))
 
 
 def v1_post_short_controller(run_mode: str) -> str:
@@ -2867,8 +2960,9 @@ def validate_v1_optimized_resume(
                 errors.append(f"{bullet_path} must be a nonempty string.")
                 continue
             words = v1_bullet_word_count(bullet)
-            if words > 24:
-                errors.append(f"{bullet_path} has {words} words; maximum is 24.")
+            maximum_words = int(V1_CONFIG["writing_policy"]["hard_maximum_bullet_words"])
+            if words > maximum_words:
+                errors.append(f"{bullet_path} has {words} words; maximum is {maximum_words}.")
             if "\u2013" in bullet or "\u2014" in bullet:
                 errors.append(f"{bullet_path} contains an em dash or en dash.")
             verb = bullet.split()[0].strip(".,:;()[]{}").lower()
@@ -2938,8 +3032,12 @@ def validate_v1_optimized_resume(
         if not isinstance(bullets, list):
             errors.append(f"{path}.bullets must be an array.")
             bullets = []
-        if len(bullets) != 2:
-            errors.append(f"{path}.bullets must contain exactly 2 bullets; received {len(bullets)}.")
+        expected_project_bullets = int(config["project_bullets_each"])
+        if len(bullets) != expected_project_bullets:
+            errors.append(
+                f"{path}.bullets must contain exactly {expected_project_bullets} bullets; "
+                f"received {len(bullets)}."
+            )
         mapper_slots = {
             int(slot.get("slot")): slot
             for slot in (mapper_project.get("bullets") or [])
@@ -2951,8 +3049,9 @@ def validate_v1_optimized_resume(
                 errors.append(f"{bullet_path} must be a nonempty string.")
                 continue
             words = v1_bullet_word_count(bullet)
-            if words > 24:
-                errors.append(f"{bullet_path} has {words} words; maximum is 24.")
+            maximum_words = int(V1_CONFIG["writing_policy"]["hard_maximum_bullet_words"])
+            if words > maximum_words:
+                errors.append(f"{bullet_path} has {words} words; maximum is {maximum_words}.")
             if "\u2013" in bullet or "\u2014" in bullet:
                 errors.append(f"{bullet_path} contains an em dash or en dash.")
             verb = bullet.split()[0].strip(".,:;()[]{}").lower()
@@ -3001,8 +3100,9 @@ def validate_v1_optimized_resume(
     if not isinstance(technical_skills, list):
         errors.append("resume.technical_skills must be an array.")
         technical_skills = []
-    if len(technical_skills) > 5:
-        errors.append("resume.technical_skills may contain at most 5 categories.")
+    maximum_categories = int(V1_CONFIG["skills_policy"]["maximum_categories"])
+    if len(technical_skills) > maximum_categories:
+        errors.append(f"resume.technical_skills may contain at most {maximum_categories} categories.")
     seen_categories: set[str] = set()
     seen_terms: set[str] = set()
     for index, category in enumerate(technical_skills):
@@ -3096,7 +3196,10 @@ async def run_v1_post_validation(
     ats_diagnostics: dict[str, Any] = {}
     try:
         ats_report = await call_v1_stage_model(
-            system_blocks=[cached_text_block(read_v1_post_stage_prompt("ATS.md"))],
+            system_blocks=[
+                cached_text_block(read_v1_post_stage_prompt("ATS.md")),
+                cached_text_block(v1_prompt_configuration_block(story_library)),
+            ],
             messages=[{"role": "user", "content": ats_input}],
             label=labeled_step(request_label, "V1 ATS GAP AUDIT"),
             cost_cb=cost_cb,
@@ -3137,7 +3240,10 @@ async def run_v1_post_validation(
     optimizer_diagnostics: dict[str, Any] = {}
     try:
         optimizer_raw = await call_v1_stage_model(
-            system_blocks=[cached_text_block(read_v1_post_stage_prompt("optimizer.md"))],
+            system_blocks=[
+                cached_text_block(read_v1_post_stage_prompt("optimizer.md")),
+                cached_text_block(v1_prompt_configuration_block()),
+            ],
             messages=[{"role": "user", "content": optimizer_input}],
             label=labeled_step(request_label, "V1 EVIDENCE-LOCKED OPTIMIZER"),
             cost_cb=cost_cb,
@@ -3204,6 +3310,22 @@ def v1_pass1_bundle(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     return analysis, mapper
 
 
+def lock_v1_mapper_project_identities(mapper: dict[str, Any]) -> None:
+    """Apply canonical project names from app_properties.py to a mapper plan."""
+
+    for index, project in enumerate(mapper.get("project_plan") or []):
+        if not isinstance(project, dict):
+            continue
+        story_id = str(project.get("story_id") or "").strip()
+        configured = candidate_project_profile(story_id=story_id)
+        if not configured:
+            raise ValueError(
+                f"Mapper project_plan[{index}] uses {story_id or '<empty>'}, which is not configured "
+                "in app_properties.py."
+            )
+        project["name"] = str(configured.get("name") or "")
+
+
 async def run_v1_pass1(
     inp: ResumeInput,
     *,
@@ -3217,7 +3339,10 @@ async def run_v1_pass1(
     analysis_diagnostics: dict[str, Any] = {}
     try:
         analysis_raw = await call_v1_stage_model(
-            system_blocks=[cached_text_block(read_prompt("01_JD_Intelligence_Analyzer.md", "v1"))],
+            system_blocks=[
+                cached_text_block(read_prompt("01_JD_Intelligence_Analyzer.md", "v1")),
+                cached_text_block(v1_prompt_configuration_block()),
+            ],
             messages=[{
                 "role": "user",
                 "content": "\n\n".join([
@@ -3301,11 +3426,13 @@ async def run_v1_evidence_mapping(
         *v1_common_input(inp),
         "JD ANALYSIS FROM PROMPT 1\n" + compact_json(analysis),
     ]
+    story_library = read_prompt("story.md", "v1")
     try:
         mapper_raw = await call_v1_stage_model(
             system_blocks=[
                 cached_text_block(read_prompt("02_Evidence_Mapper_DES_Planner.md", "v1")),
-                cached_text_block(read_prompt("story.md", "v1")),
+                cached_text_block(v1_prompt_configuration_block(story_library)),
+                cached_text_block(story_library),
             ],
             messages=[{"role": "user", "content": "\n\n".join(mapper_input)}],
             label=labeled_step(request_label, "V1 EVIDENCE MAPPING"),
@@ -3342,6 +3469,7 @@ async def run_v1_evidence_mapping(
                 v1_reasoning_text(mapper_diagnostics),
             )
         raise
+    lock_v1_mapper_project_identities(mapper)
     if stage_artifact_cb:
         stage_artifact_cb("evidence_map", mapper, v1_reasoning_text(mapper_diagnostics))
     return mapper
@@ -3371,6 +3499,7 @@ async def run_v1_pass2(
         composer_raw = await call_v1_stage_model(
             system_blocks=[
                 cached_text_block(read_prompt("03_Evidence_Locked_Resume_Composer.md", "v1")),
+                cached_text_block(v1_prompt_configuration_block()),
             ],
             messages=[{"role": "user", "content": "\n\n".join(composer_input)}],
             label=labeled_step(request_label, "V1 RESUME COMPOSITION"),

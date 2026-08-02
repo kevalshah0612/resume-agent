@@ -1,5 +1,5 @@
 """
-resume.py — Simple Resume Builder for Keval Shah
+resume.py — Simple Resume Builder
 ================================================
 
 Only 3 commands:
@@ -52,7 +52,16 @@ import sys
 from datetime import datetime
 from typing import Any, Dict
 
-from app_properties import ARCHIVES_DIR_NAME, RESUME_STEM, WORD_DIR_NAME, PDF_DIR_NAME
+from app_properties import (
+    ARCHIVES_DIR_NAME,
+    DEFAULT_GRADUATION,
+    RESUME_STEM,
+    V1_CONFIG,
+    WORD_DIR_NAME,
+    PDF_DIR_NAME,
+    candidate_experience_by_id,
+    candidate_role_id,
+)
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -87,18 +96,18 @@ PDF_DIR = PDF_DIR_NAME
 
 # ── Configs ──────────────────────────────────────────────────────────────────
 CONFIGS = {
-    ("backend", 2): {"label": "SWE Backend Entry", "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 3): {"label": "SWE Backend Mid",   "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("backend", 4): {"label": "SWE Backend Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("fullstack", 4): {"label": "Fullstack Intern", "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aiml", 2): {"label": "AI/ML Entry",           "grad": "Expected Aug 2026", "order": ["education", "skills", "projects", "experience"]},
-    ("aiml", 3): {"label": "AI/ML Mid",             "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aiml", 4): {"label": "AI/ML Intern",          "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
-    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": "Expected Aug 2026", "order": ["summary", "skills", "experience", "projects", "education"]},
-    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": "Expected Aug 2026", "order": ["education", "skills", "experience", "projects"]},
+    ("backend", 2): {"label": "SWE Backend Entry", "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 3): {"label": "SWE Backend Mid",   "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("backend", 4): {"label": "SWE Backend Intern", "grad": DEFAULT_GRADUATION, "order": ["education", "skills", "experience", "projects"]},
+    ("fullstack", 2): {"label": "Fullstack Entry",  "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 3): {"label": "Fullstack Mid",    "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("fullstack", 4): {"label": "Fullstack Intern", "grad": DEFAULT_GRADUATION, "order": ["education", "skills", "experience", "projects"]},
+    ("aiml", 2): {"label": "AI/ML Entry",           "grad": DEFAULT_GRADUATION, "order": ["education", "skills", "projects", "experience"]},
+    ("aiml", 3): {"label": "AI/ML Mid",             "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aiml", 4): {"label": "AI/ML Intern",          "grad": DEFAULT_GRADUATION, "order": ["education", "skills", "experience", "projects"]},
+    ("aitool", 2): {"label": "AI Tooling Entry",    "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 3): {"label": "AI Tooling Mid",      "grad": DEFAULT_GRADUATION, "order": ["summary", "skills", "experience", "projects", "education"]},
+    ("aitool", 4): {"label": "AI Tooling Intern",   "grad": DEFAULT_GRADUATION, "order": ["education", "skills", "experience", "projects"]},
 }
 
 
@@ -364,15 +373,9 @@ def experience_identity(job: dict) -> str:
     company = clean(job.get("company") or job.get("Company")).lower()
     if job_id:
         return job_id
-    if "binghamton university" in company or "teaching assistant" in title:
-        return "TA"
-    if "global health impact" in company:
-        return "GHI"
-    if "tata consultancy services" in company and "ii" in title:
-        return "TCS-SWE-II"
-    if "tata consultancy services" in company:
-        return "TCS-SWE"
-    return ""
+    role_id = candidate_role_id(company=company, title=title)
+    profile = candidate_experience_by_id(role_id) or {}
+    return clean(profile.get("resume_output_id") or role_id)
 
 
 def normalize_experience_order_list(value: Any) -> list[str]:
@@ -406,16 +409,26 @@ def ordered_experience(data: dict, level: int, layout_profile: str = "") -> list
         order = "ghi_first"
     if order == "json_order":
         return jobs
+    render_presets = V1_CONFIG["render_order_presets"]
+    ghi_priority_ids = set(render_presets["ghi_first"].get("priority_role_ids", []))
+    tcs_deferred_ids = set(render_presets["tcs_first"].get("deferred_role_ids", []))
+
+    def has_role(job: dict, role_ids: set[str]) -> bool:
+        identity = experience_identity(job)
+        profile = candidate_experience_by_id(identity)
+        canonical = str(profile.get("role_id") or identity) if profile else identity
+        return canonical in role_ids
+
     if order == "tcs_first":
-        return [j for j in jobs if "global health impact" not in clean(j.get("company", "")).lower()] + [
-            j for j in jobs if "global health impact" in clean(j.get("company", "")).lower()
+        return [j for j in jobs if not has_role(j, tcs_deferred_ids)] + [
+            j for j in jobs if has_role(j, tcs_deferred_ids)
         ]
     if order == "ghi_first":
-        return [j for j in jobs if "global health impact" in clean(j.get("company", "")).lower()] + [
-            j for j in jobs if "global health impact" not in clean(j.get("company", "")).lower()
+        return [j for j in jobs if has_role(j, ghi_priority_ids)] + [
+            j for j in jobs if not has_role(j, ghi_priority_ids)
         ]
-    ghi = [j for j in jobs if "global health impact" in clean(j.get("company", "")).lower()]
-    others = [j for j in jobs if "global health impact" not in clean(j.get("company", "")).lower()]
+    ghi = [j for j in jobs if has_role(j, ghi_priority_ids)]
+    others = [j for j in jobs if not has_role(j, ghi_priority_ids)]
 
     if layout_profile in TCS_FIRST_LAYOUTS:
         return others + ghi
@@ -433,14 +446,16 @@ def experience_order_label(data: dict, level: int, layout_profile: str = "") -> 
     if order in {"json", "json_order"}:
         return "JSON order"
     if order in {"ghi", "ghi_first"}:
-        return "GHI first"
+        return str(V1_CONFIG["render_order_presets"]["ghi_first"]["label"])
     if order in {"tcs", "tcs_first"}:
-        return "TCS first"
+        return str(V1_CONFIG["render_order_presets"]["tcs_first"]["label"])
     if layout_profile in TCS_FIRST_LAYOUTS:
-        return "TCS first"
+        return str(V1_CONFIG["render_order_presets"]["tcs_first"]["label"])
     if layout_profile in GHI_FIRST_LAYOUTS:
-        return "Internship/GHI first"
-    return "TCS first" if level == 3 else "Internship/GHI first"
+        return str(V1_CONFIG["render_order_presets"]["ghi_first"]["label"])
+    return str(
+        V1_CONFIG["render_order_presets"]["tcs_first" if level == 3 else "ghi_first"]["label"]
+    )
 
 
 def bool_value(value: Any, default: bool = False) -> bool:
@@ -624,7 +639,7 @@ def pdf_with_libreoffice(docx_path: str) -> str:
 
 def infer_company_from_docx(docx_path: str) -> str:
     stem = os.path.splitext(os.path.basename(docx_path))[0]
-    match = re.match(r"Keval_Shah_(.+?)_Resume$", stem, re.IGNORECASE)
+    match = re.match(rf"{re.escape(RESUME_STEM)}_(.+?)_Resume$", stem, re.IGNORECASE)
     return match.group(1) if match else "Company"
 
 

@@ -10,7 +10,7 @@
 - Resolve exactly one configured mode and preserve every important JD requirement, relationship, named technology, exact JD term, and priority.
 - Preserve literal AND/OR satisfaction. For OR presentation, target two supported members and cap at three without inventing coverage or changing a literal minimum of one; record the logic and targets for the mapper.
 - Return plain printable ASCII characters only. Normalize Unicode arrows, dash variants, smart punctuation, and mathematical symbols into words or ordinary ASCII punctuation; never use arrow shorthand such as `60s->10s`.
-- Preserve Prompt 1's writing-capacity policy exactly: 18 to 22 target words, 24 words maximum, and no more than three visible JD keyword units per final bullet.
+- Preserve the complete runtime writing-capacity policy exactly, including its target range, hard maximum, and maximum visible JD keyword units per final bullet.
 - Do not write resume bullets, a resume, an evidence map, candidate experience, suggested accomplishments, placeholders, Markdown, or commentary.
 - Do not ask for a resume. Candidate evidence is not required in this stage.
 - Complete Prompt 1's silent self-check and return exactly one valid JSON object matching its Required Output Contract, with no code fence or text before or after it.
