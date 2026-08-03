@@ -12,11 +12,13 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import tkinter as tk
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -30,7 +32,6 @@ from pipeline import (
     enforce_linkedin_message_limit,
     extract_json,
     extract_linkedin_message,
-    load_config,
     get_default_nvidia_model_option,
     get_nvidia_model_spec,
     get_nvidia_reasoning_budget,
@@ -135,6 +136,9 @@ V1_POST_VALIDATION_ARTIFACTS = (
     "07_optimizer_parse_error_raw.txt",
 )
 
+REQUEST_EXPORT_MANIFEST = "resume_agent_export.json"
+REQUEST_EXPORT_VERSION = 2
+
 
 def existing_request_file_for_key(request_dir: Path, key: str) -> Path | None:
     for name in REQUEST_FILE_ALIASES[key]:
@@ -189,6 +193,193 @@ def request_folder_candidates(parent_dir: Path) -> list[Path]:
         and existing_request_file_for_key(path, "jd")
     ]
     return sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def _unique_folder_name(preferred: str, used: set[str]) -> str:
+    """Return a safe, unique folder name for an export or import operation."""
+    base = Path(str(preferred).replace("\\", "/")).name.strip().strip(".") or "request"
+    candidate = base
+    suffix = 2
+    while candidate.casefold() in used:
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    used.add(candidate.casefold())
+    return candidate
+
+
+def application_starter_inputs(request_dir: Path) -> tuple[dict[str, object], str]:
+    """Return only the saved fields required to begin an application."""
+    metadata, job_description = read_saved_request_inputs(request_dir)
+    return (
+        {
+            "request_id": metadata.get("request id", request_dir.name) or request_dir.name,
+            "company": metadata.get("company", ""),
+            "title": metadata.get("title", "") or "Software Engineer",
+            "link": metadata.get("link", ""),
+            "location": metadata.get("location", metadata.get("words", "")),
+            "initial_des": metadata.get("initial des", metadata.get("des", "")),
+            "mode": metadata.get("mode", ""),
+            "prompt_profile": metadata.get("prompt profile", DEFAULT_PROMPT_PROFILE),
+            "nvidia_model": metadata.get("nvidia model", ""),
+            "nvidia_thinking": saved_setting_enabled(metadata.get("nvidia thinking", "ON")),
+        },
+        job_description,
+    )
+
+
+def export_request_archive(request_dirs: list[Path], archive_path: Path) -> Path:
+    """Write input-only application starters to a portable ZIP archive."""
+    archive_path = Path(archive_path)
+    if archive_path.suffix.lower() != ".zip":
+        archive_path = archive_path.with_suffix(".zip")
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+
+    requests: list[tuple[dict[str, object], str, str]] = []
+    seen_paths: set[str] = set()
+    used_names: set[str] = set()
+    for selected in request_dirs:
+        request_dir = Path(selected)
+        identity = str(request_dir.resolve()).casefold()
+        if identity in seen_paths:
+            continue
+        metadata, job_description = application_starter_inputs(request_dir)
+        seen_paths.add(identity)
+        folder_name = _unique_folder_name(request_dir.name, used_names)
+        requests.append((metadata, job_description, folder_name))
+    if not requests:
+        raise ValueError("Select at least one valid request to export.")
+
+    manifest = {
+        "format": "resume-agent-request-export",
+        "version": REQUEST_EXPORT_VERSION,
+        "exported_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "contents": "application-start-inputs-only",
+        "request_count": len(requests),
+        "requests": [folder_name for _metadata, _job_description, folder_name in requests],
+    }
+    temp_archive = archive_path.with_name(f".{archive_path.name}.tmp")
+    if temp_archive.exists():
+        temp_archive.unlink()
+    try:
+        with zipfile.ZipFile(temp_archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr(REQUEST_EXPORT_MANIFEST, json.dumps(manifest, indent=2) + "\n")
+            for metadata, job_description, folder_name in requests:
+                request_root = Path("requests") / folder_name
+                bundle.writestr(
+                    (request_root / "00_request.json").as_posix(),
+                    json.dumps(metadata, indent=2) + "\n",
+                )
+                bundle.writestr(
+                    (request_root / "01_job_description.txt").as_posix(),
+                    job_description,
+                )
+        os.replace(temp_archive, archive_path)
+    except Exception:
+        if temp_archive.exists():
+            temp_archive.unlink()
+        raise
+    return archive_path
+
+
+def _validate_zip_members(bundle: zipfile.ZipFile) -> None:
+    """Reject archive entries that could escape the temporary extraction folder."""
+    total_size = 0
+    for member in bundle.infolist():
+        normalized = member.filename.replace("\\", "/")
+        parts = Path(normalized).parts
+        if (
+            not normalized
+            or normalized.startswith("/")
+            or re.match(r"^[A-Za-z]:", normalized)
+            or any(part == ".." for part in parts)
+        ):
+            raise ValueError(f"Unsafe archive entry: {member.filename}")
+        mode = member.external_attr >> 16
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"Archive links are not supported: {member.filename}")
+        total_size += member.file_size
+        if total_size > 2 * 1024 * 1024 * 1024:
+            raise ValueError("The archive expands beyond the 2 GB import limit.")
+
+
+def _request_dirs_in_extracted_archive(extracted_root: Path) -> list[Path]:
+    """Find request folders in both app exports and simple request-folder ZIPs."""
+    found: list[Path] = []
+    seen: set[str] = set()
+    manifest_path = extracted_root / REQUEST_EXPORT_MANIFEST
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("format") != "resume-agent-request-export":
+            raise ValueError("This ZIP has an unrecognized request export manifest.")
+        for folder_name in manifest.get("requests", []):
+            safe_name = Path(str(folder_name).replace("\\", "/")).name
+            if not safe_name or safe_name != str(folder_name):
+                raise ValueError("The request export manifest contains an unsafe folder name.")
+            request_dir = extracted_root / "requests" / safe_name
+            read_saved_request_inputs(request_dir)
+            identity = str(request_dir.resolve()).casefold()
+            if identity not in seen:
+                seen.add(identity)
+                found.append(request_dir)
+
+    search_roots = [extracted_root / "requests", extracted_root]
+    search_roots.extend(
+        child / "requests"
+        for child in extracted_root.iterdir()
+        if child.is_dir() and (child / "requests").is_dir()
+    )
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for request_dir in request_folder_candidates(root):
+            identity = str(request_dir.resolve()).casefold()
+            if identity not in seen:
+                seen.add(identity)
+                found.append(request_dir)
+    return found
+
+
+def _available_import_destination(destination_root: Path, preferred: str) -> Path:
+    used = {path.name.casefold() for path in destination_root.iterdir() if path.is_dir()}
+    return destination_root / _unique_folder_name(preferred, used)
+
+
+def import_request_archives(
+    archive_paths: list[Path],
+    destination_root: Path,
+) -> tuple[list[Path], list[tuple[Path, str]]]:
+    """Import every valid request in multiple ZIP archives without overwriting existing data."""
+    destination_root = Path(destination_root)
+    destination_root.mkdir(parents=True, exist_ok=True)
+    imported: list[Path] = []
+    failures: list[tuple[Path, str]] = []
+    for selected in archive_paths:
+        archive_path = Path(selected)
+        try:
+            with tempfile.TemporaryDirectory(prefix="resume_agent_import_") as temp_dir:
+                extracted_root = Path(temp_dir)
+                with zipfile.ZipFile(archive_path, "r") as bundle:
+                    _validate_zip_members(bundle)
+                    bundle.extractall(extracted_root)
+                source_dirs = _request_dirs_in_extracted_archive(extracted_root)
+                if not source_dirs:
+                    raise ValueError("No saved request folders were found in this ZIP.")
+                for source_dir in source_dirs:
+                    destination = _available_import_destination(destination_root, source_dir.name)
+                    try:
+                        metadata, job_description = application_starter_inputs(source_dir)
+                        destination.mkdir()
+                        save_json(destination / "00_request.json", metadata)
+                        save_text(destination / "01_job_description.txt", job_description)
+                        read_saved_request_inputs(destination)
+                    except Exception:
+                        if destination.exists() and destination.parent.resolve() == destination_root.resolve():
+                            shutil.rmtree(destination)
+                        raise
+                    imported.append(destination)
+        except Exception as exc:
+            failures.append((archive_path, str(exc)))
+    return imported, failures
 
 
 class MultiRequestFolderDialog(tk.Toplevel):
@@ -255,7 +446,7 @@ class MultiRequestFolderDialog(tk.Toplevel):
         self.selection_label = ttk.Label(footer, text="0 selected")
         self.selection_label.grid(row=0, column=1, padx=12, sticky="w")
         ttk.Button(footer, text="Cancel", command=self.cancel).grid(row=0, column=2, padx=(0, 8))
-        ttk.Button(footer, text="Open Selected", command=self.accept).grid(row=0, column=3)
+        ttk.Button(footer, text="Continue with Selected", command=self.accept).grid(row=0, column=3)
 
         self.protocol("WM_DELETE_WINDOW", self.cancel)
         self.populate()
@@ -660,6 +851,19 @@ def open_path(path: Path) -> None:
             subprocess.run(["xdg-open", str(path)], check=False)
     except Exception:
         pass
+
+
+def reveal_path(path: Path) -> None:
+    """Reveal a generated share archive in the platform file browser."""
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer.exe", f"/select,{path}"])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path.parent)])
+    except Exception:
+        open_path(path.parent)
 
 
 def run_bg(app: tk.Tk, fn, done) -> None:
@@ -3307,24 +3511,17 @@ class ResumeApp(tk.Tk):
 
         top = ttk.Frame(self, padding=(8, 8, 8, 4))
         top.grid(row=0, column=0, sticky="ew")
-        top.columnconfigure(7, weight=1)
+        top.columnconfigure(8, weight=1)
 
         ttk.Button(top, text="New Application Tab", command=self.add_tab).grid(row=0, column=0, padx=(0, 6))
         ttk.Button(top, text="Duplicate Current", command=self.duplicate_current).grid(row=0, column=1, padx=(0, 6))
         ttk.Button(top, text="Close Current", command=self.close_current).grid(row=0, column=2, padx=(0, 6))
-        ttk.Button(top, text="Clear DOCX/PDF", command=self.clear_docx_pdf).grid(row=0, column=3, padx=(0, 6))
-        ttk.Button(top, text="Print Status", command=self.print_status).grid(row=0, column=4, padx=(0, 6))
+        ttk.Button(top, text="Import ZIP", command=self.import_requests).grid(row=0, column=3, padx=(0, 6))
+        ttk.Button(top, text="Export Requests", command=self.export_requests).grid(row=0, column=4, padx=(0, 6))
+        ttk.Button(top, text="Share Requests", command=self.share_requests).grid(row=0, column=5, padx=(0, 6))
+        ttk.Button(top, text="Clear DOCX/PDF", command=self.clear_docx_pdf).grid(row=0, column=6, padx=(0, 6))
+        ttk.Button(top, text="Print Status", command=self.print_status).grid(row=0, column=7, padx=(0, 6))
         self.session_cost_usd = 0.0
-        cfg = load_config()
-        self.manual_balance_usd = float(cfg.get("manual_starting_balance_usd", 0) or 0)
-        self.session_cost_label = ttk.Label(top, text="Session cost: $0.0000")
-        self.session_cost_label.grid(row=0, column=5, padx=(8, 6), sticky="w")
-        balance_text = "Balance: not connected" if self.manual_balance_usd <= 0 else f"Est. remaining: ${self.manual_balance_usd:.2f}"
-        self.balance_label = ttk.Label(top, text=balance_text)
-        self.balance_label.grid(row=0, column=6, padx=(8, 6), sticky="w")
-        ttk.Label(top, text="Each tab runs independently. Start PASS 1 in multiple tabs.").grid(
-            row=0, column=7, sticky="e"
-        )
 
         status_frame = ttk.Frame(self, padding=(8, 0, 8, 6))
         status_frame.grid(row=1, column=0, sticky="ew")
@@ -3506,9 +3703,101 @@ class ResumeApp(tk.Tk):
 
     def add_session_cost(self, amount: float) -> None:
         self.session_cost_usd += amount
-        self.session_cost_label.config(text=f"Session cost: ${self.session_cost_usd:.4f}")
-        if self.manual_balance_usd > 0:
-            self.balance_label.config(text=f"Est. remaining: ${max(self.manual_balance_usd - self.session_cost_usd, 0):.2f}")
+
+    def _select_requests_for_archive(self, title: str) -> list[Path]:
+        REQUESTS_DIR.mkdir(exist_ok=True)
+        current = self.current_tab()
+        initialdir = current.request_dir.parent if current and current.request_dir else REQUESTS_DIR
+        return select_request_folders(self, title=title, initialdir=initialdir)
+
+    def _save_request_archive(self, *, share: bool) -> None:
+        action = "Share" if share else "Export"
+        selected = self._select_requests_for_archive(f"{action} saved resume requests")
+        if not selected:
+            return
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            title=f"{action} request archive",
+            initialdir=str(ROOT),
+            initialfile=f"resume_requests_{'share_' if share else ''}{stamp}.zip",
+            defaultextension=".zip",
+            filetypes=(("ZIP archive", "*.zip"),),
+        )
+        if not path:
+            return
+
+        def done(result, err):
+            if err:
+                messagebox.showerror(f"{action} failed", str(err), parent=self)
+                return
+            archive = Path(result)
+            if share:
+                self.clipboard_clear()
+                self.clipboard_append(str(archive.resolve()))
+                self.update_idletasks()
+                reveal_path(archive)
+                messagebox.showinfo(
+                    "Share archive ready",
+                    f"Packed {len(selected)} application starter(s). The archive path was copied to the clipboard:\n\n{archive}",
+                    parent=self,
+                )
+            else:
+                messagebox.showinfo(
+                    "Export complete",
+                    f"Exported {len(selected)} input-only application starter(s) to:\n\n{archive}",
+                    parent=self,
+                )
+
+        run_bg(self, lambda: export_request_archive(selected, Path(path)), done)
+
+    def export_requests(self) -> None:
+        self._save_request_archive(share=False)
+
+    def share_requests(self) -> None:
+        self._save_request_archive(share=True)
+
+    def import_requests(self) -> None:
+        REQUESTS_DIR.mkdir(exist_ok=True)
+        selected = filedialog.askopenfilenames(
+            parent=self,
+            title="Select one or more application starter ZIP files",
+            initialdir=str(ROOT),
+            filetypes=(("ZIP archives", "*.zip"),),
+        )
+        if not selected:
+            return
+
+        def done(result, err):
+            if err:
+                messagebox.showerror("Import failed", str(err), parent=self)
+                return
+            imported, import_failures = result
+            _opened, load_failures = open_request_folders_in_new_tabs(
+                self,
+                imported,
+                rerun=False,
+            )
+            failures = import_failures + load_failures
+            if failures:
+                details = "\n".join(f"- {path.name}: {error}" for path, error in failures)
+                messagebox.showwarning(
+                    "Import completed with warnings",
+                    f"Imported {len(imported)} request(s).\n\n{details}",
+                    parent=self,
+                )
+            else:
+                messagebox.showinfo(
+                    "Import complete",
+                    f"Imported and opened {len(imported)} request(s) in new tabs.",
+                    parent=self,
+                )
+
+        run_bg(
+            self,
+            lambda: import_request_archives([Path(path) for path in selected], REQUESTS_DIR),
+            done,
+        )
 
     def current_tab(self) -> JobTab | None:
         tab_id = self.notebook.select()

@@ -2,12 +2,30 @@ import json
 import os
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import gui
 
 
 class RequestCombinerTests(unittest.TestCase):
+
+    @staticmethod
+    def make_request(request_dir: Path, company: str = "Acme") -> None:
+        request_dir.mkdir(parents=True)
+        (request_dir / "00_request.json").write_text(
+            json.dumps({
+                "request_id": request_dir.name,
+                "company": company,
+                "title": "Engineer",
+                "prompt_profile": "v1",
+            }),
+            encoding="utf-8",
+        )
+        (request_dir / "01_job_description.txt").write_text(
+            "Build reliable services.",
+            encoding="utf-8",
+        )
 
     def test_request_folder_candidates_returns_valid_children_newest_first(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -94,6 +112,107 @@ class RequestCombinerTests(unittest.TestCase):
             [tab.loaded for tab in opened],
         )
         self.assertEqual([], app.removed)
+
+    def test_exports_and_imports_multiple_requests_in_one_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = root / "source" / "request_one"
+            second = root / "source" / "request_two"
+            self.make_request(first, "Alpha")
+            self.make_request(second, "Beta")
+            (first / "05_resume_v3.json").write_text('{"resume":1}', encoding="utf-8")
+            (first / "costs.json").write_text('{"tab_total_usd":9}', encoding="utf-8")
+            (first / "08_application_questions.txt").write_text("Private questions", encoding="utf-8")
+            archive = gui.export_request_archive([first, second], root / "bundle.zip")
+            with zipfile.ZipFile(archive) as bundle:
+                archived_names = set(bundle.namelist())
+                manifest = json.loads(bundle.read(gui.REQUEST_EXPORT_MANIFEST))
+            destination = root / "imported"
+
+            imported, failures = gui.import_request_archives([archive], destination)
+            imported_files = [
+                {path.name for path in request_dir.iterdir()}
+                for request_dir in imported
+            ]
+
+        self.assertEqual([], failures)
+        self.assertEqual(["request_one", "request_two"], [path.name for path in imported])
+        self.assertEqual("application-start-inputs-only", manifest["contents"])
+        self.assertEqual(
+            {
+                gui.REQUEST_EXPORT_MANIFEST,
+                "requests/request_one/00_request.json",
+                "requests/request_one/01_job_description.txt",
+                "requests/request_two/00_request.json",
+                "requests/request_two/01_job_description.txt",
+            },
+            archived_names,
+        )
+        self.assertEqual(
+            [
+                {"00_request.json", "01_job_description.txt"},
+                {"00_request.json", "01_job_description.txt"},
+            ],
+            imported_files,
+        )
+
+    def test_imports_a_directly_selected_plain_request_zip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "direct_request"
+            self.make_request(source, "Direct ZIP")
+            (source / "05_resume_v3.json").write_text('{"do_not_import":true}', encoding="utf-8")
+            archive = root / "direct_request.zip"
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                for source_file in source.iterdir():
+                    bundle.write(source_file, f"direct_request/{source_file.name}")
+
+            imported, failures = gui.import_request_archives([archive], root / "imported")
+            metadata, job_description = gui.read_saved_request_inputs(imported[0])
+            imported_files = {path.name for path in imported[0].iterdir()}
+
+        self.assertEqual([], failures)
+        self.assertEqual(1, len(imported))
+        self.assertEqual("Direct ZIP", metadata["company"])
+        self.assertEqual("Build reliable services.", job_description)
+        self.assertEqual({"00_request.json", "01_job_description.txt"}, imported_files)
+
+    def test_imports_multiple_archives_and_does_not_overwrite_name_collisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_a = root / "a" / "same_request"
+            source_b = root / "b" / "same_request"
+            self.make_request(source_a, "Alpha")
+            self.make_request(source_b, "Beta")
+            archive_a = gui.export_request_archive([source_a], root / "a.zip")
+            archive_b = gui.export_request_archive([source_b], root / "b.zip")
+            destination = root / "imported"
+
+            imported, failures = gui.import_request_archives(
+                [archive_a, archive_b],
+                destination,
+            )
+
+            companies = [gui.read_saved_request_inputs(path)[0]["company"] for path in imported]
+
+        self.assertEqual([], failures)
+        self.assertEqual(["same_request", "same_request_2"], [path.name for path in imported])
+        self.assertEqual(["Alpha", "Beta"], companies)
+
+    def test_rejects_unsafe_import_archive_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "unsafe.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("../outside.txt", "must not escape")
+
+            imported, failures = gui.import_request_archives([archive], root / "imported")
+
+            self.assertFalse((root / "outside.txt").exists())
+
+        self.assertEqual([], imported)
+        self.assertEqual(1, len(failures))
+        self.assertIn("Unsafe archive entry", failures[0][1])
 
     def test_open_request_folders_creates_one_rerun_tab_per_folder(self):
         class FakeTab:

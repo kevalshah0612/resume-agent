@@ -96,9 +96,15 @@ LinkedIn outreach is role-specific rather than generic:
 - Hiring-manager message: names the exact title and company, connects one supported proof point to a JD priority, and asks one concise question about the team or role.
 - Each message has an independent 300-character maximum and uses ASCII punctuation.
 
-`Load Request` selects an existing `requests/<request_id>/` folder and restores its company, title, JD, DES, approval, questions, PASS 1 output, cost, and available JSON artifacts into the current tab. Recruiter, Final QA, Questions, DOCX, and PDF can then continue from the best saved artifact without rerunning earlier steps. `Open Folder` opens the active request folder in File Explorer.
+`Load Request` supports Ctrl-click, Shift-click, and Select All. Every selected `requests/<request_id>/` folder opens in its own new tab and restores its company, title, JD, DES, approval, questions, PASS 1 output, cost, and available JSON artifacts. Recruiter, Final QA, Questions, DOCX, and PDF can then continue from the best saved artifact without rerunning earlier steps. `Open Folder` opens the active request folder in File Explorer.
 
-`Load Re-run` selects an old request, opens a new application tab, copies only the original company, title, location/keywords, initial DES, JD, prompt profile, and NVIDIA model selection, and creates a fresh timestamped request folder. It does not copy analysis, evidence mapping, DES approval, resume output, reasoning, questions, costs, or generated artifacts; start the new request from `Analyze + Map` or `PASS 1`.
+`Load Re-run` uses the same multi-request selector. Each selected request opens in a new application tab, copies only the original company, title, location/keywords, initial DES, JD, prompt profile, and NVIDIA model selection, and creates a fresh timestamped request folder. It does not copy analysis, evidence mapping, DES approval, resume output, reasoning, questions, costs, or generated artifacts; start the new request from `Analyze + Map` or `PASS 1`.
+
+The main toolbar also supports portable request bundles:
+
+- `Export Requests` uses the same multi-request selector and saves only the details needed to start applications: company, title, link, location/keywords, initial DES, prompt/model selection, and job description. Generated resumes, questions, reasoning, costs, and document logs are excluded. Multiple starters are stored in one ZIP.
+- `Import ZIP` opens a ZIP file picker directly. Ctrl-click or Shift-click to select multiple ZIP files; every contained application starter is normalized to the same input-only fields, copied into `requests/`, and opened in its own tab. Extra generated artifacts in older or plain request ZIPs are ignored. Existing folders are never overwritten; name collisions receive a numeric suffix. Plain ZIPs containing a valid request folder are also accepted.
+- `Share Requests` creates the same input-only multi-request ZIP, reveals it in the file browser, and copies its full path to the clipboard so it is ready to attach or share.
 
 Default V1 path:
 
